@@ -16,12 +16,15 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import os
 import re
 import shutil
 import ssl
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -255,3 +258,48 @@ def apply_openssl_facts(certs: list[Cert], facts: list[CertFacts]) -> None:
     if len(certs) > len(facts):
         for cert in certs[len(facts) :]:
             cert.name_source = "tshark-flattened"
+
+
+LOOKUP_RE = re.compile(r"error \d+ at \d+ depth lookup:\s*(.+)")
+
+
+def verify_chain(hex_values: list[str], at_time: float | None = None) -> str | None:
+    """Zeek-style ``validation_status`` of a server chain: ``ok`` or openssl's reason (#260).
+
+    The leaf is checked with the rest of the chain as untrusted intermediates, at the capture's own time, against
+    ``PCAP_DOCTOR_CA_BUNDLE`` (``--ca-bundle``) when set, else openssl's default trust store. None when openssl or
+    the chain is missing.
+    """
+    path = openssl_path()
+    ders = split_certificate_occurrences(hex_values)
+    if path is None or not ders:
+        return None
+    cmd = [path, "verify"]
+    if bundle := os.environ.get("PCAP_DOCTOR_CA_BUNDLE"):
+        cmd += ["-CAfile", bundle]
+    if at_time:
+        cmd += ["-attime", str(int(at_time))]
+    with tempfile.TemporaryDirectory() as tmp:
+        leaf, rest = Path(tmp, "leaf.pem"), Path(tmp, "chain.pem")
+        leaf.write_text(ssl.DER_cert_to_PEM_cert(ders[0]))
+        if len(ders) > 1:
+            rest.write_text("".join(ssl.DER_cert_to_PEM_cert(der) for der in ders[1:]))
+            cmd += ["-untrusted", str(rest)]
+        try:
+            proc = subprocess.run([*cmd, str(leaf)], capture_output=True, text=True, timeout=OPENSSL_TIMEOUT,
+                                  check=False)
+        except subprocess.SubprocessError:
+            return None
+    if proc.returncode == 0:
+        return "ok"
+    match = LOOKUP_RE.search(proc.stdout + proc.stderr)
+    return match.group(1).strip() if match else "unable to verify"
+
+
+def hostname_matches(host: str, names: list[str]) -> bool:
+    """RFC 6125 name check: exact, or a ``*.`` wildcard standing for exactly one left-most label."""
+    host = host.lower().rstrip(".")
+    for name in (n.lower().rstrip(".") for n in names):
+        if name == host or (name.startswith("*.") and "." in host and host.split(".", 1)[1] == name[2:]):
+            return True
+    return False

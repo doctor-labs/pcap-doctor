@@ -217,6 +217,10 @@ class TlsSession(BaseModel):
     ja3s: str | None = None
     ja4: str | None = None
     ja4s: str | None = None
+    #: Zeek validation_status: "ok" or openssl's reason, checked at capture time (#260); None = not checked
+    validation_status: str | None = None
+    #: does the leaf certificate cover the SNI (RFC 6125)? None when there is no SNI or no certificate
+    hostname_match: bool | None = None
     certs: list[Cert] = Field(default_factory=list)
     alerts: list[TlsAlert] = Field(default_factory=list)
     frames: list[int] = Field(default_factory=list)
