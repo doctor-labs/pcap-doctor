@@ -511,3 +511,26 @@ def fixture_kerberos() -> bytes:
                                                       ticket=KRB_Ticket(realm=realm, sname=cifs, encPart=enc()),
                                                       encPart=enc()))))
     return w.write()
+
+
+@fixture("tcp_health.pcap")
+def fixture_tcp_health() -> bytes:
+    """One TCP stream with a retransmission, a content gap, a zero window and a bad checksum, plus a UDP datagram
+    with a bad checksum (#208, #209)."""
+    w = Wire(start=1_700_500_000.0)
+    c, s = "10.4.0.10", "10.4.0.20"
+    t = Tcp(w, c, s, 47000, 8080).open()
+    t.send(True, b"GET / HTTP/1.1\r\n\r\n")
+    t._emit(True, 0x18, b"PF-RETRANSMIT-01")  # first copy is lost on the wire
+    t._emit(True, 0x18, b"PF-RETRANSMIT-01")  # same sequence number again: a retransmission
+    t.seq_c += 16
+    t.seq_c += 100  # 100 client bytes never captured: a content gap before the next segment
+    t.send(True, b"PF-AFTER-THE-GAP")
+    t._emit(False, 0x10)  # the server repeats that ACK: a duplicate ACK
+    t._emit(False, 0x10, window=0)  # server advertises a zero window
+    t.send(False, b"HTTP/1.1 200 OK\r\n\r\n")
+    t._emit(True, 0x18, b"PF-BAD-CHECKSUM", bad_checksum=True)
+    t.seq_c += 15
+    t.close()
+    w.add(udp_frame(c, s, 47001, 9999, b"PF-UDP-BAD-SUM", bad_checksum=True))
+    return w.write()

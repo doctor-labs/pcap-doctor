@@ -26,12 +26,18 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 ## Where the logs differ from Zeek
 
 - `conn.orig_bytes` / `resp_bytes` are TCP/UDP payload bytes seen in the capture (no sequence-number accounting, so a
-  retransmission counts twice); `*_ip_bytes` are IP total lengths; `missed_bytes` is always 0.
+  retransmission counts twice); `*_ip_bytes` are IP total lengths; `missed_bytes` adds up the sequence-number jumps
+  tshark marks as a lost segment (#208).
 - `history` is approximated from the SYN/ACK/data/FIN/RST flags (upper case originator, lower case responder; runs of
-  the same letter collapse). `conn_state` follows Zeek's definitions (`S0`, `S1`, `SF`, `REJ`, `RSTO`, `RSTR`, `S2`,
+  the same letter collapse), plus Zeek's `C` bad checksum, `G` content gap, `T` retransmission and `W` zero window,
+  logged at their 1st, 10th, 100th... occurrence (#208, #209). Two extra columns at the end, `dup_acks` and
+  `out_of_order`, count tshark's duplicate-ACK and out-of-order marks; Zeek has no such columns. `conn_state` follows Zeek's definitions (`S0`, `S1`, `SF`, `REJ`, `RSTO`, `RSTR`, `S2`,
   `S3`, `RSTOS0`, `OTH`) from the same counts.
 - `uid` is `C` plus 16 hex characters derived from the flow key, stable across runs, not Zeek's random id.
 - Secrets are never written: FTP `PASS` is `<hidden>`, no HTTP Authorization or cookie values, no SMTP AUTH data.
-- `weird` names are slugs of tshark's own expert messages, not Zeek's weird names (a catalog is tracked in #210).
-- The pcap-doctor `ssl` log has no `validation_status` yet (#260). `files` lists the files `extract` recovers, with `seen_bytes`, `md5`, `sha1`, `sha256` and a magic-byte `mime_type`; only HTTP files carry hosts and a connection uid.
+- `weird` names are slugs of tshark's own expert messages, not Zeek's weird names (a catalog is tracked in #210),
+  except bad checksums, which use Zeek's `bad_IP_checksum` / `bad_TCP_checksum` / `bad_UDP_checksum` /
+  `bad_ICMP_checksum`. Checksums are validated for the conn and weird logs only; captures taken on the sending host
+  with checksum offload show every outgoing packet as bad.
+- `files` lists the files `extract` recovers, with `seen_bytes`, `md5`, `sha1`, `sha256` and a magic-byte `mime_type`; only HTTP files carry hosts and a connection uid.
 - `#open` / `#close` carry the capture's first and last packet time, so two runs give identical files.
