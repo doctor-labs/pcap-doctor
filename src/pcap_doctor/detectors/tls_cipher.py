@@ -64,7 +64,9 @@ class TlsCipherDetector(Detector):
             findings += self._offered_ciphers(session, subjects)
             findings += self._forward_secrecy(session, subjects)
             findings += self._key_in_firmware(index, session, subjects)
-            findings += self._certificates(session, subjects, index.capture.last_seen)
+            findings += self._certificates(session, subjects, index.capture.last_seen, index.capture.first_seen)
+            findings += self._sni_mismatch(session, subjects)
+            findings += self._extended_master_secret(session, subjects)
             findings += self._alerts(session, subjects)
             if session.truncated and flow is not None:
                 findings += self._truncated(session, subjects)
@@ -426,10 +428,36 @@ class TlsCipherDetector(Detector):
             )
         return out
 
-    def _certificates(self, session: TlsSession, subjects: list[str], capture_end: float) -> list[Finding]:
+    def _certificates(
+        self, session: TlsSession, subjects: list[str], capture_end: float, capture_start: float
+    ) -> list[Finding]:
         out: list[Finding] = []
         for cert in session.certs:
             scope = f"{session.key}|cert{cert.chain_index}"
+            if cert.not_before:
+                nb = parse_ts(cert.not_before)
+                if nb is not None and nb > datetime.fromtimestamp(capture_start, UTC):
+                    out.append(
+                        self.finding(
+                            code="TLS_CERT_NOT_YET_VALID",
+                            title=f"Certificate {', '.join(cert.common_names) or f'#{cert.chain_index}'} not yet valid at the capture",
+                            severity="high",
+                            confidence="high",
+                            summary=(
+                                f"Chain position {cert.chain_index} presented on {session.key} has validity "
+                                f"{cert.not_before} .. {cert.not_after}, which starts after the capture began "
+                                f"({datetime.fromtimestamp(capture_start, UTC).isoformat()} ). Names seen in the certificate: "
+                                f"{', '.join(cert.common_names) or 'n/a'}."
+                            ),
+                            scope=f"{scope}|notyet",
+                            flow_key=session.key,
+                            subjects=subjects,
+                            evidence=[ev(cert.frame, "x509af.utcTime", f"{cert.not_before} .. {cert.not_after}")],
+                            remediation="Replace the certificate with one whose validity window covers the capture.",
+                            references=["RFC 5280"],
+                            tags=["tls", "certificate"],
+                        )
+                    )
             if cert.not_after:
                 expiry = parse_ts(cert.not_after)
                 if expiry is not None:
@@ -559,6 +587,71 @@ class TlsCipherDetector(Detector):
                 )
             )
         return out
+
+    def _sni_mismatch(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
+        if session.hostname_match is not False or not session.certs:
+            return []
+        leaf = session.certs[0]
+        names = leaf.san_dns or leaf.common_names
+        sni = session.sni or (session.client_hello.sni if session.client_hello else None)
+        return [
+            self.finding(
+                code="TLS_SNI_CERT_MISMATCH",
+                title=f"SNI {sni} not covered by the leaf certificate on {session.key}",
+                severity="medium",
+                confidence="high",
+                summary=(
+                    f"The client requested host '{sni}' (SNI), but the leaf certificate's names "
+                    f"are: {', '.join(names) or 'n/a'} ({', '.join(leaf.common_names) or 'n/a'} in CN)."
+                ),
+                scope=f"{session.key}|sni",
+                flow_key=session.key,
+                subjects=subjects,
+                evidence=[
+                    ev(self._client_hello_frame(session), "tls.handshake.extensions_server_name", sni or "n/a"),
+                    ev(leaf.frame, "x509ce.dNSName", ", ".join(names) or "n/a"),
+                ],
+                remediation="Present a certificate whose SAN/CN matches the SNI the client requested.",
+                references=["RFC 6125"],
+                tags=["tls", "certificate"],
+            )
+        ]
+
+    def _extended_master_secret(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
+        if session.negotiated_version not in ("TLS 1.0", "TLS 1.1", "TLS 1.2"):
+            return []
+        server_hello = session.server_hello
+        if server_hello is None:
+            return []
+        if 23 in server_hello.extensions:
+            return []
+        return [
+            self.finding(
+                code="TLS_NO_EXTENDED_MASTER_SECRET",
+                title=f"Session on {session.key} lacks extended master secret (RFC 7627)",
+                severity="low",
+                confidence="high",
+                summary=(
+                    f"The server did not agree to the extended master secret extension (RFC 7627): "
+                    f"server hello extensions {server_hello.extensions}. On {session.negotiated_version} "
+                    "the session master secret is not bound to the handshake transcript, exposing the "
+                    "session to the triple-handshake attack and related key-reuse weaknesses."
+                ),
+                scope=f"{session.key}|ems",
+                flow_key=session.key,
+                subjects=subjects,
+                evidence=[
+                    ev(
+                        server_hello.frame,
+                        "tls.handshake.extension.type",
+                        ",".join(map(str, server_hello.extensions)) or "none",
+                    )
+                ],
+                remediation="Enable the extended_master_secret option on the TLS 1.2 server, or move to TLS 1.3.",
+                references=["RFC 7627"],
+                tags=["tls"],
+            )
+        ]
 
     def _alerts(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
         out: list[Finding] = []

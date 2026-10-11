@@ -73,10 +73,17 @@ def _write_pcap(path: Path, packets: list[bytes], start: float = 1_700_000_000.0
     path.write_bytes(_pcap_header() + body)
 
 
+#: Committed test certificates valid 2023-01-01..2033-01-01, so they cover the fixtures' 2023 capture clock: a
+#: certificate minted at build time would start after the capture and read as not yet valid (#262).
+FIXTURE_CERTS = Path(__file__).resolve().parent / "fixture_certs"
+
+
 def _make_cert(tmp: Path, cn: str) -> tuple[Path, Path]:
-    """Self-signed certificate for the throwaway TLS server."""
+    """Self-signed certificate for the throwaway TLS server (the committed one when it exists)."""
     import subprocess
 
+    if (FIXTURE_CERTS / f"{cn}.crt").exists():
+        return FIXTURE_CERTS / f"{cn}.crt", FIXTURE_CERTS / f"{cn}.key"
     cert, key = tmp / f"{cn}.crt", tmp / f"{cn}.key"
     subprocess.run(
         [
