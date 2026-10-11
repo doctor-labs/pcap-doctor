@@ -169,6 +169,7 @@ class Handshake(BaseModel):
     alpn: list[str] = Field(default_factory=list)
     supported_groups: list[str] = Field(default_factory=list)
     sig_algs: list[str] = Field(default_factory=list)
+    extensions: list[int] = Field(default_factory=list)  # extension types in wire order (#267)
     session_id: str | None = None
     ticket: bool = False
     downgrade_sentinel: str | None = None

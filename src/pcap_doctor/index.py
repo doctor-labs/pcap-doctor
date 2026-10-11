@@ -613,6 +613,7 @@ class IndexBuilder:
             alpn=many(row, "tls.handshake.extensions_alpn_str"),
             supported_groups=many(row, "tls.handshake.extensions_supported_group"),
             sig_algs=many(row, "tls.handshake.extensions_signature_algorithms"),
+            extensions=[t for t in (to_int(x) for x in many(row, "tls.handshake.extension.type")) if t is not None],
             session_id=first(row, "tls.handshake.session_id_length") or None,
         )
 
