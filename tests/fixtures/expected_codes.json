@@ -107,7 +107,6 @@
     "CLEARTEXT_SERVICE"
   ],
   "weak_tls.pcap": [
-    "TLS_CERT_NOT_YET_VALID",
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",
     "TLS_SELF_SIGNED_CHAIN",

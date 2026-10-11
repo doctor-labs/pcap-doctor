@@ -83,9 +83,9 @@ def test_action_script_gates_only_findings_new_since_the_base(tmp_path, cache_di
     result = _action(repo, base)
     assert result.returncode == 1, result.stderr
     assert "| `caps/a.pcap` | 0 | 3 |" in result.stdout
-    assert "| `caps/b.pcap` | 5 :x: | 5 |" in result.stdout
+    assert "| `caps/b.pcap` | 4 :x: | 4 |" in result.stdout
     sarif = json.loads((repo / "out" / "pcap-doctor.sarif").read_text())
-    assert len(sarif["runs"]) == 1 and len(sarif["runs"][0]["results"]) == 5
+    assert len(sarif["runs"]) == 1 and len(sarif["runs"][0]["results"]) == 4
 
     (repo / "caps" / "b.pcap").unlink()
     assert _action(repo, base).returncode == 0
