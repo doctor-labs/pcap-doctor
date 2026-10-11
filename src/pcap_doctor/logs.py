@@ -26,7 +26,7 @@ from .index import CaptureIndex, first, many
 from .models import flow_key, stable_id
 from .prompts import clean_capture_text
 from .smb import unc, unescape
-from .tshark import CHECKSUM_ARGS, Row, to_float, to_int
+from .tshark import CHECKSUM_ARGS, Row, to_float, to_int, to_int_auto
 
 Column = tuple[str, str]  # (zeek field name, zeek type)
 
@@ -663,10 +663,75 @@ def _ntlm_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+_MODBUS_FUNCS = {1: "READ_COILS", 2: "READ_DISCRETE_INPUTS", 3: "READ_HOLDING_REGISTERS", 4: "READ_INPUT_REGISTERS",
+    5: "WRITE_SINGLE_COIL", 6: "WRITE_SINGLE_REGISTER", 7: "READ_EXCEPTION_STATUS", 8: "DIAGNOSTICS", 11: "GET_COMM_EVENT_COUNTER",
+    12: "GET_COMM_EVENT_LOG", 15: "WRITE_MULTIPLE_COILS", 16: "WRITE_MULTIPLE_REGISTERS", 17: "REPORT_SLAVE_ID",
+    20: "READ_FILE_RECORD", 21: "WRITE_FILE_RECORD", 22: "MASK_WRITE_REGISTER", 23: "READ_WRITE_MULTIPLE_REGISTERS",
+    24: "READ_FIFO_QUEUE", 43: "ENCAP_INTERFACE_TRANSPORT"}
+_MODBUS_EXCEPTIONS = {1: "ILLEGAL_FUNCTION", 2: "ILLEGAL_DATA_ADDRESS", 3: "ILLEGAL_DATA_VALUE", 4: "SLAVE_DEVICE_FAILURE",
+    5: "ACKNOWLEDGE", 6: "SLAVE_DEVICE_BUSY", 8: "MEMORY_PARITY_ERROR", 10: "GATEWAY_PATH_UNAVAILABLE",
+    11: "GATEWAY_TARGET_DEVICE_FAILED_TO_RESPOND"}
+_DNP3_FUNCS = {0: "CONFIRM", 1: "READ", 2: "WRITE", 3: "SELECT", 4: "OPERATE", 5: "DIRECT_OPERATE", 6: "DIRECT_OPERATE_NR",
+    7: "IMMED_FREEZE", 8: "IMMED_FREEZE_NR", 9: "FREEZE_CLEAR", 10: "FREEZE_CLEAR_NR", 11: "FREEZE_AT_TIME",
+    12: "FREEZE_AT_TIME_NR", 13: "COLD_RESTART", 14: "WARM_RESTART", 15: "INITIALIZE_DATA", 16: "INITIALIZE_APPL",
+    17: "START_APPL", 18: "STOP_APPL", 19: "SAVE_CONFIG", 20: "ENABLE_UNSOLICITED", 21: "DISABLE_UNSOLICITED",
+    22: "ASSIGN_CLASS", 23: "DELAY_MEASURE", 24: "RECORD_CURRENT_TIME", 25: "OPEN_FILE", 26: "CLOSE_FILE",
+    27: "DELETE_FILE", 28: "GET_FILE_INFO", 29: "AUTHENTICATE_FILE", 30: "ABORT_FILE", 31: "ACTIVATE_CONFIG",
+    32: "AUTHENTICATE_REQ", 33: "AUTHENTICATE_REQ_NR", 129: "RESPONSE", 130: "UNSOLICITED_RESPONSE", 131: "AUTHENTICATE_RESP"}
+
+
+def _modbus_log(ctx: _Ctx) -> LogTable:
+    table = LogTable("modbus", [("ts", "time"), *ID_COLS, ("func", "string"), ("exception", "string")])
+    for row in ctx.runner.run("modbus"):
+        key = ctx.row_key(row, "tcp")
+        if not key:
+            continue
+        dst = to_int(first(row, "tcp.dstport"))
+        if dst == 502:
+            continue
+        code = to_int(first(row, "modbus.func_code"))
+        exc = to_int(first(row, "modbus.exception_code"))
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "func": _MODBUS_FUNCS.get(code, f"UNKNOWN_{code}") if code is not None else None,
+            "exception": _MODBUS_EXCEPTIONS.get(exc, f"UNKNOWN_{exc}") if exc is not None else None,
+        })
+    return table
+
+
+def _dnp3_log(ctx: _Ctx) -> LogTable:
+    table = LogTable("dnp3", [("ts", "time"), *ID_COLS, ("fc_request", "string"), ("fc_reply", "string"), ("iin", "count")])
+    pending: dict[str, dict[str, Any]] = {}
+    for row in ctx.runner.run("dnp3"):
+        proto = "tcp" if first(row, "tcp.srcport") else "udp"
+        key = ctx.row_key(row, proto)
+        if not key:
+            continue
+        func = to_int(first(row, "dnp3.al.func"))
+        if func is None:
+            continue
+        if func < 128:
+            entry: dict[str, Any] = {"ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+                                     "fc_request": _DNP3_FUNCS.get(func, f"UNKNOWN_{func}"), "fc_reply": None, "iin": None}
+            table.rows.append(entry)
+            pending[key] = entry
+        else:
+            entry = pending.pop(key) if key in pending else {
+                "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+                "fc_request": None, "fc_reply": None, "iin": None}
+            entry["fc_reply"] = _DNP3_FUNCS.get(func, f"UNKNOWN_{func}")
+            iin_raw = first(row, "dnp3.al.iin")
+            entry["iin"] = to_int_auto(iin_raw) if iin_raw else None
+            if entry["fc_request"] is None:  # a reply whose request is not in the capture
+                table.rows.append(entry)
+    return table
+
+
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 

@@ -504,6 +504,11 @@ NTLM_PASS = PassSpec(
     )),
 )
 
+MODBUS_PASS = PassSpec(name="modbus", display_filter="modbus", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
+       "mbtcp.trans_id", "modbus.func_code", "modbus.exception_code")))
+DNP3_PASS = PassSpec(name="dnp3", display_filter="dnp3", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
+       "udp.srcport", "udp.dstport", "dnp3.al.func", "dnp3.al.iin")))
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -569,6 +574,8 @@ PASSES: dict[str, PassSpec] = {
         PAYLOAD_PASS,
         KERBEROS_PASS,
         NTLM_PASS,
+        MODBUS_PASS,
+        DNP3_PASS,
     )
 }
 

@@ -46,6 +46,7 @@
   "http_firmware_headers.pcap": [
     "HTTP_CLEARTEXT"
   ],
+  "ics_mix.pcap": [],
   "kerberos.pcap": [],
   "logs_mix.pcap": [
     "CLEARTEXT_SERVICE",
