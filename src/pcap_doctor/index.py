@@ -901,6 +901,15 @@ class IndexBuilder:
             elif version:
                 sess.server_version = version
             for attr, field in (
+                ("hassh", "ssh.kex.hassh"),
+                ("hassh_algorithms", "ssh.kex.hassh_algorithms"),
+                ("hassh_server", "ssh.kex.hasshserver"),
+                ("hassh_server_algorithms", "ssh.kex.hasshserver_algorithms"),
+            ):
+                value = first(row, field)
+                if value and not getattr(sess, attr):
+                    setattr(sess, attr, value)
+            for attr, field in (
                 ("kex_algorithms", "ssh.kex_algorithms"),
                 ("host_key_algorithms", "ssh.server_host_key_algorithms"),
                 ("ciphers", "ssh.encryption_algorithms_client_to_server"),

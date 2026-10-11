@@ -303,7 +303,8 @@ def _ssh_log(ctx: _Ctx) -> LogTable:
     table = LogTable("ssh", [
         ("ts", "time"), *ID_COLS, ("version", "count"), ("client", "string"), ("server", "string"),
         ("cipher_alg", "string"), ("mac_alg", "string"), ("compression_alg", "string"), ("kex_alg", "string"),
-        ("host_key_alg", "string")])
+        ("host_key_alg", "string"), ("hassh", "string"), ("hasshAlgorithms", "string"),
+        ("hasshServer", "string"), ("hasshServerAlgorithms", "string")])
     for s in ctx.index.ssh:
         table.rows.append({
             "ts": ctx.ts(s.frame), **ctx.ids(s.key), "version": 2, "client": s.client_version,
@@ -311,6 +312,8 @@ def _ssh_log(ctx: _Ctx) -> LogTable:
             "mac_alg": s.macs[0] if s.macs else None, "compression_alg": s.compression[0] if s.compression else None,
             "kex_alg": s.kex_algorithms[0] if s.kex_algorithms else None,
             "host_key_alg": s.host_key_algorithms[0] if s.host_key_algorithms else None,
+            "hassh": s.hassh, "hasshAlgorithms": s.hassh_algorithms,
+            "hasshServer": s.hassh_server, "hasshServerAlgorithms": s.hassh_server_algorithms,
         })
     return table
 
