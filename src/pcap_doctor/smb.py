@@ -20,8 +20,18 @@ EXEC_PIPES = ("svcctl", "atsvc", "psexesvc", "winreg", "remcom")
 
 
 def unescape(value: str) -> str:
-    """tshark's field output doubles every backslash: a doubled pair is one real backslash."""
-    return value.replace("\\\\", "\\")
+    """One backslash per path separator, whatever the tshark version printed.
+
+    tshark 4.6 doubles every backslash in ``-T fields`` output, 4.2 prints them as they are. Windows paths never
+    contain a doubled separator, so every run of backslashes collapses to one.
+    """
+    return re.sub(r"\\+", lambda _: "\\", value)
+
+
+def unc(value: str) -> str:
+    """A share path: collapse the separators, then restore the two leading backslashes of a UNC path."""
+    value = unescape(value)
+    return "\\" + value if value.startswith("\\") else value
 
 
 class SmbOp(BaseModel):
@@ -75,7 +85,7 @@ def parse_smb(rows: list[Row], key_of: object) -> list[SmbOp]:  # key_of: Callab
                 key=key, frame=frame, ts=ts, version=version, command=command,
                 response=to_bool01(responses[i] if i < len(responses) else (responses[0] if responses else "")),
                 status=first(row, "smb2.nt_status") or first(row, "smb.nt_status") or None,
-                tree=unescape(first(row, "smb2.tree") or first(row, "smb.path")) or None,
+                tree=unc(first(row, "smb2.tree") or first(row, "smb.path")) or None,
                 filename=unescape(first(row, "smb2.filename") or first(row, "smb.file")) or None,
                 user=first(row, "ntlmssp.auth.username") or None,
                 domain=first(row, "ntlmssp.auth.domain") or None,

@@ -60,3 +60,17 @@ def test_smb_command_and_query_source(cli_runner) -> None:
     rows = json.loads(cli_runner.invoke(app, ["query", str(fixture("smb_attack.pcap")), 'version == "SMB1"', "-s", "smb", "--json"]).output)
     assert rows and rows[0]["command"] == "NEGOTIATE"
     assert "no SMB traffic" in cli_runner.invoke(app, ["smb", str(fixture("http_basic.pcap"))]).output
+
+
+def test_paths_read_the_same_whichever_tshark_printed_them() -> None:
+    """tshark 4.6 doubles backslashes in field output, 4.2 does not (CI runs 4.2.2): both give one UNC path."""
+    from pcap_doctor.smb import parse_smb, unc, unescape
+
+    want = "\\\\10.0.0.30\\ADMIN$"
+    assert unc("\\\\\\\\10.0.0.30\\\\ADMIN$") == want  # 4.6
+    assert unc("\\\\10.0.0.30\\ADMIN$") == want  # 4.2
+    assert unescape("windows\\\\temp\\\\x.exe") == unescape("windows\\temp\\x.exe") == "windows\\temp\\x.exe"
+    for printed in ("\\\\\\\\h\\\\IPC$", "\\\\h\\IPC$"):
+        rows = [{"frame.number": ["1"], "smb2.cmd": ["3"], "smb2.flags.response": ["0"], "smb2.tree": [printed]}]
+        (op,) = parse_smb(rows, lambda _row: "tcp:a:1<->b:445")
+        assert op.tree == "\\\\h\\IPC$" and op.share == "IPC$"

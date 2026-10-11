@@ -25,7 +25,7 @@ from .data_ciphers import registry
 from .index import CaptureIndex, first, many
 from .models import flow_key, stable_id
 from .prompts import clean_capture_text
-from .smb import unescape
+from .smb import unc, unescape
 from .tshark import Row, to_float, to_int
 
 Column = tuple[str, str]  # (zeek field name, zeek type)
@@ -525,7 +525,7 @@ def _smb_log(ctx: _Ctx) -> LogTable:
                 "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key), "version": version, "command": name,
                 "response": (responses[i] if i < len(responses) else (responses[0] if responses else "")) in ("1", "True") if responses else None,
                 "status": first(row, "smb2.nt_status") or first(row, "smb.nt_status") or None,
-                "tree": unescape(first(row, "smb2.tree")) or None,
+                "tree": unc(first(row, "smb2.tree")) or None,
                 "filename": unescape(first(row, "smb2.filename") or first(row, "smb.file")) or None,
                 "username": first(row, "ntlmssp.auth.username") or None,
                 "domain": first(row, "ntlmssp.auth.domain") or None,
