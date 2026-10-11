@@ -70,6 +70,7 @@ class TlsCipherDetector(Detector):
             findings += self._weak_dh(session, subjects)
             findings += self._ocsp_staple(session, subjects)
             findings += self._alerts(session, subjects)
+            findings += self._heartbleed(session, subjects)
             if session.truncated and flow is not None:
                 findings += self._truncated(session, subjects)
         findings += self._fingerprint_clusters(index)
@@ -738,6 +739,35 @@ class TlsCipherDetector(Detector):
                 )
             )
         return out
+
+    def _heartbleed(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
+        if not session.heartbleed_probes:
+            return []
+        frame, claimed, length = session.heartbleed_probes[0]
+        count = len(session.heartbleed_probes)
+        total = f" ({count} probes in total)" if count > 1 else ""
+        return [
+            self.finding(
+                code="TLS_HEARTBLEED_PROBE",
+                severity="high",
+                confidence="high",
+                scope=f"{session.key}|heartbleed",
+                flow_key=session.key,
+                subjects=subjects,
+                title=f"Heartbleed probe on {session.key}",
+                evidence=[ev(frame, "tls.heartbeat_message.payload_length", str(claimed))],
+                summary=(
+                    f"A heartbeat request claimed {claimed} payload bytes in a {length}-byte record{total}: "
+                    "the shape of a CVE-2014-0160 probe; a vulnerable OpenSSL answers with that much of its memory."
+                ),
+                remediation=(
+                    "Upgrade OpenSSL past 1.0.1g (or disable heartbeats), revoke and reissue the server "
+                    "certificate, and rotate secrets that may have leaked."
+                ),
+                references=["CVE-2014-0160", "RFC 6520"],
+                tags=["tls", "heartbleed"],
+            )
+        ]
 
     def _truncated(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
         return [

@@ -227,6 +227,7 @@ class TlsSession(BaseModel):
     validation_status: str | None = None
     #: does the leaf certificate cover the SNI (RFC 6125)? None when there is no SNI or no certificate
     hostname_match: bool | None = None
+    heartbleed_probes: list[tuple[int, int, int]] = Field(default_factory=list)  # (frame, claimed, record length) (#234)
     certs: list[Cert] = Field(default_factory=list)
     alerts: list[TlsAlert] = Field(default_factory=list)
     frames: list[int] = Field(default_factory=list)

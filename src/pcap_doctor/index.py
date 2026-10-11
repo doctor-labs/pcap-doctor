@@ -613,6 +613,12 @@ class IndexBuilder:
                         description=first(row, "tls.alert_message.desc"),
                     )
                 )
+            if first(row, "tls.heartbeat_message.type") == "1":
+                claimed = to_int(first(row, "tls.heartbeat_message.payload_length"))
+                lengths = many(row, "tls.record.length")
+                length = to_int(lengths[-1]) if lengths else None
+                if claimed is not None and length is not None and claimed + 19 > length:
+                    session.heartbleed_probes.append((frame, claimed, length))
             _ = src
         for session in sessions.values():
             self._finalize_tls(index, session)

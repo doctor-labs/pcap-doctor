@@ -494,7 +494,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 
 | Id | Module | Owns |
 |---|---|---|
-| `d1.tls_cipher` | `detectors/tls_cipher.py` | negotiated version, chosen suite, offered-but-unused weak suites, forward secrecy, weak DHE group (Logjam), OCSP response not stapled, certificate expiry/key/signature/self-signed, certificate not yet valid, SNI/certificate mismatch, no extended master secret, alerts, truncated handshakes, JA3 fleet clustering |
+| `d1.tls_cipher` | `detectors/tls_cipher.py` | negotiated version, chosen suite, offered-but-unused weak suites, forward secrecy, weak DHE group (Logjam), OCSP response not stapled, certificate expiry/key/signature/self-signed, certificate not yet valid, SNI/certificate mismatch, no extended master secret, alerts, truncated handshakes, JA3 fleet clustering, Heartbleed probes |
 | `d2.transport_exposure` | `detectors/transport_exposure.py` | plain HTTP (firmware-like downloads rated high; query strings never reported), HTTP Basic/Digest over cleartext, Basic inside TLS, cookies without `Secure`, cleartext FTP/Telnet/NTP/SNMP/LDAP/SMTP/POP/MySQL/TFTP, leaked credentials (SNMP community, FTP `PASS`, LDAP simple bind, MySQL queries, Telnet logins; always redacted), services on odd ports (lower-port side, low confidence), unanswered-SYN scan shapes, beaconing (regular gaps between bursts) |
 | `d3.sip_rtp` | `detectors/sip_rtp.py` | SIP call graph, cleartext REGISTER/INVITE with auth headers, SDP offered without `a=crypto` (no SRTP possible), RTP media in the clear, media volume anomalies |
 | `d9.user_signatures` | `detectors/user_signatures.py` | matches of Suricata-style rules / Zeek signatures you pass with `analyze --signatures` (`SIGNATURE_MATCH`) |
