@@ -25,6 +25,7 @@
     "DNS_CLEARTEXT",
     "DNS_TUNNEL_SHAPE"
   ],
+  "devices.pcap": [],
   "files_mix.pcap": [
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE",
