@@ -28,6 +28,8 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `device` | one row per sender MAC: OUI vendor, IPs seen, packet count (an extension; Zeek's known_devices is similar) | `device` pass |
 | `protocols` | protocol hierarchy breakdown: frames, bytes and share of frames per protocol layer (an extension, like `tshark -z io,phs` flattened) | `protocols` pass |
 | `capture_loss` | ACKs, gaps (segments after a mid-stream hole) and percent lost, like Zeek's capture_loss.log | `capture_loss` pass |
+| `conversations` | frames, bytes, first seen and duration per IP pair, both directions together (an extension, like `tshark -z conv,ip`) | `frames` pass |
+| `io` | frames and bytes per one-second bucket (an extension, like Wireshark's IO graph) | `frames` pass |
 
 ## Where the logs differ from Zeek
 
