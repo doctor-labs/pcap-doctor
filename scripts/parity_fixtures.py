@@ -824,3 +824,16 @@ def fixture_connect_scans() -> bytes:
     for i in range(20):  # horizontal: port 445 on 20 hosts
         connect(f"10.90.1.{i + 1}", 51000 + i, 445)
     return w.write()
+    return w.write()
+
+
+@fixture("os_ttls.pcap")
+def fixture_os_ttls() -> bytes:
+    """SYNs from three hosts a few hops away: initial TTL 128 (Windows), 64 (Linux/Unix) and 255 (network device) (#244)."""
+    w = Wire(start=1_701_900_000.0)
+    server = "10.95.0.1"
+    for i, (host, ttl) in enumerate((("10.95.0.10", 125), ("10.95.0.20", 61), ("10.95.0.30", 252))):
+        for n in range(2):  # two SYNs each: one row per host
+            w.add(ether(MAC_A, MAC_B, ip_packet(host, server, 6, tcp_segment(host, server, 52000 + i * 10 + n, 443, 7000, 0, 0x02), ttl=ttl)))
+    return w.write()
+
