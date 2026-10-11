@@ -640,7 +640,7 @@ class IndexBuilder:
             supported_versions=normalize_version_list(many(row, "tls.handshake.extensions.supported_version")),
             cipher_suites=ciphers if htype == 1 else [],
             cipher_suite=ciphers[0] if (htype == 2 and ciphers) else None,
-            compression_methods=to_int_list(many(row, "tls.handshake.compression_methods")),
+            compression_methods=to_int_list(many(row, "tls.handshake.comp_method")),
             sni=first(row, "tls.handshake.extensions_server_name") or None,
             alpn=many(row, "tls.handshake.extensions_alpn_str"),
             supported_groups=many(row, "tls.handshake.extensions_supported_group"),
