@@ -533,6 +533,12 @@ DEVICE_PASS = PassSpec(
         "eth.src_resolved", "ip.src", "ipv6.src"),
 )
 
+PROTOCOLS_PASS = PassSpec(
+    name="protocols",
+    display_filter="frame",
+    fields=("frame.len", "frame.protocols"),
+)
+
 ARP_ICMP_PASS = PassSpec(
     name="arp_icmp",
     display_filter="arp.opcode == 2 || icmp.type == 5",
@@ -612,6 +618,7 @@ PASSES: dict[str, PassSpec] = {
         MODBUS_PASS,
         DNP3_PASS,
         TUNNEL_PASS,
+        PROTOCOLS_PASS,
         ARP_ICMP_PASS,
         DEVICE_PASS,
     )
@@ -1029,7 +1036,7 @@ class TsharkRunner:
         if not lines:
             return []
         header = lines[0].split(TAB)
-        if header and header[0] == "frame.number":
+        if header == list(fields) or (header and header[0] == "frame.number"):
             names = header
             body = lines[1:]
         else:
