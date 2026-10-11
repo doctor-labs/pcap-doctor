@@ -840,12 +840,33 @@ def _resolve_vendor(oui_resolved: str | None, src_resolved: str | None, mac: str
     return None
 
 
+def _protocols_log(ctx: _Ctx) -> LogTable:
+    """Protocol hierarchy breakdown: frames and bytes per protocol layer (issue #279)."""
+    table = LogTable("protocols", [("protocol", "string"), ("frames", "count"), ("bytes", "count"), ("percent_frames", "double")])
+    counts: dict[str, list[int]] = {}  # protocol -> [frames, bytes]
+    total_frames = 0
+    for row in ctx.runner.run("protocols"):
+        protocols = (first(row, "frame.protocols") or "").split(":")
+        layers = set(protocols) - {"ethertype", ""}
+        length = to_int(first(row, "frame.len")) or 0
+        total_frames += 1
+        for layer in layers:
+            entry = counts.setdefault(layer, [0, 0])
+            entry[0] += 1
+            entry[1] += length
+    for protocol, (frames, byte_count) in counts.items():
+        percent = round(100 * frames / total_frames, 1) if total_frames else 0.0
+        table.rows.append({"protocol": protocol, "frames": frames, "bytes": byte_count, "percent_frames": percent})
+    table.rows.sort(key=lambda r: (-r["frames"], r["protocol"]))
+    return table
+
+
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
-    "device": _device_log,
+    "device": _device_log, "protocols": _protocols_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 
