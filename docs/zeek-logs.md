@@ -25,6 +25,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `modbus` | Modbus/TCP reply: function and exception name | `modbus` pass |
 | `dnp3` | DNP3 request with its reply: function codes and IIN bits | `dnp3` pass |
 | `tunnel` | encapsulation seen: GRE, VXLAN, GENEVE, GTP, MPLS, ERSPAN, PPPoE by outer endpoints (802.1Q as `VLAN`, an extension) | `tunnel` pass |
+| `device` | one row per sender MAC: OUI vendor, IPs seen, packet count (an extension; Zeek's known_devices is similar) | `device` pass |
 
 ## Where the logs differ from Zeek
 

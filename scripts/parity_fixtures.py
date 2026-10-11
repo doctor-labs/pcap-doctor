@@ -715,3 +715,13 @@ def fixture_arp_icmp() -> bytes:
     icmp = icmp[:2] + struct.pack("!H", csum(icmp)) + icmp[4:]
     w.add(ether("02:00:00:00:00:fe", MAC_A, ip_packet("10.0.0.254", "10.0.0.20", 1, icmp)))
     return w.write()
+
+
+@fixture("devices.pcap")
+def fixture_devices() -> bytes:
+    """Three senders: a Google OUI, a Raspberry Pi OUI and a locally administered MAC with no vendor (#274)."""
+    w = Wire(start=1_701_300_000.0)
+    for src_mac, ip in (("00:1a:11:aa:bb:01", "10.40.0.1"), ("b8:27:eb:12:34:56", "10.40.0.2"), ("02:00:00:00:00:0c", "10.40.0.3")):
+        for _ in range(2):  # repeated traffic, one row per MAC
+            w.add(ether(src_mac, "ff:ff:ff:ff:ff:ff", ip_packet(ip, "10.40.0.255", 17, udp_datagram(ip, "10.40.0.255", 40002, 9999, b"PF-DEV"))))
+    return w.write()

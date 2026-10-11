@@ -785,11 +785,67 @@ def _tunnel_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+def _device_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style ``device.log`` (an extension; Zeek's known_devices is similar).
+
+    One row per distinct sender MAC: first-seen time, OUI vendor, distinct IPs,
+    and packet count.
+    """
+    table = LogTable("device", [("ts", "time"), ("mac", "string"), ("vendor", "string"),
+                                ("ips", "set[string]"), ("packets", "count")])
+    # mac -> {"ts": float, "vendor": str | None, "ips": set[str], "packets": int}
+    devs: dict[str, dict[str, Any]] = {}
+    for row in ctx.runner.run("device"):
+        mac = first(row, "eth.src")
+        if not mac:
+            continue
+        mac = mac.lower()
+        ts = to_float(first(row, "frame.time_epoch"))
+        ip = first(row, "ip.src") or first(row, "ipv6.src")
+        oui = first(row, "eth.src.oui_resolved")
+        resolved = first(row, "eth.src_resolved")
+        vendor = _resolve_vendor(oui, resolved, mac)
+        info = devs.get(mac)
+        if info is None:
+            info = {"ts": ts, "vendor": vendor, "ips": set(), "packets": 0}
+            devs[mac] = info
+        if ts is not None and (info["ts"] is None or ts < info["ts"]):
+            info["ts"] = ts
+        if ip:
+            info["ips"].add(ip)
+        info["packets"] += 1
+    for mac, info in devs.items():
+        table.rows.append({
+            "ts": info["ts"], "mac": mac, "vendor": info["vendor"],
+            "ips": sorted(info["ips"]), "packets": info["packets"],
+        })
+    table.rows.sort(key=lambda r: (r["ts"] is None, r["ts"] or 0.0))
+    return table
+
+
+def _resolve_vendor(oui_resolved: str | None, src_resolved: str | None, mac: str) -> str | None:
+    """Pick a vendor string for a MAC.
+
+    * eth.src.oui_resolved when non-empty;
+    * else eth.src_resolved when it is not the MAC itself: the part before the
+      last ``_`` (e.g. ``"Google_aa:bb:01"`` -> ``"Google"``);
+    * else None.
+    """
+    if oui_resolved:
+        return oui_resolved
+    if src_resolved and src_resolved != mac:
+        idx = src_resolved.rfind("_")
+        if idx > 0:
+            return src_resolved[:idx]
+    return None
+
+
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
+    "device": _device_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 

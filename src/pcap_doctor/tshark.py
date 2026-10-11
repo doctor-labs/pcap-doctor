@@ -526,6 +526,13 @@ TUNNEL_PASS = PassSpec(
     )),
 )
 
+DEVICE_PASS = PassSpec(
+    name="device",
+    display_filter="eth",
+    fields=("frame.number", "frame.time_epoch", "eth.src", "eth.src.oui_resolved",
+        "eth.src_resolved", "ip.src", "ipv6.src"),
+)
+
 ARP_ICMP_PASS = PassSpec(
     name="arp_icmp",
     display_filter="arp.opcode == 2 || icmp.type == 5",
@@ -606,6 +613,7 @@ PASSES: dict[str, PassSpec] = {
         DNP3_PASS,
         TUNNEL_PASS,
         ARP_ICMP_PASS,
+        DEVICE_PASS,
     )
 }
 
