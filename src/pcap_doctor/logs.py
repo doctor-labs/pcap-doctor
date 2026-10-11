@@ -248,14 +248,15 @@ def _conn_log(ctx: _Ctx) -> LogTable:
 
 
 _QTYPES = {"1": "A", "2": "NS", "5": "CNAME", "6": "SOA", "12": "PTR", "15": "MX", "16": "TXT", "28": "AAAA",
-           "33": "SRV", "43": "DS", "46": "RRSIG", "48": "DNSKEY", "65": "HTTPS", "255": "*"}
+           "33": "SRV", "43": "DS", "46": "RRSIG", "48": "DNSKEY", "64": "SVCB", "65": "HTTPS", "257": "CAA", "255": "*"}
 _RCODES = {"0": "NOERROR", "1": "FORMERR", "2": "SERVFAIL", "3": "NXDOMAIN", "4": "NOTIMP", "5": "REFUSED"}
 
 
 def _dns_log(ctx: _Ctx) -> LogTable:
     table = LogTable("dns", [
         ("ts", "time"), *ID_COLS, ("proto", "enum"), ("query", "string"), ("qtype_name", "string"),
-        ("rcode_name", "string"), ("answers", "vector[string]"), ("rejected", "bool")])
+        ("rcode_name", "string"), ("answers", "vector[string]"), ("rejected", "bool"),
+        ("edns_udp_size", "count")])
     for q in ctx.index.dns:
         if q.is_response:
             continue
@@ -265,6 +266,7 @@ def _dns_log(ctx: _Ctx) -> LogTable:
             "qtype_name": _QTYPES.get(q.qtype, q.qtype),
             "rcode_name": _RCODES.get(rcode, rcode) if rcode is not None else None, "answers": q.answers or None,
             "rejected": None if rcode is None else _RCODES.get(rcode, rcode) != "NOERROR",
+            "edns_udp_size": q.edns_udp_size,
         })
     return table
 

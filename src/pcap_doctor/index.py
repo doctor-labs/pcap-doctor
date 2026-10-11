@@ -211,6 +211,28 @@ def many(row: Row, field: str) -> list[str]:
     return out
 
 
+def dns_answers(row: Row) -> list[str]:
+    """Answer values in Zeek's dns.log form: addresses and names as they are, TXT as ``TXT <len> <text>`` (#229)."""
+    out = many(row, "dns.a") + many(row, "dns.aaaa") + many(row, "dns.cname")
+    out += [f"TXT {len(t)} {t}" for t in row.get("dns.txt", []) if t]  # not many(): TXT may hold commas
+    for field in ("dns.mx.mail_exchange", "dns.ns", "dns.ptr.domain_name", "dns.srv.target", "dns.soa.mname"):
+        out += many(row, field)
+    out += [f"{tag} {value}" for tag, value in zip(row.get("dns.caa.tag", []), row.get("dns.caa.value", []), strict=False)]
+    return out
+
+
+def _attach_dns_answers(pending: dict[tuple[str, int], list[DnsQuery]], row: Row, frame: int) -> None:
+    """Attach a response row's answers and rcode to the pending queries it answers (#229)."""
+    answers = dns_answers(row)
+    rcode = first(row, "dns.flags.rcode")
+    for bucket in pending.values():
+        for query in bucket:
+            if query.response_frame is None and abs(query.frame - frame) < 200:
+                query.response_frame = frame
+                query.answers = answers
+                query.rcode = rcode or None
+
+
 def normalize_version_list(values: Iterable[str]) -> list[str]:
     out: list[str] = []
     for value in values:
@@ -793,19 +815,15 @@ class IndexBuilder:
                     qtype=qtypes[0] if qtypes else "?",
                     over_tls=over_tls,
                     is_response=is_response is True,
+                    edns_udp_size=to_int(first(row, "dns.rr.udp_payload_size")),
                 )
                 index.dns.append(query)
                 if not is_response:
                     pending[(key, frame)].append(query)
+                else:
+                    _attach_dns_answers(pending, row, frame)
             else:
-                answers = many(row, "dns.a") + many(row, "dns.aaaa") + many(row, "dns.cname")
-                rcode = first(row, "dns.flags.rcode")
-                for bucket in pending.values():
-                    for query in bucket:
-                        if query.response_frame is None and abs(query.frame - frame) < 200:
-                            query.response_frame = frame
-                            query.answers = answers
-                            query.rcode = rcode or None
+                _attach_dns_answers(pending, row, frame)
             _ = (names, qtypes, is_response)
 
     # -- SIP / SDP ---------------------------------------------------------

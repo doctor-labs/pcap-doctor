@@ -281,6 +281,7 @@ class DnsQuery(BaseModel):
     is_response: bool = False
     over_tls: bool = False
     response_frame: int | None = None
+    edns_udp_size: int | None = None  # the query's EDNS OPT payload size (#229)
 
 
 class SipMessage(BaseModel):

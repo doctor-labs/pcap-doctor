@@ -14,6 +14,9 @@
     "DNS_CLEARTEXT",
     "DNS_EXTERNAL_RESOLVER"
   ],
+  "dns_records.pcap": [
+    "DNS_CLEARTEXT"
+  ],
   "dns_tunnel.pcap": [
     "DNS_CLEARTEXT",
     "DNS_TUNNEL_SHAPE"
