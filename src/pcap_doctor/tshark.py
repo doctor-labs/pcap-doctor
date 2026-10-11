@@ -508,6 +508,24 @@ NTLM_PASS = PassSpec(
     )),
 )
 
+TUNNEL_PASS = PassSpec(
+    name="tunnel",
+    display_filter="gre || vxlan || geneve || gtp || mpls || erspan || pppoes || vlan",
+    fields=with_addr((
+        "frame.time_epoch",
+        "udp.srcport",
+        "udp.dstport",
+        "gre.proto",
+        "vxlan.vni",
+        "geneve.vni",
+        "gtp.teid",
+        "mpls.label",
+        "erspan.spanid",
+        "pppoe.session_id",
+        "vlan.id",
+    )),
+)
+
 MODBUS_PASS = PassSpec(name="modbus", display_filter="modbus", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
        "mbtcp.trans_id", "modbus.func_code", "modbus.exception_code")))
 DNP3_PASS = PassSpec(name="dnp3", display_filter="dnp3", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
@@ -580,6 +598,7 @@ PASSES: dict[str, PassSpec] = {
         NTLM_PASS,
         MODBUS_PASS,
         DNP3_PASS,
+        TUNNEL_PASS,
     )
 }
 

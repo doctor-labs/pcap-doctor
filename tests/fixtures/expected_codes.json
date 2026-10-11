@@ -114,6 +114,7 @@
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"
   ],
+  "tunnels.pcap": [],
   "weak_tls.pcap": [
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",

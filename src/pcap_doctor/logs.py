@@ -727,11 +727,69 @@ def _dnp3_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+_TUNNEL_TYPE = {
+    "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
+    "mpls": "Tunnel::MPLS", "erspan": "Tunnel::ERSPAN", "pppoes": "Tunnel::PPPOE", "vlan": "VLAN",
+}
+
+#: The tunnel_id field for each tunnel type, in priority order for GRE (which has none -> empty).
+_TUNNEL_ID_FIELD = {
+    "vxlan": "vxlan.vni", "geneve": "geneve.vni", "gtp": "gtp.teid", "mpls": "mpls.label",
+    "erspan": "erspan.spanid", "pppoes": "pppoe.session_id", "vlan": "vlan.id",
+}
+
+
+def _tunnel_log(ctx: _Ctx) -> LogTable:
+    """Zeek ``tunnel.log``: one row per distinct encapsulation seen at its outer endpoints (#227)."""
+    table = LogTable("tunnel", [("ts", "time"), *ID_COLS, ("tunnel_type", "string"), ("action", "string"), ("tunnel_id", "string")])
+    seen: set[tuple[str, str, int, str, int, str]] = set()
+    for row in ctx.runner.run("tunnel"):
+        protocols = (first(row, "frame.protocols") or "").split(":")
+        tunnel_type = None
+        tunnel_field = None
+        for layer in protocols:
+            mapped = _TUNNEL_TYPE.get(layer)
+            if mapped:
+                tunnel_type = mapped
+                tunnel_field = _TUNNEL_ID_FIELD.get(layer)
+                break
+        if tunnel_type is None:
+            continue
+        ts = to_float(first(row, "frame.time_epoch"))
+        if ts is None:
+            continue
+        outer_orig = first(row, "ip.src") or first(row, "ipv6.src")
+        outer_resp = first(row, "ip.dst") or first(row, "ipv6.dst")
+        if not outer_orig or not outer_resp:
+            continue
+        # outer ports: the first UDP ports when the tunnel rides on UDP (a `udp`
+        # layer appears before the tunnel layer), else 0. GRE's own payload may
+        # carry an inner UDP that is NOT the outer transport.
+        tunnel_idx = protocols.index(layer)
+        on_udp = "udp" in protocols[:tunnel_idx]
+        outer_orig_p = to_int(first(row, "udp.srcport")) or 0 if on_udp and first(row, "udp.srcport") else 0
+        outer_resp_p = to_int(first(row, "udp.dstport")) or 0 if on_udp and first(row, "udp.dstport") else 0
+        tunnel_id = first(row, tunnel_field) if tunnel_field else ""
+        # id.orig/resp come from the outer 4-tuple; find the outer conn uid when one exists.
+        proto = "udp" if on_udp else "gre"
+        key = flow_key(proto, outer_orig, outer_orig_p, outer_resp, outer_resp_p)
+        ids = ctx.ids(key)
+        sig = (tunnel_type, ids["id.orig_h"], ids["id.orig_p"], ids["id.resp_h"], ids["id.resp_p"], tunnel_id)
+        if sig in seen:
+            continue
+        seen.add(sig)
+        table.rows.append({
+            "ts": ts, **ids, "tunnel_type": tunnel_type, "action": "Tunnel::DISCOVER", "tunnel_id": tunnel_id or None,
+        })
+    table.rows.sort(key=lambda r: (r["ts"] is None, r["ts"] or 0.0))
+    return table
+
+
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 
