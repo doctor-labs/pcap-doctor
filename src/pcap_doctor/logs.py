@@ -312,14 +312,16 @@ def _ssl_log(ctx: _Ctx) -> LogTable:
 
 def _x509_log(ctx: _Ctx) -> LogTable:
     table = LogTable("x509", [
-        ("ts", "time"), ("id", "string"), ("certificate.subject", "string"), ("certificate.issuer", "string"),
+        ("ts", "time"), ("id", "string"), ("fingerprint", "string"),
+        ("certificate.subject", "string"), ("certificate.issuer", "string"),
         ("certificate.not_valid_before", "string"), ("certificate.not_valid_after", "string"),
         ("certificate.key_alg", "string"), ("certificate.key_length", "count"), ("certificate.sig_alg", "string"),
         ("certificate.curve", "string"), ("san.dns", "vector[string]"), ("spki_sha256", "string")])
     for s in ctx.index.tls.values():
         for c in s.certs:
             table.rows.append({
-                "ts": ctx.ts(c.frame), "id": _fuid(s.key, c.chain_index), "certificate.subject": c.subject,
+                "ts": ctx.ts(c.frame), "id": _fuid(s.key, c.chain_index), "fingerprint": c.fingerprint,
+                "certificate.subject": c.subject,
                 "certificate.issuer": c.issuer, "certificate.not_valid_before": c.not_before,
                 "certificate.not_valid_after": c.not_after, "certificate.key_alg": c.key_algorithm,
                 "certificate.key_length": c.public_key_bits, "certificate.sig_alg": c.signature_algorithm_oid,

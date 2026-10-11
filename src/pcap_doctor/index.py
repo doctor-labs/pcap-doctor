@@ -15,7 +15,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .certificates import CertFacts, apply_openssl_facts, enrich_all, hostname_matches, verify_chain
+from .certificates import (
+    CertFacts,
+    apply_openssl_facts,
+    enrich_all,
+    hostname_matches,
+    split_certificate_occurrences,
+    verify_chain,
+)
 from .models import (
     CaptureInfo,
     Cert,
@@ -287,6 +294,7 @@ class CaptureIndex:
         self.smb: list[SmbOp] = []
         self.signature_hits: list[SignatureHit] = []  # filled by the pipeline when --signatures is given (#201)
         self.firmware_keys: dict[str, str] = {}  # {cert SPKI fingerprint: firmware path} supplied via --firmware
+        self.cert_der: dict[str, bytes] = {}  # {sha256(DER): DER} for certificate export (#212)
         self.dropped_fields: list[str] = []
         self.pass_stats: dict[str, dict[str, int | float | str]] = {}
         self._flow_by_pair: dict[tuple[str, int], str] = {}
@@ -702,6 +710,14 @@ class IndexBuilder:
             )
         if printable and certs:
             certs[0].organizations = printable[: len(printable)] or certs[0].organizations
+        # Keep the DER of each certificate, keyed by sha256, so the pipeline can export it (#212).
+        ders = split_certificate_occurrences(row.get("tls.handshake.certificate", []))
+        for i, cert in enumerate(certs):
+            if i < len(ders):
+                fp = hashlib.sha256(ders[i]).hexdigest()
+                cert.fingerprint = fp
+                if self.index is not None:
+                    self.index.cert_der[fp] = ders[i]
         if enrich is not None:
             apply_openssl_facts(certs, enrich(row.get("tls.handshake.certificate", [])))
         return certs

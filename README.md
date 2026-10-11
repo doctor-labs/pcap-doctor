@@ -247,6 +247,7 @@ graph LR
 | `03-findings.md` | triage table (worst first), then per-finding detail: severity, confidence, code, evidence table, remediation, references, tags |
 | `04-diagrams.md` | topology graph, crypto matrix graph, severity pie, per-detector bar chart, RTP timeline, SIP sequence diagrams |
 | `report.json` | the same data with a stable `schema_version`, for diffing between runs |
+| `certificates/<sha256>.pem` | every TLS certificate seen, named by the SHA-256 of its DER |
 
 Machine-readable output, on top of the six files:
 

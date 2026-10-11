@@ -146,6 +146,7 @@ class Cert(BaseModel):
     key_algorithm: str | None = None
     key_curve: str | None = None
     spki_sha256: str | None = None  # sha256(DER public key)[:16] — non-secret; matches a firmware key's SPKI
+    fingerprint: str | None = None  # sha256(DER certificate) hex
     signature_algorithm_oid: str | None = None
     san_dns: list[str] = Field(default_factory=list)
     subject: str | None = None
