@@ -446,6 +446,46 @@ SMB_PASS = PassSpec(
     )),
 )
 
+#: Kerberos AS/TGS exchanges for kerberos.log (#205): principals, realms, message types, errors. No key material.
+KERBEROS_PASS = PassSpec(
+    name="kerberos",
+    display_filter="kerberos",
+    fields=with_addr((
+        "frame.time_epoch",
+        "tcp.srcport",
+        "tcp.dstport",
+        "udp.srcport",
+        "udp.dstport",
+        "kerberos.msg_type",
+        "kerberos.CNameString",
+        "kerberos.SNameString",
+        "kerberos.realm",
+        "kerberos.crealm",
+        "kerberos.error_code",
+        "kerberos.etype",
+    )),
+)
+
+#: NTLMSSP identities for ntlm.log (#205): user, domain, workstation, server names. Never the responses.
+NTLM_PASS = PassSpec(
+    name="ntlm",
+    display_filter="ntlmssp",
+    fields=with_addr((
+        "frame.time_epoch",
+        "tcp.srcport",
+        "tcp.dstport",
+        "udp.srcport",
+        "udp.dstport",
+        "ntlmssp.messagetype",
+        "ntlmssp.auth.username",
+        "ntlmssp.auth.domain",
+        "ntlmssp.auth.hostname",
+        "ntlmssp.challenge.target_name",
+        "ntlmssp.challenge.target_info.nb_computer_name",
+        "ntlmssp.challenge.target_info.dns_computer_name",
+    )),
+)
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -500,6 +540,8 @@ PASSES: dict[str, PassSpec] = {
         SMB_PASS,
         WEIRD_PASS,
         PAYLOAD_PASS,
+        KERBEROS_PASS,
+        NTLM_PASS,
     )
 }
 

@@ -459,3 +459,55 @@ def fixture_smb_attack() -> bytes:
     t.send(False, smb2_create_response(tree=2, msg_id=8))
     t.close()
     return w.write()
+
+
+def _krb(root: object) -> bytes:
+    """DER bytes of one Kerberos message, built with scapy (a dev dependency) and fixed timestamps."""
+    from scapy.layers.kerberos import Kerberos
+
+    return bytes(Kerberos(root=root))
+
+
+@fixture("kerberos.pcap")
+def fixture_kerberos() -> bytes:
+    """AS exchange that needs pre-authentication, then a TGS request for cifs/fs1 (#205). Names only, no keys."""
+    from scapy.asn1.asn1 import ASN1_GENERAL_STRING, ASN1_GENERALIZED_TIME
+    from scapy.layers.kerberos import (
+        KRB_AS_REP,
+        KRB_AS_REQ,
+        KRB_ERROR,
+        KRB_KDC_REQ_BODY,
+        KRB_TGS_REP,
+        KRB_TGS_REQ,
+        EncryptedData,
+        KRB_Ticket,
+        PrincipalName,
+    )
+
+    realm, when = "CORP.EXAMPLE", ASN1_GENERALIZED_TIME("20231115000000Z")
+
+    def name(kind: int, *parts: str) -> PrincipalName:
+        return PrincipalName(nameType=kind, nameString=[ASN1_GENERAL_STRING(p) for p in parts])
+
+    def req(cname: str | None, sname: PrincipalName) -> KRB_KDC_REQ_BODY:
+        return KRB_KDC_REQ_BODY(cname=name(1, cname) if cname else None, realm=realm, sname=sname, etype=[18, 23],
+                                nonce=1, till=when, rtime=when)
+
+    def enc() -> EncryptedData:
+        return EncryptedData(etype=18, cipher=bytes(16))
+
+    krbtgt, cifs = name(2, "krbtgt", realm), name(2, "cifs", "fs1.corp.example")
+    w = Wire(start=1_700_400_000.0)
+    c, k = "10.3.0.10", "10.3.0.2"
+    w.add(udp_frame(c, k, 50001, 88, _krb(KRB_AS_REQ(reqBody=req("alice", krbtgt)))))
+    w.add(udp_frame(k, c, 88, 50001, _krb(KRB_ERROR(errorCode=25, stime=when, susec=0, realm=realm, sname=krbtgt,
+                                                    cname=name(1, "alice"), crealm=realm))))
+    w.add(udp_frame(c, k, 50002, 88, _krb(KRB_AS_REQ(reqBody=req("alice", krbtgt)))))
+    w.add(udp_frame(k, c, 88, 50002, _krb(KRB_AS_REP(crealm=realm, cname=name(1, "alice"),
+                                                     ticket=KRB_Ticket(realm=realm, sname=krbtgt, encPart=enc()),
+                                                     encPart=enc()))))
+    w.add(udp_frame(c, k, 50003, 88, _krb(KRB_TGS_REQ(reqBody=req(None, cifs)))))
+    w.add(udp_frame(k, c, 88, 50003, _krb(KRB_TGS_REP(msgType=13, crealm=realm, cname=name(1, "alice"),
+                                                      ticket=KRB_Ticket(realm=realm, sname=cifs, encPart=enc()),
+                                                      encPart=enc()))))
+    return w.write()

@@ -538,10 +538,86 @@ def _smb_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+_KRB_ERRORS = {6: "KDC_ERR_C_PRINCIPAL_UNKNOWN", 7: "KDC_ERR_S_PRINCIPAL_UNKNOWN", 12: "KDC_ERR_POLICY",
+               14: "KDC_ERR_ETYPE_NOSUPP", 18: "KDC_ERR_CLIENT_REVOKED", 23: "KDC_ERR_KEY_EXPIRED",
+               24: "KDC_ERR_PREAUTH_FAILED", 25: "KDC_ERR_PREAUTH_REQUIRED", 32: "KRB_AP_ERR_TKT_EXPIRED",
+               37: "KRB_AP_ERR_SKEW", 41: "KRB_AP_ERR_MODIFIED", 68: "KDC_ERR_WRONG_REALM"}
+_KRB_ETYPES = {1: "des-cbc-crc", 3: "des-cbc-md5", 17: "aes128-cts-hmac-sha1-96", 18: "aes256-cts-hmac-sha1-96",
+               19: "aes128-cts-hmac-sha256-128", 20: "aes256-cts-hmac-sha384-192", 23: "rc4-hmac"}
+
+
+def _kerberos_log(ctx: _Ctx) -> LogTable:
+    """One row per AS/TGS request, completed by its reply or KRB-ERROR (#205). Names only, never key material."""
+    table = LogTable("kerberos", [
+        ("ts", "time"), *ID_COLS, ("request_type", "string"), ("client", "string"), ("service", "string"),
+        ("success", "bool"), ("error_msg", "string"), ("cipher", "string")])
+    pending: dict[str, dict[str, Any]] = {}
+    for row in ctx.runner.run("kerberos"):
+        msg = to_int(first(row, "kerberos.msg_type"))
+        if msg not in (10, 11, 12, 13, 30):
+            continue
+        key = ctx.row_key(row, "tcp" if first(row, "tcp.srcport") else "udp")
+        if not key:
+            continue
+        realm = first(row, "kerberos.crealm") or first(row, "kerberos.realm")
+        cname = first(row, "kerberos.CNameString")
+        client = f"{cname}/{realm}" if cname and realm else cname or None
+        entry = None if msg in (10, 12) else pending.pop(key, None)
+        if entry is None:
+            entry = {"ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+                     "request_type": "AS" if msg in (10, 11) else "TGS" if msg in (12, 13) else None,
+                     "client": client, "service": "/".join(many(row, "kerberos.SNameString")) or None,
+                     "success": None, "error_msg": None, "cipher": None}
+            table.rows.append(entry)
+        if msg in (10, 12):
+            pending[key] = entry
+            continue
+        entry["client"] = entry["client"] or client
+        entry["success"] = msg != 30
+        if msg == 30:
+            code = to_int(first(row, "kerberos.error_code")) or 0
+            entry["error_msg"] = _KRB_ERRORS.get(code, f"KRB_ERROR_{code}")
+        elif (etype := to_int(first(row, "kerberos.etype"))) is not None:
+            entry["cipher"] = _KRB_ETYPES.get(etype, str(etype))
+    return table
+
+
+def _ntlm_name(value: str) -> str | None:
+    return None if value in ("", "NULL") else value
+
+
+def _ntlm_log(ctx: _Ctx) -> LogTable:
+    """One row per NTLM AUTHENTICATE, with the server names from the CHALLENGE before it (#205). No responses."""
+    table = LogTable("ntlm", [
+        ("ts", "time"), *ID_COLS, ("username", "string"), ("hostname", "string"), ("domainname", "string"),
+        ("server_nb_computer_name", "string"), ("server_dns_computer_name", "string"), ("server_tree_name", "string")])
+    challenges: dict[str, Row] = {}
+    for row in ctx.runner.run("ntlm"):
+        key = ctx.row_key(row, "tcp" if first(row, "tcp.srcport") else "udp")
+        if not key:
+            continue
+        types = {to_int(t, 16) for t in many(row, "ntlmssp.messagetype")}
+        if 2 in types:
+            challenges[key] = row
+        if 3 not in types:
+            continue
+        challenge = challenges.get(key, {})
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "username": _ntlm_name(first(row, "ntlmssp.auth.username")),
+            "hostname": _ntlm_name(first(row, "ntlmssp.auth.hostname")),
+            "domainname": _ntlm_name(first(row, "ntlmssp.auth.domain")),
+            "server_nb_computer_name": first(challenge, "ntlmssp.challenge.target_info.nb_computer_name") or None,
+            "server_dns_computer_name": first(challenge, "ntlmssp.challenge.target_info.dns_computer_name") or None,
+            "server_tree_name": first(challenge, "ntlmssp.challenge.target_name") or None,
+        })
+    return table
+
+
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
-    "ssh": _ssh_log, "smb": _smb_log,
+    "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 
