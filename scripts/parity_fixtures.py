@@ -725,3 +725,18 @@ def fixture_devices() -> bytes:
         for _ in range(2):  # repeated traffic, one row per MAC
             w.add(ether(src_mac, "ff:ff:ff:ff:ff:ff", ip_packet(ip, "10.40.0.255", 17, udp_datagram(ip, "10.40.0.255", 40002, 9999, b"PF-DEV"))))
     return w.write()
+
+
+@fixture("capture_loss.pcap")
+def fixture_capture_loss() -> bytes:
+    """One TCP flow whose middle data segment was never captured, then ACKed by the receiver (#240)."""
+    w = Wire(start=1_701_400_000.0)
+    c, s = "10.50.0.1", "10.50.0.2"
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 40000, 8080, 1000, 0, 0x02))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 8080, 40000, 5000, 1001, 0x12))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 40000, 8080, 1001, 5001, 0x10))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 40000, 8080, 1001, 5001, 0x18, b"A" * 100))))
+    # seq 1101..1200 is missing from the capture
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 40000, 8080, 1201, 5001, 0x18, b"C" * 100))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 8080, 40000, 5001, 1301, 0x10))))
+    return w.write()
