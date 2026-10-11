@@ -780,3 +780,28 @@ def fixture_http_versions() -> bytes:
     w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42000, 80, 1001, 9001, 0x18, req))))
     w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 80, 42000, 9001, 1001 + len(req), 0x18, resp))))
     return w.write()
+
+
+@fixture("mail_logins.pcap")
+def fixture_mail_logins() -> bytes:
+    """Cleartext POP3 USER/PASS, IMAP LOGIN and SMTP AUTH PLAIN logins (#230)."""
+    w = Wire(start=1_701_700_000.0)
+    c, s = "10.80.0.1", "10.80.0.2"
+    exchanges = (
+        (41100, 110, [(False, b"+OK POP3 ready\r\n"), (True, b"USER alice\r\n"), (False, b"+OK\r\n"), (True, b"PASS secret1\r\n"), (False, b"+OK logged in\r\n")]),
+        (41200, 143, [(False, b"* OK IMAP ready\r\n"), (True, b"a1 LOGIN bob secret2\r\n"), (False, b"a1 OK LOGIN completed\r\n")]),
+        (41300, 25, [(False, b"220 mail ESMTP\r\n"), (True, b"EHLO c\r\n"), (False, b"250-mail\r\n250 AUTH PLAIN\r\n"),
+                     (True, b"AUTH PLAIN AGNhcm9sAHNlY3JldDM=\r\n"), (False, b"235 2.7.0 Authentication successful\r\n")]),
+    )
+    for sport, dport, msgs in exchanges:
+        seq = {"c": 1001, "s": 5001}
+        w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, sport, dport, 1000, 0, 0x02))))
+        w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, dport, sport, 5000, 1001, 0x12))))
+        w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, sport, dport, 1001, 5001, 0x10))))
+        for from_client, payload in msgs:
+            src, dst, sp, dp = (c, s, sport, dport) if from_client else (s, c, dport, sport)
+            side, other = ("c", "s") if from_client else ("s", "c")
+            w.add(ether(MAC_A if from_client else MAC_B, MAC_B if from_client else MAC_A,
+                        ip_packet(src, dst, 6, tcp_segment(src, dst, sp, dp, seq[side], seq[other], 0x18, payload))))
+            seq[side] += len(payload)
+    return w.write()

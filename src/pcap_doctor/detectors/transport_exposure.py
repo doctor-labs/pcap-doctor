@@ -6,6 +6,9 @@ encryption, plus the shapes that reconnaissance traffic leaves behind.
 
 from __future__ import annotations
 
+import base64
+import contextlib
+import shlex
 from collections import Counter
 from typing import ClassVar
 
@@ -286,6 +289,91 @@ class TransportExposureDetector(Detector):
                         tags=["cleartext", "credential"],
                     )
                 )
+
+            # --- Cleartext mail credentials (POP3 / IMAP / SMTP AUTH) ---
+            pop_cmd = (fields.get("pop.request.command") or "").upper()
+            if pop_cmd == "PASS":
+                value = fields.get("pop.request.parameter")
+                if value:
+                    out.append(
+                        self.finding(
+                            code="CLEARTEXT_CREDENTIAL",
+                            title=f"POP3 password exposed in cleartext on {hit.key}",
+                            severity="critical",
+                            confidence="high",
+                            summary=(
+                                f"Frame {hit.frame}: a POP3 PASS was observed in cleartext. "
+                                "Treat this credential as compromised and rotate it."
+                            ),
+                            scope=f"{hit.key}|cred|pop.request.parameter|{hit.frame}",
+                            flow_key=hit.key,
+                            subjects=self._subjects(index, hit.key),
+                            evidence=[ev(hit.frame, "pop.request.parameter", value)],
+                            remediation="Rotate the credential and require an encrypted transport (POP3S/STLS).",
+                            references=["CWE-319", "CWE-798"],
+                            tags=["cleartext", "credential", "pop3"],
+                        )
+                    )
+
+            imap_req = fields.get("imap.request")
+            if imap_req:
+                parts: list[str] = []
+                with contextlib.suppress(ValueError):
+                    parts = shlex.split(imap_req, posix=True)
+                if len(parts) >= 4 and parts[1].upper() == "LOGIN":
+                    user = parts[2]
+                    value = parts[3]
+                    if value:
+                        out.append(
+                            self.finding(
+                                code="CLEARTEXT_CREDENTIAL",
+                                title=f"IMAP LOGIN password exposed in cleartext on {hit.key}",
+                                severity="critical",
+                                confidence="high",
+                                summary=(
+                                    f"Frame {hit.frame}: an IMAP LOGIN was observed in cleartext"
+                                    f" for user {user!r}. Treat this credential as compromised and rotate it."
+                                ),
+                                scope=f"{hit.key}|cred|imap.request|{hit.frame}",
+                                flow_key=hit.key,
+                                subjects=self._subjects(index, hit.key),
+                                evidence=[ev(hit.frame, "imap.request", value)],
+                                remediation="Rotate the credential and require an encrypted transport (IMAPS).",
+                                references=["CWE-319", "CWE-798"],
+                                tags=["cleartext", "credential", "imap"],
+                            )
+                        )
+
+            smtp_cmd = (fields.get("smtp.req.command") or "").upper()
+            smtp_param = fields.get("smtp.req.parameter") or ""
+            if smtp_cmd == "AUTH" and smtp_param.startswith("PLAIN "):
+                decoded = ""
+                with contextlib.suppress(Exception):
+                    decoded = base64.b64decode(smtp_param[len("PLAIN "):], validate=True).decode("utf-8", errors="replace")
+                if decoded:
+                    segments = decoded.split("\0")
+                    if len(segments) == 3:
+                        _authzid, user, value = segments
+                        if value:
+                            out.append(
+                                self.finding(
+                                    code="CLEARTEXT_CREDENTIAL",
+                                    title=f"SMTP AUTH PLAIN password exposed in cleartext on {hit.key}",
+                                    severity="critical",
+                                    confidence="high",
+                                    summary=(
+                                        f"Frame {hit.frame}: an SMTP AUTH PLAIN exchange was observed in cleartext"
+                                        f" for user {user!r}. Treat this credential as compromised and rotate it."
+                                    ),
+                                    scope=f"{hit.key}|cred|smtp.auth.password|{hit.frame}",
+                                    flow_key=hit.key,
+                                    subjects=self._subjects(index, hit.key),
+                                    evidence=[ev(hit.frame, "smtp.auth.password", value)],
+                                    remediation="Rotate the credential and require an encrypted transport (SMTPS/STARTTLS).",
+                                    references=["CWE-319", "CWE-798"],
+                                    tags=["cleartext", "credential", "smtp"],
+                                )
+                            )
         return out
 
     def _telnet_logins(self, index: CaptureIndex) -> list[Finding]:

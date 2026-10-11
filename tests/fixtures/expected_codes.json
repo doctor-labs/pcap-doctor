@@ -60,6 +60,10 @@
   ],
   "ics_mix.pcap": [],
   "kerberos.pcap": [],
+  "mail_logins.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE"
+  ],
   "logs_mix.pcap": [
     "CLEARTEXT_SERVICE",
     "SMB_ADMIN_SHARE_ACCESS",
