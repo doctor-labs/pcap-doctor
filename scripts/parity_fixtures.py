@@ -664,3 +664,18 @@ def fixture_ics_mix() -> bytes:
     d.send(False, dnp3_frame(bytes([0xC1, 0x81, 0x80, 0x00]), dst=1, src=10, primary=False))  # RESPONSE, IIN device restart
     d.close()
     return w.write()
+
+
+@fixture("heartbleed.pcap")
+def fixture_heartbleed() -> bytes:
+    """A TLS heartbeat request that claims 16384 payload bytes but carries 3 (the Heartbleed probe), and an honest one (#234, #264)."""
+    w = Wire(start=1_701_000_000.0)
+    c, s = "10.9.0.66", "10.9.0.20"
+    t = Tcp(w, c, s, 49300, 443).open()
+    t.send(True, bytes.fromhex("1803020008") + bytes([1]) + struct.pack("!H", 0x4000) + b"PFX" + bytes(2))  # claims 16384
+    t.close()
+    h = Tcp(w, c, s, 49301, 443).open()
+    beat = bytes([1]) + struct.pack("!H", 4) + b"PING" + bytes(16)  # type, payload_length 4, payload, 16 bytes padding
+    h.send(True, bytes.fromhex("180303") + struct.pack("!H", len(beat)) + beat)
+    h.close()
+    return w.write()

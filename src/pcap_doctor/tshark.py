@@ -104,7 +104,7 @@ TLS_PASS = PassSpec(
     # "!= 0x0303" on purpose: a DTLS record version is 0xfefd/0xfeff, which is numerically far above
     # 0x0303, so the loose form would pull in every DTLS data record in every capture.
     display_filter=(
-        "tls.handshake || tls.alert_message "
+        "tls.handshake || tls.alert_message || tls.heartbeat_message "
         "|| (tls.record.content_type == 23 && tls.record.version < 0x0303)"
     ),
     fields=with_addr((
@@ -116,6 +116,9 @@ TLS_PASS = PassSpec(
         "udp.stream",
         "tls.record.version",
         "tls.record.content_type",
+        "tls.record.length",
+        "tls.heartbeat_message.type",
+        "tls.heartbeat_message.payload_length",
         "tls.handshake.type",
         "tls.handshake.version",
         "tls.handshake.ciphersuite",

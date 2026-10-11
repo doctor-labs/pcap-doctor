@@ -52,6 +52,7 @@ RULES: dict[str, Rule] = {
         Rule("TLS_WARNING_ALERT", _TLS, "Crypto", "TLS warning alert"),
         Rule("TLS_HANDSHAKE_TRUNCATED", _TLS, "Crypto", "Truncated TLS handshake"),
         Rule("TLS_JA3_FLEET", _TLS, "Crypto", "Client JA3 fingerprint fleet"),
+        Rule("TLS_HEARTBLEED_PROBE", _TLS, "Crypto", "Heartbleed probe (CVE-2014-0160)"),
         Rule("CLEARTEXT_CREDENTIAL", _TRANSPORT, "Credentials", "Credential sent in cleartext"),
         Rule("HTTP_BASIC_AUTH", _TRANSPORT, "Credentials", "HTTP Basic authentication"),
         Rule("HTTP_CLEARTEXT_AUTH", _TRANSPORT, "Credentials", "HTTP authentication over cleartext"),
