@@ -218,6 +218,11 @@ class TlsSession(BaseModel):
     ja3s: str | None = None
     ja4: str | None = None
     ja4s: str | None = None
+    #: finite-field DHE group size from the ServerKeyExchange (p length x 8) and its frame (#266)
+    dh_bits: int | None = None
+    dh_frame: int | None = None
+    #: the server sent a CertificateStatus (stapled OCSP) message (#261)
+    ocsp_stapled: bool = False
     #: Zeek validation_status: "ok" or openssl's reason, checked at capture time (#260); None = not checked
     validation_status: str | None = None
     #: does the leaf certificate cover the SNI (RFC 6125)? None when there is no SNI or no certificate

@@ -45,6 +45,8 @@ RULES: dict[str, Rule] = {
         Rule("TLS_CERT_NOT_YET_VALID", _TLS, "Crypto", "Certificate not yet valid"),
         Rule("TLS_SNI_CERT_MISMATCH", _TLS, "Crypto", "SNI not covered by the certificate"),
         Rule("TLS_NO_EXTENDED_MASTER_SECRET", _TLS, "Crypto", "No extended master secret (RFC 7627)"),
+        Rule("TLS_WEAK_DH_GROUP", _TLS, "Crypto", "Weak finite-field DH group (Logjam)"),
+        Rule("TLS_NO_OCSP_STAPLE", _TLS, "Crypto", "OCSP response not stapled"),
         Rule("TLS_SELF_SIGNED_CHAIN", _TLS, "Crypto", "Self-signed certificate chain"),
         Rule("TLS_FATAL_ALERT", _TLS, "Crypto", "Fatal TLS alert"),
         Rule("TLS_WARNING_ALERT", _TLS, "Crypto", "TLS warning alert"),

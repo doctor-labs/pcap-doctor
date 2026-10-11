@@ -597,6 +597,10 @@ class IndexBuilder:
             if 11 in hts:
                 session.certs.extend(self._parse_certs(row, frame, self._enrich))
                 self._chains.setdefault(key, row.get("tls.handshake.certificate", []))
+            if 12 in hts and session.dh_bits is None and (p_len := to_int(first(row, "tls.handshake.p_len"))):
+                session.dh_bits, session.dh_frame = p_len * 8, frame
+            if 22 in hts:
+                session.ocsp_stapled = True
             if 20 in hts:
                 session.resumption = True
             elif 21 in hts:
