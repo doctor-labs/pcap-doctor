@@ -24,6 +24,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `ntlm` | NTLM AUTHENTICATE: user, workstation, domain, server names from the CHALLENGE (no responses) | `ntlm` pass |
 | `modbus` | Modbus/TCP reply: function and exception name | `modbus` pass |
 | `dnp3` | DNP3 request with its reply: function codes and IIN bits | `dnp3` pass |
+| `tunnel` | encapsulation seen: GRE, VXLAN, GENEVE, GTP, MPLS, ERSPAN, PPPoE by outer endpoints (802.1Q as `VLAN`, an extension) | `tunnel` pass |
 
 ## Where the logs differ from Zeek
 

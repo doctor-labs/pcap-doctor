@@ -679,3 +679,19 @@ def fixture_heartbleed() -> bytes:
     h.send(True, bytes.fromhex("180303") + struct.pack("!H", len(beat)) + beat)
     h.close()
     return w.write()
+
+
+@fixture("tunnels.pcap")
+def fixture_tunnels() -> bytes:
+    """An inner TCP/UDP exchange carried in GRE and in VXLAN, and one 802.1Q-tagged frame (#227)."""
+    w = Wire(start=1_701_100_000.0)
+    inner = ip_packet("192.168.50.10", "192.168.50.20", 17, udp_datagram("192.168.50.10", "192.168.50.20", 40001, 9999, b"PF-INNER"))
+    gre = struct.pack("!HH", 0x0000, 0x0800) + inner  # GRE, no options, carrying IPv4
+    w.add(ether(MAC_A, MAC_B, ip_packet("10.10.0.1", "10.10.0.2", 47, gre)))
+    vx_inner = ether("02:00:00:00:00:aa", "02:00:00:00:00:bb", inner)
+    vxlan = struct.pack("!II", 0x08000000, 4242 << 8) + vx_inner  # VNI 4242
+    w.add(udp_frame("10.20.0.1", "10.20.0.2", 49999, 4789, vxlan))
+    tagged = mac(MAC_B) + mac(MAC_A) + struct.pack("!HHH", 0x8100, 100, 0x0800) + ip_packet(
+        "10.30.0.1", "10.30.0.2", 17, udp_datagram("10.30.0.1", "10.30.0.2", 40000, 53, b"\x00" * 12))
+    w.add(tagged)
+    return w.write()
