@@ -328,6 +328,11 @@ class SshSession(BaseModel):
     ciphers: list[str] = Field(default_factory=list)
     macs: list[str] = Field(default_factory=list)
     compression: list[str] = Field(default_factory=list)
+    #: HASSH (client KEXINIT) and HASSHServer (server KEXINIT) md5 fingerprints and their source strings
+    hassh: str | None = None
+    hassh_algorithms: str | None = None
+    hassh_server: str | None = None
+    hassh_server_algorithms: str | None = None
     #: algorithm name -> KEXINIT frames that offered it
     offered_in: dict[str, list[int]] = Field(default_factory=dict)
     encrypted: bool = True

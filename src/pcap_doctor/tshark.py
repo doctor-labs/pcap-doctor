@@ -259,6 +259,10 @@ SSH_PASS = PassSpec(
         "ssh.encryption_algorithms_client_to_server",
         "ssh.mac_algorithms_client_to_server",
         "ssh.compression_algorithms_client_to_server",
+        "ssh.kex.hassh",
+        "ssh.kex.hassh_algorithms",
+        "ssh.kex.hasshserver",
+        "ssh.kex.hasshserver_algorithms",
     )),
 )
 
