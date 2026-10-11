@@ -398,6 +398,21 @@ def _notice_log(ctx: _Ctx) -> LogTable:
 
 _SEVERITY = {0x600000: "warn", 0x800000: "error"}
 
+#: Wireshark epan/proto.h expert-info severity bits (0x00100000..0x00800000).
+_EXPERT_SEVERITY: dict[int, str] = {
+    0x00100000: "comment", 0x00200000: "chat", 0x00400000: "note",
+    0x00600000: "warn", 0x00800000: "error",
+}
+
+#: Wireshark epan/proto.h expert-info group bits (0x01000000..0x0e000000).
+_EXPERT_GROUP: dict[int, str] = {
+    0x01000000: "checksum", 0x02000000: "sequence", 0x03000000: "response-code",
+    0x04000000: "request-code", 0x05000000: "undecoded", 0x06000000: "reassemble",
+    0x07000000: "malformed", 0x08000000: "debug", 0x09000000: "protocol",
+    0x0a000000: "security", 0x0b000000: "comments", 0x0c000000: "decryption",
+    0x0d000000: "assumption", 0x0e000000: "deprecated",
+}
+
 
 #: tshark expert message prefix -> Zeek weird name, only where the two mean exactly the same thing (#210). Everything
 #: else keeps the slug of tshark's own message; docs/zeek-logs.md lists both.
@@ -435,6 +450,22 @@ def _weird_log(ctx: _Ctx) -> LogTable:
             name = f"bad_{bad.pop(0)}_checksum" if bad and message.startswith("Bad checksum") else zeek_weird_name(message)
             if level:
                 table.rows.append({"ts": ts, **ids, "name": name, "addl": message, "severity": level})
+    return table
+
+
+def _expert_log(ctx: _Ctx) -> LogTable:
+    table = LogTable("expert", [("ts", "time"), *ID_COLS, ("severity", "string"), ("group", "string"), ("message", "string")])
+    for row in ctx.runner.run("weird", CHECKSUM_ARGS):
+        proto = "tcp" if first(row, "tcp.srcport") else "udp"
+        key = ctx.row_key(row, proto)
+        ts = to_float(first(row, "frame.time_epoch"))
+        ids = ctx.ids(key) if key else {}
+        for message, sev, grp in zip(many(row, "_ws.expert.message"), many(row, "_ws.expert.severity"),
+                                     many(row, "_ws.expert.group"), strict=False):
+            level = _EXPERT_SEVERITY.get(to_int(sev) or 0, f"severity-{to_int(sev) or 0:#x}")
+            group = _EXPERT_GROUP.get(to_int(grp) or 0, f"group-{to_int(grp) or 0:#x}")
+            table.rows.append({"ts": ts, **ids, "severity": level, "group": group, "message": message})
+    table.rows.sort(key=lambda r: (r["ts"] is None, r["ts"] or 0.0))
     return table
 
 
@@ -948,7 +979,7 @@ def _io_log(ctx: _Ctx) -> LogTable:
 
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
-    "notice": _notice_log, "weird": _weird_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
+    "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
     "device": _device_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,

@@ -15,6 +15,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `files` | HTTP body that names a type or a file | `http` pass |
 | `notice` | pcap-doctor finding (`note` = finding code) | the detectors |
 | `weird` | tshark expert warning or error (malformed packet, bad length...) | `weird` pass |
+| `expert` | every Wireshark expert-info item: severity (comment, chat, note, warn, error), group and message (an extension; `weird` keeps only warn and error) | `weird` pass |
 | `dhcp` | DHCP transaction (xid) | `dhcp` pass |
 | `ftp` | FTP command and its reply | `ftp` pass |
 | `smtp` | mail transaction (`MAIL FROM` ... `QUIT`) | `smtp` pass |
