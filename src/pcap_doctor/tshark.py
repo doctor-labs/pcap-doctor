@@ -131,6 +131,8 @@ TLS_PASS = PassSpec(
         "tls.handshake.downgrade_sentinel",
         "tls.handshake.ja3",
         "tls.handshake.ja3s",
+        "tls.handshake.ja4",
+        "tls.handshake.extension.type",
         "tls.handshake.certificate",
         "tls.alert_message.level",
         "tls.alert_message.desc",

@@ -215,6 +215,8 @@ class TlsSession(BaseModel):
     resumption: bool | None = None
     ja3: str | None = None
     ja3s: str | None = None
+    ja4: str | None = None
+    ja4s: str | None = None
     certs: list[Cert] = Field(default_factory=list)
     alerts: list[TlsAlert] = Field(default_factory=list)
     frames: list[int] = Field(default_factory=list)
