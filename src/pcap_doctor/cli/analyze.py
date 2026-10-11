@@ -19,7 +19,7 @@ from ..handoff import _subprocess_run, detect_agents, in_agent, offer, safe_mode
 from ..keymaterial import collect, firmware_key_spkis
 from ..models import SEVERITY_ORDER
 from ..output import json_envelope, sarif
-from ..pipeline import analyze
+from ..pipeline import DecodeAsError, analyze, validate_decode_as
 from ..policy import PolicyError, validate
 from ..scoring import score
 from ._browse import ICON, browse, supported
@@ -84,6 +84,10 @@ def analyze_cmd(
         None, "--signatures", exists=True, dir_okay=False,
         help="Suricata rules (*.rules) or Zeek signatures (*.sig) to match against the payloads (repeatable)",
     ),
+    decode_as: list[str] = typer.Option(
+        None, "--decode-as",
+        help="dissect a port as a protocol, like tshark -d (repeatable): tcp.port==2121,ftp",
+    ),
     sig_var: list[str] = typer.Option(
         None, "--sig-var", help="rule variable NAME=VALUE, e.g. HOME_NET=10.0.0.0/8 (repeatable)",
     ),
@@ -95,6 +99,7 @@ def analyze_cmd(
     """Analyze a capture, write the report files and print a scored summary."""
     try:
         validate(only=only or (), categories=category or (), min_severity=min_severity, fail_on=fail_on)
+        validate_decode_as(decode_as or [])
         config = load_config(config_path, profile=profile)
         if ca_bundle:  # ponytail: handed over in the environment, so every index build sees it without a new kwarg
             os.environ["PCAP_DOCTOR_CA_BUNDLE"] = str(ca_bundle)
@@ -105,6 +110,9 @@ def analyze_cmd(
             else {}
         )
     except PolicyError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    except DecodeAsError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc
     sig_vars = dict(v.split("=", 1) for v in (sig_var or []) if "=" in v)
@@ -141,6 +149,7 @@ def analyze_cmd(
                 firmware_keys=firmware_keys,
                 signatures=tuple(signatures or ()),
                 signature_vars=sig_vars,
+                decode_as=tuple(decode_as or ()),
                 progress=(lambda stage: status.update(f"{stage}…")) if status is not None else None,
             )
     except KeyboardInterrupt:

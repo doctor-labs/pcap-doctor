@@ -695,7 +695,7 @@ These are the project's rules for itself, and tests enforce the mechanical ones:
 pcap-doctor analyze CAPTURE [--out DIR] [--only ID]... [--category NAME]... [--min-severity LEVEL]
                             [--fail-on LEVEL] [--profile NAME] [--config FILE] [--baseline OLD.json]
                             [--json] [--json-out FILE] [--sarif FILE] [--score] [-v] [-q]
-                            [--no-handoff] [--safe] [--no-cache]
+                            [--no-handoff] [--safe] [--no-cache] [--decode-as SPEC]...
 pcap-doctor why QUERY [--report report.json] [--prompt]    # QUERY: a frame number or an id prefix
 pcap-doctor rules list [--category NAME]
 pcap-doctor rules explain CODE

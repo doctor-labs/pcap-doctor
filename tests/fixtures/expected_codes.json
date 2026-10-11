@@ -128,5 +128,6 @@
     "TLS_NO_FORWARD_SECRECY",
     "TLS_SELF_SIGNED_CHAIN",
     "TLS_VERSION_DEPRECATED"
-  ]
+  ],
+  "ftp_odd_port.pcap": []
 }
