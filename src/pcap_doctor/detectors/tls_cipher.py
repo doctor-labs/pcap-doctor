@@ -67,6 +67,8 @@ class TlsCipherDetector(Detector):
             findings += self._certificates(session, subjects, index.capture.last_seen, index.capture.first_seen)
             findings += self._sni_mismatch(session, subjects)
             findings += self._extended_master_secret(session, subjects)
+            findings += self._compression(session, subjects)
+            findings += self._insecure_renegotiation(session, subjects)
             findings += self._weak_dh(session, subjects)
             findings += self._ocsp_staple(session, subjects)
             findings += self._alerts(session, subjects)
@@ -652,6 +654,75 @@ class TlsCipherDetector(Detector):
                 ],
                 remediation="Enable the extended_master_secret option on the TLS 1.2 server, or move to TLS 1.3.",
                 references=["RFC 7627"],
+                tags=["tls"],
+            )
+        ]
+
+    def _compression(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
+        server_hello = session.server_hello
+        if server_hello is None:
+            return []
+        if not any(value != 0 for value in server_hello.compression_methods):
+            return []
+        chosen = next((value for value in server_hello.compression_methods if value != 0), None)
+        return [
+            self.finding(
+                code="TLS_COMPRESSION_ENABLED",
+                title=f"TLS compression negotiated on {session.key}",
+                severity="high",
+                confidence="high",
+                summary=(
+                    f"The server chose TLS-level compression (method {chosen}) on {session.key}, which leaks "
+                    "secrets through ciphertext length (CRIME)."
+                ),
+                scope=f"{session.key}|compression",
+                flow_key=session.key,
+                subjects=subjects,
+                evidence=[ev(server_hello.frame, "tls.handshake.comp_method", str(chosen))],
+                remediation="Disable TLS compression on the server.",
+                references=["CVE-2012-4929", "RFC 7457"],
+                tags=["tls"],
+            )
+        ]
+
+    def _insecure_renegotiation(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
+        if session.negotiated_version not in ("TLS 1.0", "TLS 1.1", "TLS 1.2"):
+            return []
+        client_hello = session.client_hello
+        server_hello = session.server_hello
+        if client_hello is None or server_hello is None:
+            return []
+        if 65281 in server_hello.extensions:
+            return []
+        offered_scsv = 0x00FF in client_hello.cipher_suites
+        note = (
+            " The client offered the renegotiation SCSV (0x00FF) but the server ignored it."
+            if offered_scsv
+            else ""
+        )
+        return [
+            self.finding(
+                code="TLS_INSECURE_RENEGOTIATION",
+                title=f"Insecure renegotiation on {session.key}",
+                severity="medium",
+                confidence="high",
+                summary=(
+                    f"The server does not support secure renegotiation (no renegotiation_info extension) on {session.key},"
+                    " so an attacker can splice a prefix into a renegotiated session (CVE-2009-3555)."
+                    f"{note}"
+                ),
+                scope=f"{session.key}|reneg",
+                flow_key=session.key,
+                subjects=subjects,
+                evidence=[
+                    ev(
+                        server_hello.frame,
+                        "tls.handshake.extension.type",
+                        ",".join(map(str, server_hello.extensions)) or "none",
+                    )
+                ],
+                remediation="Enable RFC 5746 secure renegotiation on the server, or disable renegotiation.",
+                references=["CVE-2009-3555", "RFC 5746"],
                 tags=["tls"],
             )
         ]
