@@ -10,7 +10,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `conn` | TCP/UDP connection, originator = first sender | `conn` pass (flags, lengths) |
 | `dns` | query, with its answers and rcode | `dns` pass |
 | `http` | request/response exchange | `http` pass |
-| `ssl` | TLS/DTLS session: version, cipher name, SNI, ALPN, JA3/JA3S, certificate ids | `tls` pass |
+| `ssl` | TLS/DTLS session: version, cipher name, SNI, ALPN, JA5/JA5S, JA5/JA5S, certificate ids, `validation_status` (openssl at capture time, `--ca-bundle` to pin a trust store), `hostname_match` | `tls` pass |
 | `x509` | certificate in a handshake | `tls` pass |
 | `files` | HTTP body that names a type or a file | `http` pass |
 | `notice` | pcap-doctor finding (`note` = finding code) | the detectors |

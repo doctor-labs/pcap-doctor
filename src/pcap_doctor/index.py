@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .certificates import CertFacts, apply_openssl_facts, enrich_all
+from .certificates import CertFacts, apply_openssl_facts, enrich_all, hostname_matches, verify_chain
 from .models import (
     CaptureInfo,
     Cert,
@@ -338,6 +338,8 @@ class IndexBuilder:
         self.decrypt_args = decrypt_args
         self.index: CaptureIndex | None = None
         self._cert_cache: dict[tuple[str, ...], list[CertFacts]] = {}
+        self._chains: dict[str, list[str]] = {}  # session key -> the first Certificate message's hex blobs
+        self._verified: dict[tuple[str, ...], str | None] = {}  # one openssl verify per distinct chain
         self._sdp_media_ports: list[int] = []
 
     def build(self) -> CaptureIndex:
@@ -572,6 +574,7 @@ class IndexBuilder:
                 session.ja4s = ja4s_fingerprint(row, session.proto)
             if 11 in hts:
                 session.certs.extend(self._parse_certs(row, frame, self._enrich))
+                self._chains.setdefault(key, row.get("tls.handshake.certificate", []))
             if 20 in hts:
                 session.resumption = True
             elif 21 in hts:
@@ -702,6 +705,14 @@ class IndexBuilder:
         fs, reason = forward_secrecy_for(session)
         session.forward_secrecy = fs
         session.forward_secrecy_reason = reason
+        chain = tuple(self._chains.get(session.key, []))
+        if chain:
+            if chain not in self._verified:
+                self._verified[chain] = verify_chain(list(chain), index.capture.first_seen)
+            session.validation_status = self._verified[chain]
+        if session.sni and session.certs:
+            leaf = session.certs[0]
+            session.hostname_match = hostname_matches(session.sni, leaf.san_dns or leaf.common_names)
 
     # -- HTTP --------------------------------------------------------------
     def _build_http(self, index: CaptureIndex, rows: list[Row]) -> None:

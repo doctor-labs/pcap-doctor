@@ -76,6 +76,10 @@ def analyze_cmd(
         help="TLS key-log file (SSLKEYLOGFILE format) to decrypt forward-secret sessions",
     ),
     psk: str = typer.Option("", "--psk", envvar="PCAP_DOCTOR_PSK", help="TLS/DTLS pre-shared key, hex"),
+    ca_bundle: Path = typer.Option(
+        None, "--ca-bundle", exists=True, dir_okay=False,
+        help="PEM CA bundle to validate TLS chains against (default: openssl's trust store; also PCAP_DOCTOR_CA_BUNDLE)",
+    ),
     signatures: list[Path] = typer.Option(
         None, "--signatures", exists=True, dir_okay=False,
         help="Suricata rules (*.rules) or Zeek signatures (*.sig) to match against the payloads (repeatable)",
@@ -92,6 +96,8 @@ def analyze_cmd(
     try:
         validate(only=only or (), categories=category or (), min_severity=min_severity, fail_on=fail_on)
         config = load_config(config_path, profile=profile)
+        if ca_bundle:  # ponytail: handed over in the environment, so every index build sees it without a new kwarg
+            os.environ["PCAP_DOCTOR_CA_BUNDLE"] = str(ca_bundle)
         keys = collect(tls_key, tls_key_password=tls_key_password, keys_from=keys_from, keylog=keylog, psk=psk)
         firmware_keys = (
             firmware_key_spkis(firmware or [], extra_keys=keys.tls_keys)
