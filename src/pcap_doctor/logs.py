@@ -397,6 +397,24 @@ def _notice_log(ctx: _Ctx) -> LogTable:
 _SEVERITY = {0x600000: "warn", 0x800000: "error"}
 
 
+#: tshark expert message prefix -> Zeek weird name, only where the two mean exactly the same thing (#210). Everything
+#: else keeps the slug of tshark's own message; docs/zeek-logs.md lists both.
+ZEEK_WEIRD: dict[str, str] = {
+    "Bad length value": "UDP_datagram_length_mismatch",
+    "Bogus TCP Header length": "bad_TCP_header_len",
+    "Window scale shift exceeds 14": "TCP_scale_range",
+    "The Content-Length and Transfer-Encoding header must not be set together": "HTTP_content_length_and_chunked",
+}
+
+
+def zeek_weird_name(message: str) -> str:
+    """The Zeek weird name for a tshark expert message, else the message's slug."""
+    for prefix, name in ZEEK_WEIRD.items():
+        if message.startswith(prefix):
+            return name
+    return _slug(message)
+
+
 def _slug(message: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", message.lower()).strip("_")[:80]
 
@@ -412,7 +430,7 @@ def _weird_log(ctx: _Ctx) -> LogTable:
         bad = [p.upper() for p in ("ip", "tcp", "udp", "icmp") if first(row, f"{p}.checksum.status") == "0"]
         for message, sev in zip(many(row, "_ws.expert.message"), many(row, "_ws.expert.severity"), strict=False):
             level = _SEVERITY.get(to_int(sev) or 0)
-            name = f"bad_{bad.pop(0)}_checksum" if bad and message.startswith("Bad checksum") else _slug(message)
+            name = f"bad_{bad.pop(0)}_checksum" if bad and message.startswith("Bad checksum") else zeek_weird_name(message)
             if level:
                 table.rows.append({"ts": ts, **ids, "name": name, "addl": message, "severity": level})
     return table

@@ -569,3 +569,24 @@ def fixture_brute_force() -> bytes:
         t.send(False, b"530 Login incorrect.\r\n")
         t.close()
     return w.write()
+
+
+@fixture("weird_mix.pcap")
+def fixture_weird_mix() -> bytes:
+    """Protocol events with exact Zeek weird names: a UDP length that lies, a window-scale shift over 14, an HTTP
+    request with both Content-Length and Transfer-Encoding (#210)."""
+    w = Wire(start=1_700_700_000.0)
+    c, s = "10.6.0.10", "10.6.0.20"
+    payload = b"PF-UDP-LENGTH-LIES"
+    head = struct.pack("!HHHH", 47100, 9998, 8 + len(payload) + 40, 0)  # length field 40 bytes longer than the datagram
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 17, head + payload)))
+    t = Tcp(w, c, s, 47200, 80)
+    t._emit(True, 0x02, options=b"\x03\x03\x0f\x00")  # SYN with window scale shift 15 (the maximum is 14)
+    t.seq_c += 1
+    t._emit(False, 0x12)
+    t.seq_s += 1
+    t._emit(True, 0x10)
+    t.send(True, b"POST /up HTTP/1.1\r\nHost: s\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nPFPF\r\n0\r\n\r\n")
+    t.send(False, b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+    t.close()
+    return w.write()

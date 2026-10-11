@@ -99,6 +99,9 @@
   "tcp_health.pcap": [
     "HTTP_CLEARTEXT"
   ],
+  "weird_mix.pcap": [
+    "HTTP_CLEARTEXT"
+  ],
   "telnet_login.pcap": [
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"
