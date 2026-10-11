@@ -526,6 +526,12 @@ TUNNEL_PASS = PassSpec(
     )),
 )
 
+ARP_ICMP_PASS = PassSpec(
+    name="arp_icmp",
+    display_filter="arp.opcode == 2 || icmp.type == 5",
+    fields=("frame.number", "frame.time_epoch", "ip.src", "ip.dst", "arp.opcode", "arp.src.hw_mac",
+    "arp.src.proto_ipv4", "icmp.type", "icmp.code", "icmp.redir_gw"))
+
 MODBUS_PASS = PassSpec(name="modbus", display_filter="modbus", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
        "mbtcp.trans_id", "modbus.func_code", "modbus.exception_code")))
 DNP3_PASS = PassSpec(name="dnp3", display_filter="dnp3", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
@@ -599,6 +605,7 @@ PASSES: dict[str, PassSpec] = {
         MODBUS_PASS,
         DNP3_PASS,
         TUNNEL_PASS,
+        ARP_ICMP_PASS,
     )
 }
 

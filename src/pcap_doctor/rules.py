@@ -26,6 +26,7 @@ _DNS_QUIC_SSH = "d4.dns_quic_ssh"
 _SIGNATURES = "d9.user_signatures"
 _SMB = "d10.smb"
 _BRUTE = "d11.brute_force"
+_ARP = "d12.arp_icmp"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -85,6 +86,8 @@ RULES: dict[str, Rule] = {
         Rule("SMB_EXECUTABLE_ON_SHARE", _SMB, "SMB", "Executable opened on an SMB share"),
         Rule("SIGNATURE_MATCH", _SIGNATURES, "Signatures", "User-supplied signature matched"),
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
+        Rule("ARP_SPOOFING_SUSPECTED", _ARP, "Network", "ARP spoofing suspected"),
+        Rule("ICMP_REDIRECT", _ARP, "Network", "ICMP redirect seen"),
     )
 }
 
