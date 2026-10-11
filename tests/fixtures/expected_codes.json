@@ -88,6 +88,9 @@
   "syn_scan.pcap": [
     "SYN_SCAN_SHAPE"
   ],
+  "tcp_health.pcap": [
+    "HTTP_CLEARTEXT"
+  ],
   "telnet_login.pcap": [
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"

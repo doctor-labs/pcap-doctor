@@ -26,7 +26,7 @@ from .index import CaptureIndex, first, many
 from .models import flow_key, stable_id
 from .prompts import clean_capture_text
 from .smb import unc, unescape
-from .tshark import Row, to_float, to_int
+from .tshark import CHECKSUM_ARGS, Row, to_float, to_int
 
 Column = tuple[str, str]  # (zeek field name, zeek type)
 
@@ -58,7 +58,7 @@ class _Ctx:
     @property
     def conns(self) -> dict[str, _Conn]:
         if self._conn is None:
-            self._conn = _read_conns(self.runner.run("conn"))
+            self._conn = _read_conns(self.runner.run("conn", CHECKSUM_ARGS))
         return self._conn
 
     def ids(self, key: str) -> dict[str, Any]:
@@ -110,6 +110,17 @@ class _Conn:
     fin: list[int] = field(default_factory=lambda: [0, 0])
     rst: list[int] = field(default_factory=lambda: [0, 0])
     history: list[str] = field(default_factory=list)
+    missed: int = 0  # bytes in content gaps (Zeek missed_bytes)
+    dup_acks: int = 0
+    out_of_order: int = 0
+    events: dict[str, int] = field(default_factory=dict)  # history letter -> times seen
+    next_seq: list[int] = field(default_factory=lambda: [0, 0])
+
+    def flag(self, letter: str) -> None:
+        """Zeek's repeatable history letters (C, G, T, W) are logged at the 1st, 10th, 100th... occurrence."""
+        n = self.events[letter] = self.events.get(letter, 0) + 1
+        if str(n) == "1" + "0" * (len(str(n)) - 1):
+            self.history.append(letter)
 
     def ids(self) -> dict[str, Any]:
         return {"uid": _uid(self.key), "id.orig_h": self.orig[0], "id.orig_p": self.orig[1],
@@ -165,8 +176,22 @@ def _read_conns(rows: list[Row]) -> dict[str, _Conn]:
         if ip_len is None:
             ip_len = (to_int(first(row, "ipv6.plen")) or 0) + 40
         conn.ip_bytes[side] += ip_len
+        if first(row, f"{proto}.checksum.status") == "0":  # noted, then ignored, as Zeek drops the packet
+            conn.flag("C" if side == 0 else "c")
+            continue
         if proto != "tcp":
             continue
+        seq, nxt = to_int(first(row, "tcp.seq")), to_int(first(row, "tcp.nxtseq"))
+        if first(row, "tcp.analysis.lost_segment") and seq is not None and conn.next_seq[side]:
+            conn.missed += max(0, seq - conn.next_seq[side])
+        if nxt:
+            conn.next_seq[side] = max(conn.next_seq[side], nxt)
+        for field_name, letter in (("tcp.analysis.lost_segment", "G"), ("tcp.analysis.retransmission", "T"),
+                                   ("tcp.analysis.zero_window", "W")):
+            if first(row, field_name):
+                conn.flag(letter if side == 0 else letter.lower())
+        conn.dup_acks += bool(first(row, "tcp.analysis.duplicate_ack"))
+        conn.out_of_order += bool(first(row, "tcp.analysis.out_of_order"))
         syn, ack = first(row, "tcp.flags.syn") in ("1", "True"), first(row, "tcp.flags.ack") in ("1", "True")
         fin, rst = first(row, "tcp.flags.fin") in ("1", "True"), first(row, "tcp.flags.reset") in ("1", "True")
         letters = []
@@ -203,7 +228,7 @@ CONN_COLS: list[Column] = [
     ("ts", "time"), *ID_COLS, ("proto", "enum"), ("service", "string"), ("duration", "interval"),
     ("orig_bytes", "count"), ("resp_bytes", "count"), ("conn_state", "string"), ("missed_bytes", "count"),
     ("history", "string"), ("orig_pkts", "count"), ("orig_ip_bytes", "count"), ("resp_pkts", "count"),
-    ("resp_ip_bytes", "count"),
+    ("resp_ip_bytes", "count"), ("dup_acks", "count"), ("out_of_order", "count"),
 ]
 
 
@@ -215,9 +240,9 @@ def _conn_log(ctx: _Ctx) -> LogTable:
             "ts": c.first_ts, **c.ids(), "proto": c.proto,
             "service": (_SERVICE.get(flow.app_proto) if flow else None) or _PORT_SERVICE.get(c.resp[1]),
             "duration": round(c.last_ts - c.first_ts, 6), "orig_bytes": c.payload[0], "resp_bytes": c.payload[1],
-            "conn_state": c.state(), "missed_bytes": 0, "history": "".join(c.history) or None,
+            "conn_state": c.state(), "missed_bytes": c.missed, "history": "".join(c.history) or None,
             "orig_pkts": c.pkts[0], "orig_ip_bytes": c.ip_bytes[0], "resp_pkts": c.pkts[1],
-            "resp_ip_bytes": c.ip_bytes[1],
+            "resp_ip_bytes": c.ip_bytes[1], "dup_acks": c.dup_acks, "out_of_order": c.out_of_order,
         })
     return table
 
@@ -378,15 +403,18 @@ def _slug(message: str) -> str:
 
 def _weird_log(ctx: _Ctx) -> LogTable:
     table = LogTable("weird", [("ts", "time"), *ID_COLS, ("name", "string"), ("addl", "string"), ("severity", "string")])
-    for row in ctx.runner.run("weird"):
+    for row in ctx.runner.run("weird", CHECKSUM_ARGS):
         proto = "tcp" if first(row, "tcp.srcport") else "udp"
         key = ctx.row_key(row, proto)
         ts = to_float(first(row, "frame.time_epoch"))
         ids = ctx.ids(key) if key else {}
+        # Zeek names bad checksums bad_<PROTO>_checksum; hand them out in header order, outermost first (#209)
+        bad = [p.upper() for p in ("ip", "tcp", "udp", "icmp") if first(row, f"{p}.checksum.status") == "0"]
         for message, sev in zip(many(row, "_ws.expert.message"), many(row, "_ws.expert.severity"), strict=False):
             level = _SEVERITY.get(to_int(sev) or 0)
+            name = f"bad_{bad.pop(0)}_checksum" if bad and message.startswith("Bad checksum") else _slug(message)
             if level:
-                table.rows.append({"ts": ts, **ids, "name": _slug(message), "addl": message, "severity": level})
+                table.rows.append({"ts": ts, **ids, "name": name, "addl": message, "severity": level})
     return table
 
 

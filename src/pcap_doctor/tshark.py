@@ -357,6 +357,15 @@ CONN_PASS = PassSpec(
         "udp.length",
         "ip.len",
         "ipv6.plen",
+        "tcp.seq",
+        "tcp.nxtseq",
+        "tcp.analysis.retransmission",
+        "tcp.analysis.lost_segment",
+        "tcp.analysis.zero_window",
+        "tcp.analysis.duplicate_ack",
+        "tcp.analysis.out_of_order",
+        "tcp.checksum.status",
+        "udp.checksum.status",
     )),
 )
 
@@ -499,7 +508,16 @@ WEIRD_PASS = PassSpec(
         "_ws.expert.message",
         "_ws.expert.severity",
         "_ws.expert.group",
+        "ip.checksum.status",
+        "tcp.checksum.status",
+        "udp.checksum.status",
+        "icmp.checksum.status",
     )),
+)
+
+#: tshark leaves checksums unverified by default; the conn and weird passes turn checking on (#209).
+CHECKSUM_ARGS: tuple[str, ...] = (
+    "-o", "ip.check_checksum:TRUE", "-o", "tcp.check_checksum:TRUE", "-o", "udp.check_checksum:TRUE",
 )
 
 #: Every TCP/UDP payload, for the user-supplied signature engine (#201). Only run when signatures are given.
