@@ -8,7 +8,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | Log | One row per | Built from |
 |---|---|---|
 | `conn` | TCP/UDP connection, originator = first sender | `conn` pass (flags, lengths) |
-| `dns` | query, with its answers and rcode | `dns` pass |
+| `dns` | query, with its answers, TXT/MX/NS/PTR/SRV/SOA/CAA answers and rcode | `dns` pass |
 | `http` | request/response exchange | `http` pass |
 | `ssl` | TLS/DTLS session: version, cipher name, SNI, ALPN, JA5/JA5S, JA5/JA5S, certificate ids, `validation_status` (openssl at capture time, `--ca-bundle` to pin a trust store), `hostname_match` | `tls` pass |
 | `x509` | certificate in a handshake | `tls` pass |
@@ -52,3 +52,4 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
   | `Bad checksum` (ICMP) | `bad_ICMP_checksum` |
 - `files` lists the files `extract` recovers, with `seen_bytes`, `md5`, `sha1`, `sha256` and a magic-byte `mime_type`; only HTTP files carry hosts and a connection uid.
 - `#open` / `#close` carry the capture's first and last packet time, so two runs give identical files.
+- `dns.answers` holds A/AAAA/CNAME/MX/NS/PTR/SRV-target/SOA-mname values as they are, TXT as `TXT <len> <text>` and CAA as `<tag> <value>`; an extra last column `edns_udp_size` gives the query's EDNS payload size (#229).

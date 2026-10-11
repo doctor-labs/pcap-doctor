@@ -200,6 +200,14 @@ DNS_PASS = PassSpec(
         "dns.resp.name",
         "dns.txt",
         "dns.count.answers",
+        "dns.mx.mail_exchange",
+        "dns.ns",
+        "dns.ptr.domain_name",
+        "dns.srv.target",
+        "dns.soa.mname",
+        "dns.caa.tag",
+        "dns.caa.value",
+        "dns.rr.udp_payload_size",
     )),
 )
 

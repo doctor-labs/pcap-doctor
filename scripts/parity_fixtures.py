@@ -590,3 +590,32 @@ def fixture_weird_mix() -> bytes:
     t.send(False, b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
     t.close()
     return w.write()
+
+
+@fixture("dns_records.pcap")
+def fixture_dns_records() -> bytes:
+    """One answer of each record type beyond A/AAAA/CNAME, plus an EDNS OPT record (#229)."""
+    from scapy.layers.dns import DNS, DNSQR, DNSRR, DNSRRMX, DNSRROPT, DNSRRSOA, DNSRRSRV
+
+    w = Wire(start=1_700_800_000.0)
+    c, r = "10.7.0.10", "10.7.0.53"
+    answers = [
+        ("example.org", "TXT", DNSRR(rrname="example.org", type="TXT", ttl=60, rdata=[b"v=spf1 -all"])),
+        ("example.org", "MX", DNSRRMX(rrname="example.org", ttl=60, preference=10, exchange="mail.example.org")),
+        ("example.org", "NS", DNSRR(rrname="example.org", type="NS", ttl=60, rdata="ns1.example.org")),
+        ("10.0.7.10.in-addr.arpa", "PTR", DNSRR(rrname="10.0.7.10.in-addr.arpa", type="PTR", ttl=60, rdata="host.example.org")),
+        ("_sip._tcp.example.org", "SRV", DNSRRSRV(rrname="_sip._tcp.example.org", ttl=60, priority=1, weight=5, port=5060,
+                                                  target="sip.example.org")),
+        ("example.org", "SOA", DNSRRSOA(rrname="example.org", ttl=60, mname="ns1.example.org", rname="admin.example.org",
+                                        serial=1, refresh=2, retry=3, expire=4, minimum=5)),
+    ]
+    for i, (name, qtype, rr) in enumerate(answers):
+        query = DNS(id=0x100 + i, rd=1, qd=DNSQR(qname=name, qtype=qtype), ar=DNSRROPT(rclass=1232))
+        reply = DNS(id=0x100 + i, qr=1, aa=1, rd=1, ra=1, qd=DNSQR(qname=name, qtype=qtype), an=rr)
+        w.add(udp_frame(c, r, 41000 + i, 53, bytes(query)))
+        w.add(udp_frame(r, c, 53, 41000 + i, bytes(reply), smac=MAC_B, dmac=MAC_A))
+    caa = DNSRR(rrname="example.org", type="CAA", ttl=60, rdata=b"\x00\x05issueletsencrypt.org")
+    w.add(udp_frame(c, r, 41010, 53, bytes(DNS(id=0x200, rd=1, qd=DNSQR(qname="example.org", qtype="CAA")))))
+    w.add(udp_frame(r, c, 53, 41010, bytes(DNS(id=0x200, qr=1, rd=1, ra=1, qd=DNSQR(qname="example.org", qtype="CAA"),
+                                                an=caa)), smac=MAC_B, dmac=MAC_A))
+    return w.write()
