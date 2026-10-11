@@ -132,6 +132,7 @@ TLS_PASS = PassSpec(
         "tls.handshake.ja3",
         "tls.handshake.ja3s",
         "tls.handshake.ja4",
+        "tls.handshake.p_len",
         "tls.handshake.extension.type",
         "tls.handshake.certificate",
         "tls.alert_message.level",

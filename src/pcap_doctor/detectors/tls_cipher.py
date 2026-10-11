@@ -67,6 +67,8 @@ class TlsCipherDetector(Detector):
             findings += self._certificates(session, subjects, index.capture.last_seen, index.capture.first_seen)
             findings += self._sni_mismatch(session, subjects)
             findings += self._extended_master_secret(session, subjects)
+            findings += self._weak_dh(session, subjects)
+            findings += self._ocsp_staple(session, subjects)
             findings += self._alerts(session, subjects)
             if session.truncated and flow is not None:
                 findings += self._truncated(session, subjects)
@@ -650,6 +652,65 @@ class TlsCipherDetector(Detector):
                 remediation="Enable the extended_master_secret option on the TLS 1.2 server, or move to TLS 1.3.",
                 references=["RFC 7627"],
                 tags=["tls"],
+            )
+        ]
+
+    def _weak_dh(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
+        if session.dh_bits is not None and session.dh_bits < 2048:
+            severity: Severity = "high" if session.dh_bits < 1024 else "medium"
+            return [
+                self.finding(
+                    code="TLS_WEAK_DH_GROUP",
+                    title=f"Weak finite-field DHE group ({session.dh_bits} bits) on {session.key}",
+                    severity=severity,
+                    confidence="high",
+                    summary=(
+                        f"The server's finite-field DHE group is {session.dh_bits} bits; groups under 2048 bits "
+                        "are within reach of precomputation (Logjam)."
+                    ),
+                    scope=f"{session.key}|dh",
+                    flow_key=session.key,
+                    subjects=subjects,
+                    evidence=[ev(session.dh_frame or 0, "tls.handshake.p_len", str(session.dh_bits // 8))],
+                    remediation="Use a 2048-bit or larger DH group (RFC 7919 ffdhe2048+), or prefer ECDHE.",
+                    references=["RFC 7919", "CVE-2015-4000"],
+                    tags=["tls", "dh"],
+                )
+            ]
+        return []
+
+    def _ocsp_staple(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
+        if session.negotiated_version not in ("TLS 1.0", "TLS 1.1", "TLS 1.2"):
+            return []
+        if session.client_hello is None or session.server_hello is None:
+            return []
+        if 5 not in session.client_hello.extensions:
+            return []
+        if 5 in session.server_hello.extensions or session.ocsp_stapled:
+            return []
+        return [
+            self.finding(
+                code="TLS_NO_OCSP_STAPLE",
+                title=f"Server did not staple OCSP when asked on {session.key}",
+                severity="low",
+                confidence="medium",
+                summary=(
+                    "The client asked for a stapled OCSP response (status_request) and the server did not provide one, "
+                    "so clients must query the CA themselves or skip revocation checking."
+                ),
+                scope=f"{session.key}|ocsp",
+                flow_key=session.key,
+                subjects=subjects,
+                evidence=[
+                    ev(
+                        session.server_hello.frame,
+                        "tls.handshake.extension.type",
+                        ",".join(map(str, session.server_hello.extensions)) or "none",
+                    )
+                ],
+                remediation="Enable OCSP stapling on the server.",
+                references=["RFC 6066", "RFC 6961"],
+                tags=["tls", "certificate", "revocation"],
             )
         ]
 
