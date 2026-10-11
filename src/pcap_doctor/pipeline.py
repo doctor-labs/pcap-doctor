@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -35,6 +36,22 @@ class RunResult:
         return sorted(self.findings, key=lambda f: SEVERITY_ORDER.get(f.severity, 9))[:10]
 
 
+_DECODE_AS_RE = re.compile(r"^[a-z][a-z0-9_.]*==[0-9]{1,5}(-[0-9]{1,5})?,[a-z][a-z0-9_.-]+$")
+
+
+class DecodeAsError(ValueError):
+    """A --decode-as spec that is not <layer>==<port>,<protocol>."""
+
+
+def validate_decode_as(specs: tuple[str, ...] | list[str]) -> None:
+    """Refuse a malformed decode-as spec before it reaches tshark's argv."""
+    for spec in specs:
+        if not _DECODE_AS_RE.match(spec):
+            raise DecodeAsError(
+                f"bad decode-as spec {spec!r}: expected <layer>==<port>,<protocol>, e.g. tcp.port==2121,ftp"
+            )
+
+
 def analyze(
     pcap: Path,
     outdir: Path | None = None,
@@ -49,13 +66,19 @@ def analyze(
     firmware_keys: dict[str, str] | None = None,
     signatures: tuple[Path, ...] = (),
     signature_vars: dict[str, str] | None = None,
+    decode_as: tuple[str, ...] = (),
 ) -> RunResult:
     policy.validate(only=only, categories=categories, min_severity=min_severity)
     pcap = Path(pcap)
     outdir = Path(outdir or pcap.with_suffix(".pf-report"))
     outdir.mkdir(parents=True, exist_ok=True)
 
-    runner = TsharkRunner(pcap, use_cache=use_cache)
+    validate_decode_as(decode_as)
+    runner = TsharkRunner(
+        pcap,
+        use_cache=use_cache,
+        extra_args=tuple(arg for spec in decode_as for arg in ("-d", spec)),
+    )
     decrypt_args = tuple(keys.tshark_args()) if keys is not None and not keys.is_empty() else ()
     builder = IndexBuilder(runner, decrypt_args=decrypt_args)
     if progress:

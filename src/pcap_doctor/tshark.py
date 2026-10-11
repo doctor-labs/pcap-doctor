@@ -923,9 +923,8 @@ class TsharkRunner:
         return tuple(keep)
 
     def _cache_file(self, pass_name: str, extra_args: tuple[str, ...] = ()) -> Path:
-        suffix = ""
-        if extra_args:
-            suffix = "-" + hashlib.sha256("\x1f".join(extra_args).encode()).hexdigest()[:8]
+        args = self.extra_args + extra_args
+        suffix = "-" + hashlib.sha256("\x1f".join(args).encode()).hexdigest()[:8] if args else ""
         return cache_dir() / self.sha[:16] / f"{self.version.split()[0]}-{pass_name}{suffix}.json"
 
     def _filter_for(self, spec: PassSpec) -> str | None:

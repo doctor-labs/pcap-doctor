@@ -740,3 +740,28 @@ def fixture_capture_loss() -> bytes:
     w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 40000, 8080, 1201, 5001, 0x18, b"C" * 100))))
     w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 8080, 40000, 5001, 1301, 0x10))))
     return w.write()
+
+
+@fixture("ftp_odd_port.pcap")
+def fixture_ftp_odd_port() -> bytes:
+    """An FTP login on TCP 2121, a port tshark does not dissect as FTP unless told to (#254, decode-as)."""
+    w = Wire(start=1_701_500_000.0)
+    c, s = "10.60.0.1", "10.60.0.2"
+    seq = {"c": 1001, "s": 7001}
+
+    def send(from_client: bool, payload: bytes) -> None:
+        src, dst, sp, dp = (c, s, 41000, 2121) if from_client else (s, c, 2121, 41000)
+        side, other = ("c", "s") if from_client else ("s", "c")
+        w.add(ether(MAC_A if from_client else MAC_B, MAC_B if from_client else MAC_A,
+                    ip_packet(src, dst, 6, tcp_segment(src, dst, sp, dp, seq[side], seq[other], 0x18, payload))))
+        seq[side] += len(payload)
+
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 41000, 2121, 1000, 0, 0x02))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 2121, 41000, 7000, 1001, 0x12))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 41000, 2121, 1001, 7001, 0x10))))
+    send(False, b"220 ready\r\n")
+    send(True, b"USER admin\r\n")
+    send(False, b"331 password please\r\n")
+    send(True, b"PASS hunter2\r\n")
+    send(False, b"230 logged in\r\n")
+    return w.write()
