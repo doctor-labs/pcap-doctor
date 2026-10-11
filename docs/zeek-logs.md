@@ -22,6 +22,8 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `smb` | SMB/SMB2 command or response, tree, file name, NTLM user | `smb` pass |
 | `kerberos` | AS/TGS request with its reply or KRB-ERROR: client, service, error, ticket cipher (no key material) | `kerberos` pass |
 | `ntlm` | NTLM AUTHENTICATE: user, workstation, domain, server names from the CHALLENGE (no responses) | `ntlm` pass |
+| `modbus` | Modbus/TCP reply: function and exception name | `modbus` pass |
+| `dnp3` | DNP3 request with its reply: function codes and IIN bits | `dnp3` pass |
 
 ## Where the logs differ from Zeek
 

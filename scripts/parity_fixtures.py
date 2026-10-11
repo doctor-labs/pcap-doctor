@@ -619,3 +619,48 @@ def fixture_dns_records() -> bytes:
     w.add(udp_frame(r, c, 53, 41010, bytes(DNS(id=0x200, qr=1, rd=1, ra=1, qd=DNSQR(qname="example.org", qtype="CAA"),
                                                 an=caa)), smac=MAC_B, dmac=MAC_A))
     return w.write()
+
+
+def dnp3_crc(data: bytes) -> bytes:
+    """CRC-16/DNP (reflected 0x3D65, init 0, xor out 0xFFFF), little-endian, as DNP3 link frames carry it."""
+    crc = 0
+    for b in data:
+        crc ^= b
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0xA6BC if crc & 1 else crc >> 1
+    return struct.pack("<H", crc ^ 0xFFFF)
+
+
+def dnp3_frame(app: bytes, *, dst: int, src: int, primary: bool) -> bytes:
+    """One DNP3 link frame carrying a single-fragment transport segment and the application bytes ``app``."""
+    user = bytes([0xC0]) + app  # transport: FIR | FIN, sequence 0
+    ctrl = 0xC4 if primary else 0x44  # DIR | PRM, unconfirmed user data (or the reply direction)
+    head = b"\x05\x64" + bytes([5 + len(user), ctrl]) + struct.pack("<HH", dst, src)
+    body = b"".join(user[i:i + 16] + dnp3_crc(user[i:i + 16]) for i in range(0, len(user), 16))
+    return head + dnp3_crc(head) + body
+
+
+def modbus_adu(trans: int, unit: int, pdu: bytes) -> bytes:
+    return struct.pack("!HHHB", trans, 0, len(pdu) + 1, unit) + pdu
+
+
+@fixture("ics_mix.pcap")
+def fixture_ics_mix() -> bytes:
+    """Modbus/TCP reads, a register write and an exception reply; DNP3 a read with its response and a cold restart (#206)."""
+    w = Wire(start=1_700_900_000.0)
+    hmi, plc, rtu = "10.8.0.10", "10.8.0.20", "10.8.0.30"
+    t = Tcp(w, hmi, plc, 49100, 502).open()
+    t.send(True, modbus_adu(1, 1, bytes([3]) + struct.pack("!HH", 0, 2)))  # read holding registers 0-1
+    t.send(False, modbus_adu(1, 1, bytes([3, 4]) + struct.pack("!HH", 7, 9)))
+    t.send(True, modbus_adu(2, 1, bytes([6]) + struct.pack("!HH", 1, 1234)))  # write single register 1
+    t.send(False, modbus_adu(2, 1, bytes([6]) + struct.pack("!HH", 1, 1234)))
+    t.send(True, modbus_adu(3, 1, bytes([3]) + struct.pack("!HH", 900, 1)))  # read past the end
+    t.send(False, modbus_adu(3, 1, bytes([0x83, 2])))  # exception 2: illegal data address
+    t.close()
+    d = Tcp(w, hmi, rtu, 49200, 20000).open()
+    d.send(True, dnp3_frame(bytes([0xC0, 0x01, 60, 1, 6]), dst=10, src=1, primary=True))  # READ class 0
+    d.send(False, dnp3_frame(bytes([0xC0, 0x81, 0x00, 0x00]), dst=1, src=10, primary=False))  # RESPONSE, IIN 0
+    d.send(True, dnp3_frame(bytes([0xC1, 0x0D]), dst=10, src=1, primary=True))  # COLD_RESTART
+    d.send(False, dnp3_frame(bytes([0xC1, 0x81, 0x80, 0x00]), dst=1, src=10, primary=False))  # RESPONSE, IIN device restart
+    d.close()
+    return w.write()
