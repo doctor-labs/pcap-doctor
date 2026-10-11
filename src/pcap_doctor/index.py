@@ -7,6 +7,7 @@ missing, file an issue and the core owner extends the model (AGENTS.md ->
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
@@ -562,10 +563,13 @@ class IndexBuilder:
                 session.client_hello = self._parse_hello(row, 1, frame)
                 if first(row, "tls.handshake.ja3"):
                     session.ja3 = first(row, "tls.handshake.ja3")
+                if first(row, "tls.handshake.ja4"):
+                    session.ja4 = first(row, "tls.handshake.ja4")
             if 2 in hts and session.server_hello is None:
                 session.server_hello = self._parse_hello(row, 2, frame)
                 if first(row, "tls.handshake.ja3s"):
                     session.ja3s = first(row, "tls.handshake.ja3s")
+                session.ja4s = ja4s_fingerprint(row, session.proto)
             if 11 in hts:
                 session.certs.extend(self._parse_certs(row, frame, self._enrich))
             if 20 in hts:
@@ -1168,6 +1172,26 @@ RTP_PAYLOAD_TYPES: dict[int, str] = {
     14: "MPA", 15: "G728", 18: "G729", 31: "H261", 33: "MPV2", 34: "MP2T",
     96: "dynamic", 97: "dynamic", 98: "dynamic", 99: "dynamic",
 }
+
+
+_JA4_VERSIONS = {0x0002: "s2", 0x0300: "s3", 0x0301: "10", 0x0302: "11", 0x0303: "12", 0x0304: "13",
+                 0xFEFF: "d1", 0xFEFD: "d2", 0xFEFC: "d3"}
+
+
+def ja4s_fingerprint(row: Row, proto: str) -> str | None:
+    """FoxIO JA4S of the ServerHello in ``row``: extensions hashed in wire order, GREASE kept (issue #258)."""
+    cipher = to_int(first(row, "tls.handshake.ciphersuite"), 0)
+    if cipher is None:
+        return None
+    versions = [v for v in (to_int(x, 0) for x in many(row, "tls.handshake.extensions.supported_version"))
+                if v is not None and v & 0x0F0F != 0x0A0A]
+    version = max(versions) if versions else to_int(first(row, "tls.handshake.version"), 0)
+    exts = [f"{t:04x}" for t in (to_int(x) for x in many(row, "tls.handshake.extension.type")) if t is not None]
+    alpn = first(row, "tls.handshake.extensions_alpn_str")
+    ends = "".join(c if ord(c) < 128 else "9" for c in (alpn[0], alpn[-1])) if alpn else "00"
+    digest = hashlib.sha256(",".join(exts).encode()).hexdigest()[:12] if exts else "000000000000"
+    kind = "d" if proto == "dtls" else "t"
+    return f"{kind}{_JA4_VERSIONS.get(version or 0, '00')}{min(len(exts), 99):02d}{ends}_{cipher:04x}_{digest}"
 
 
 def normalize_dtls_row(row: Row) -> Row:

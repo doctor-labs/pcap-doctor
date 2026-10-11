@@ -103,6 +103,8 @@ def build_eve(index: CaptureIndex, types: tuple[str, ...] = EVENT_TYPES) -> list
                 tls["ja3"] = {"hash": r["ja3"]}
             if r["ja3s"]:
                 tls["ja3s"] = {"hash": r["ja3s"]}
+            if r["ja4"]:
+                tls["ja4"] = r["ja4"]
             ev["tls"] = {k: v for k, v in tls.items() if v is not None}
             events.append(ev)
     if "fileinfo" in types:

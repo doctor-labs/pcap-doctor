@@ -268,7 +268,8 @@ def _ssl_log(ctx: _Ctx) -> LogTable:
     table = LogTable("ssl", [
         ("ts", "time"), *ID_COLS, ("version", "string"), ("cipher", "string"), ("curve", "string"),
         ("server_name", "string"), ("resumed", "bool"), ("next_protocol", "string"), ("established", "bool"),
-        ("cert_chain_fuids", "vector[string]"), ("ja3", "string"), ("ja3s", "string")])
+        ("cert_chain_fuids", "vector[string]"), ("ja3", "string"), ("ja3s", "string"), ("ja4", "string"),
+        ("ja4s", "string")])
     for s in ctx.index.tls.values():
         suite = suites.get(s.chosen_cipher) if s.chosen_cipher is not None else None
         table.rows.append({
@@ -276,7 +277,7 @@ def _ssl_log(ctx: _Ctx) -> LogTable:
             "cipher": suite.name if suite else None, "curve": s.groups[0] if s.groups else None,
             "server_name": s.sni, "resumed": s.resumption, "next_protocol": s.alpn[0] if s.alpn else None,
             "established": s.complete, "cert_chain_fuids": [_fuid(s.key, c.chain_index) for c in s.certs] or None,
-            "ja3": s.ja3, "ja3s": s.ja3s,
+            "ja3": s.ja3, "ja3s": s.ja3s, "ja4": s.ja4, "ja4s": s.ja4s,
         })
     return table
 
