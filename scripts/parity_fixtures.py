@@ -805,3 +805,22 @@ def fixture_mail_logins() -> bytes:
                         ip_packet(src, dst, 6, tcp_segment(src, dst, sp, dp, seq[side], seq[other], 0x18, payload))))
             seq[side] += len(payload)
     return w.write()
+
+
+@fixture("connect_scans.pcap")
+def fixture_connect_scans() -> bytes:
+    """Connect scans that complete every handshake: 20 ports on one host, and port 445 on 20 hosts (#242)."""
+    w = Wire(start=1_701_800_000.0)
+    scanner = "10.90.0.66"
+
+    def connect(dst: str, sport: int, dport: int) -> None:
+        w.add(ether(MAC_A, MAC_B, ip_packet(scanner, dst, 6, tcp_segment(scanner, dst, sport, dport, 100, 0, 0x02))))
+        w.add(ether(MAC_B, MAC_A, ip_packet(dst, scanner, 6, tcp_segment(dst, scanner, dport, sport, 900, 101, 0x12))))
+        w.add(ether(MAC_A, MAC_B, ip_packet(scanner, dst, 6, tcp_segment(scanner, dst, sport, dport, 101, 901, 0x10))))
+        w.add(ether(MAC_A, MAC_B, ip_packet(scanner, dst, 6, tcp_segment(scanner, dst, sport, dport, 101, 901, 0x14))))
+
+    for i, port in enumerate(range(20, 40)):  # vertical: 20 ports on one host
+        connect("10.90.0.10", 50000 + i, port)
+    for i in range(20):  # horizontal: port 445 on 20 hosts
+        connect(f"10.90.1.{i + 1}", 51000 + i, 445)
+    return w.write()

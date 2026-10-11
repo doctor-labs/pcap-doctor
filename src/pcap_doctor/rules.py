@@ -65,6 +65,8 @@ RULES: dict[str, Rule] = {
         Rule("CLEARTEXT_SERVICE", _TRANSPORT, "Cleartext", "Cleartext service"),
         Rule("SERVICE_ON_ODD_PORT", _TRANSPORT, "Network", "Service on a non-standard port"),
         Rule("SYN_SCAN_SHAPE", _TRANSPORT, "Network", "Unanswered-SYN scan shape"),
+        Rule("PORT_SCAN_VERTICAL", _TRANSPORT, "Network", "Vertical port scan"),
+        Rule("PORT_SCAN_HORIZONTAL", _TRANSPORT, "Network", "Horizontal port scan"),
         Rule("BEACONING_SHAPE", _TRANSPORT, "Network", "Beaconing (regular callbacks)"),
         Rule("SIP_CLEARTEXT_SIGNALLING", _VOICE, "Voice", "Cleartext SIP signalling"),
         Rule("SDP_NO_CRYPTO_ATTR", _VOICE, "Voice", "SDP offered without SRTP keys"),
