@@ -896,12 +896,63 @@ def _protocols_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+def _conversations_log(ctx: _Ctx) -> LogTable:
+    """Per IP-pair frame/byte/duration summary, both directions together (issues #248)."""
+    table = LogTable("conversations", [("a", "addr"), ("b", "addr"), ("frames", "count"),
+                                       ("bytes", "count"), ("first_ts", "time"), ("duration", "interval")])
+    agg: dict[tuple[str, str], list[Any]] = {}  # (a, b) -> [frames, bytes, min_epoch, max_epoch]
+    for row in ctx.runner.run("frames"):
+        src = first(row, "ip.src") or first(row, "ipv6.src")
+        dst = first(row, "ip.dst") or first(row, "ipv6.dst")
+        if not src or not dst:
+            continue
+        a, b = sorted((src, dst))
+        length = to_int(first(row, "frame.len")) or 0
+        epoch = to_float(first(row, "frame.time_epoch"))
+        entry = agg.setdefault((a, b), [0, 0, None, None])
+        entry[0] += 1
+        entry[1] += length
+        if epoch is not None:
+            if entry[2] is None or epoch < entry[2]:
+                entry[2] = epoch
+            if entry[3] is None or epoch > entry[3]:
+                entry[3] = epoch
+    for (a, b), (frames, byte_count, first_epoch, last_epoch) in agg.items():
+        duration = round(last_epoch - first_epoch, 6) if first_epoch is not None and last_epoch is not None else 0.0
+        table.rows.append({"a": a, "b": b, "frames": frames, "bytes": byte_count,
+                           "first_ts": first_epoch, "duration": duration})
+    table.rows.sort(key=lambda r: (-r["bytes"], r["a"], r["b"]))
+    return table
+
+
+def _io_log(ctx: _Ctx) -> LogTable:
+    """Frames and bytes per one-second bucket (issue #249, like Wireshark's IO graph)."""
+    table = LogTable("io", [("offset", "count"), ("ts", "time"), ("frames", "count"), ("bytes", "count")])
+    buckets: dict[int, list[Any]] = {}  # offset -> [frames, bytes, first_epoch]
+    for row in ctx.runner.run("frames"):
+        relative = to_float(first(row, "frame.time_relative"))
+        if relative is None:
+            continue
+        offset = int(relative)
+        length = to_int(first(row, "frame.len")) or 0
+        epoch = to_float(first(row, "frame.time_epoch"))
+        entry = buckets.setdefault(offset, [0, 0, None])
+        entry[0] += 1
+        entry[1] += length
+        if epoch is not None and (entry[2] is None or epoch < entry[2]):
+            entry[2] = epoch
+    for offset, (frames, byte_count, first_epoch) in sorted(buckets.items()):
+        table.rows.append({"offset": offset, "ts": first_epoch, "frames": frames, "bytes": byte_count})
+    return table
+
+
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
     "device": _device_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
+    "conversations": _conversations_log, "io": _io_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 

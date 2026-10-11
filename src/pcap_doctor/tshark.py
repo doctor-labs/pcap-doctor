@@ -539,6 +539,13 @@ PROTOCOLS_PASS = PassSpec(
     fields=("frame.len", "frame.protocols"),
 )
 
+FRAMES_PASS = PassSpec(
+    name="frames",
+    display_filter="frame",
+    fields=("frame.time_relative", "frame.time_epoch",
+    "frame.len", "ip.src", "ip.dst", "ipv6.src", "ipv6.dst"),
+)
+
 ARP_ICMP_PASS = PassSpec(
     name="arp_icmp",
     display_filter="arp.opcode == 2 || icmp.type == 5",
@@ -623,6 +630,7 @@ PASSES: dict[str, PassSpec] = {
         DNP3_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
+        FRAMES_PASS,
         ARP_ICMP_PASS,
         CAPTURE_LOSS_PASS,
         DEVICE_PASS,
