@@ -485,7 +485,8 @@ class TransportExposureDetector(Detector):
         """Detect completed (connect-style) port scans, vertical and horizontal (#242).
 
         Who connected to whom comes from the conn log's originator/responder, so a scan of high
-        ports (8080, 3389, 5900...) counts as much as one of well-known ports.
+        ports (8080, 3389, 5900...) counts as much as one of well-known ports. Only completed
+        handshakes count: SYN_SCAN_SHAPE already reports the unanswered and refused ones.
         """
         if index.runner is None:  # a hand-built index has no conn log to read
             return []
@@ -494,15 +495,18 @@ class TransportExposureDetector(Detector):
         horizontal: dict[tuple[str, int], set[str]] = {}
         horizontal_first_frame: dict[tuple[str, int], int] = {}
         # the conn log knows who opened each connection (Zeek's id.orig_*); flows only know a sorted key
+        # only completed handshakes: unanswered/refused attempts are SYN_SCAN_SHAPE's, so a scan is reported once
         first_frame = {frozenset(((f.endpoint_a, f.port_a), (f.endpoint_b, f.port_b))): f.first_frame
-                       for f in index.flows.values() if f.proto == "tcp"}
+                       for f in index.flows.values() if f.proto == "tcp" and f.handshake_completed}
         for row in log_rows(index, "conn"):
             if row.get("proto") != "tcp":
                 continue
             src, dst, port = row["id.orig_h"], row["id.resp_h"], row["id.resp_p"]
             if not src or not dst or port is None:
                 continue
-            frame = first_frame.get(frozenset(((src, row["id.orig_p"]), (dst, port))), 0)
+            frame = first_frame.get(frozenset(((src, row["id.orig_p"]), (dst, port))))
+            if frame is None:  # not a completed handshake
+                continue
             vertical.setdefault((src, dst), set()).add(port)
             vertical_first_frame[(src, dst)] = min(vertical_first_frame.get((src, dst), frame), frame)
             horizontal.setdefault((src, port), set()).add(dst)
