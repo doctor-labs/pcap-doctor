@@ -765,3 +765,18 @@ def fixture_ftp_odd_port() -> bytes:
     send(True, b"PASS hunter2\r\n")
     send(False, b"230 logged in\r\n")
     return w.write()
+
+
+@fixture("http_versions.pcap")
+def fixture_http_versions() -> bytes:
+    """An HTTP exchange whose client and server announce versioned software (#247)."""
+    w = Wire(start=1_701_600_000.0)
+    c, s = "10.70.0.1", "10.70.0.2"
+    req = b"GET / HTTP/1.1\r\nHost: 10.70.0.2\r\nUser-Agent: curl/7.58.0\r\n\r\n"
+    resp = b"HTTP/1.1 200 OK\r\nServer: Apache/2.4.29 (Ubuntu)\r\nContent-Length: 2\r\n\r\nok"
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42000, 80, 1000, 0, 0x02))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 80, 42000, 9000, 1001, 0x12))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42000, 80, 1001, 9001, 0x10))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42000, 80, 1001, 9001, 0x18, req))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 80, 42000, 9001, 1001 + len(req), 0x18, resp))))
+    return w.write()
