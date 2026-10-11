@@ -906,6 +906,110 @@ def _resolve_vendor(oui_resolved: str | None, src_resolved: str | None, mac: str
     return None
 
 
+def _parse_http_version(value: str) -> tuple[str | None, str | None]:
+    """HTTP 'Name/Version rest' -> (name, version).
+
+    No '/' -> name is the whole value (stripped), version is None.
+    """
+    if not value:
+        return None, None
+    value = value.strip()
+    if not value:
+        return None, None
+    if "/" not in value:
+        return value, None
+    name, rest = value.split("/", 1)
+    # version stops at the first space or "("
+    version_str = rest
+    for marker in (" ", "("):
+        idx = version_str.find(marker)
+        if idx != -1:
+            version_str = version_str[:idx]
+    version_str = version_str.strip()
+    version = version_str or None
+    return name.strip() or None, version
+
+
+def _parse_ssh_version(value: str) -> tuple[str | None, str | None]:
+    """SSH 'SSH-2.0-<software>' -> (name, version).
+
+    software 'OpenSSH_7.4' -> name 'OpenSSH', version '7.4' (split on first '_').
+    No '_' -> name = software, version None.
+    """
+    if not value:
+        return None, None
+    value = value.strip()
+    # "SSH-<protoversion>-<softwareversion> <comments>": drop the prefix, stop at the comments.
+    parts = value.split("-", 2)
+    software = parts[2] if len(parts) == 3 and parts[0] == "SSH" else value
+    software = software.split(" ", 1)[0]
+    if not software:
+        return None, None
+    if "_" not in software:
+        head, dash, tail = software.rpartition("-")  # Cisco-1.25
+        if dash and head and tail[:1].isdigit():
+            return head, tail
+        return software, None
+    name, version = software.split("_", 1)
+    return name or None, version or None
+
+
+def _software_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style ``software.log``: versioned software from HTTP Server / User-Agent headers and SSH banners."""
+    table = LogTable("software", [
+        ("ts", "time"), ("host", "addr"), ("host_p", "port"), ("software_type", "string"),
+        ("name", "string"), ("version", "string"), ("unparsed_version", "string")])
+    # key -> {"ts": float|None, "software_type": str, "name": str|None, "version": str|None, "unparsed_version": str}
+    seen: dict[tuple[str, int | None, str, str], dict[str, Any]] = {}
+    for row in ctx.runner.run("software"):
+        ts = to_float(first(row, "frame.time_epoch"))
+        src = first(row, "ip.src") or first(row, "ipv6.src")
+        srcport = to_int(first(row, "tcp.srcport"))
+        dstport = to_int(first(row, "tcp.dstport"))
+        if not src:
+            continue
+        server = first(row, "http.server")
+        agent = first(row, "http.user_agent")
+        banner = first(row, "ssh.protocol")
+        entries: list[tuple[str, str, str | None, str | None, str]] = []
+        if server:
+            name, version = _parse_http_version(server)
+            entries.append(("HTTP::SERVER", server, name, version, server))
+        if agent:
+            name, version = _parse_http_version(agent)
+            entries.append(("HTTP::BROWSER", agent, name, version, agent))
+        if banner:
+            name, version = _parse_ssh_version(banner)
+            # Determine server vs client: the side whose tcp.srcport is lower / is 22 is the server.
+            if srcport is not None and dstport is not None:
+                stype = "SSH::SERVER" if srcport == 22 or srcport < dstport else "SSH::CLIENT"
+            elif srcport == 22:
+                stype = "SSH::SERVER"
+            else:
+                stype = "SSH::CLIENT"
+            entries.append((stype, banner, name, version, banner))
+        for stype, unparsed, name, version, raw in entries:
+            # Client sides have no port: they are the originator behind NAT / a shared address.
+            # host_p is None for HTTP::BROWSER and SSH::CLIENT; otherwise the src port.
+            is_client = stype in ("HTTP::BROWSER", "SSH::CLIENT")
+            host_p = None if is_client else srcport
+            key = (src, host_p, stype, unparsed)
+            info = seen.get(key)
+            if info is None:
+                info = {"ts": ts, "software_type": stype, "name": name, "version": version,
+                        "unparsed_version": raw}
+                seen[key] = info
+            elif ts is not None and (info["ts"] is None or ts < info["ts"]):
+                info["ts"] = ts
+    for (host, host_p, _stype, _unparsed), info in sorted(seen.items(), key=lambda kv: (kv[1]["ts"] is None, kv[1]["ts"] or 0.0, kv[0][0])):
+        table.rows.append({
+            "ts": info["ts"], "host": host, "host_p": host_p,
+            "software_type": info["software_type"], "name": info["name"], "version": info["version"],
+            "unparsed_version": info["unparsed_version"],
+        })
+    return table
+
+
 def _protocols_log(ctx: _Ctx) -> LogTable:
     """Protocol hierarchy breakdown: frames and bytes per protocol layer (issue #279)."""
     table = LogTable("protocols", [("protocol", "string"), ("frames", "count"), ("bytes", "count"), ("percent_frames", "double")])
@@ -982,7 +1086,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
-    "device": _device_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
+    "device": _device_log, "software": _software_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log,
 }
 LOG_NAMES = tuple(BUILDERS)

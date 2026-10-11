@@ -546,6 +546,13 @@ FRAMES_PASS = PassSpec(
     "frame.len", "ip.src", "ip.dst", "ipv6.src", "ipv6.dst"),
 )
 
+SOFTWARE_PASS = PassSpec(
+    name="software",
+    display_filter="http.server || http.user_agent || ssh.protocol",
+    fields=("frame.time_epoch", "ip.src", "ipv6.src", "tcp.srcport", "tcp.dstport",
+            "http.server", "http.user_agent", "ssh.protocol"),
+)
+
 ARP_ICMP_PASS = PassSpec(
     name="arp_icmp",
     display_filter="arp.opcode == 2 || icmp.type == 5",
@@ -631,6 +638,7 @@ PASSES: dict[str, PassSpec] = {
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,
+        SOFTWARE_PASS,
         ARP_ICMP_PASS,
         CAPTURE_LOSS_PASS,
         DEVICE_PASS,

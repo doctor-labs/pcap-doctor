@@ -129,5 +129,8 @@
     "TLS_SELF_SIGNED_CHAIN",
     "TLS_VERSION_DEPRECATED"
   ],
-  "ftp_odd_port.pcap": []
+  "ftp_odd_port.pcap": [],
+  "http_versions.pcap": [
+    "HTTP_CLEARTEXT"
+  ]
 }
