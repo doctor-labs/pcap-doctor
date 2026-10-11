@@ -28,6 +28,10 @@
   "capture_loss.pcap": [
     "CAPTURE_LOSS"
   ],
+  "connect_scans.pcap": [
+    "PORT_SCAN_HORIZONTAL",
+    "PORT_SCAN_VERTICAL"
+  ],
   "devices.pcap": [],
   "files_mix.pcap": [
     "CLEARTEXT_CREDENTIAL",

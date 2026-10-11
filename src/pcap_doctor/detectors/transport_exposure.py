@@ -13,6 +13,7 @@ from collections import Counter
 from typing import ClassVar
 
 from ..index import WELL_KNOWN_PORTS, CaptureIndex
+from ..logs import log_rows
 from ..models import Finding, HttpExchange, ServiceHit
 from .base import Detector, ev
 
@@ -38,6 +39,9 @@ FIRMWARE_CONTENT_TYPES = ("application/x-firmware", "application/vnd.android.ota
 BEACON_MIN_GAPS = 5
 BEACON_MAX_CV = 0.1
 
+#: Minimum distinct ports/hosts before a connect-style scan shape is reported (#242).
+SCAN_MIN = 15
+
 
 class TransportExposureDetector(Detector):
     name: ClassVar[str] = "d2.transport_exposure"
@@ -59,6 +63,7 @@ class TransportExposureDetector(Detector):
         findings += self._telnet_logins(index)
         findings += self._nonstandard_ports(index)
         findings += self._syn_only(index)
+        findings += self._port_scans(index)
         findings += self._beaconing(index)
         return findings
 
@@ -470,6 +475,81 @@ class TransportExposureDetector(Detector):
                     subjects=[ip],
                     evidence=[ev(first_frames.get(ip, 0), "tcp.flags.syn", f"{count} unanswered SYNs")],
                     remediation="Block or rate-limit the source; if this was authorised testing, record the window.",
+                    references=[],
+                    tags=["network", "scan"],
+                )
+            )
+        return out
+
+    def _port_scans(self, index: CaptureIndex) -> list[Finding]:
+        """Detect completed (connect-style) port scans, vertical and horizontal (#242).
+
+        Who connected to whom comes from the conn log's originator/responder, so a scan of high
+        ports (8080, 3389, 5900...) counts as much as one of well-known ports.
+        """
+        if index.runner is None:  # a hand-built index has no conn log to read
+            return []
+        vertical: dict[tuple[str, str], set[int]] = {}
+        vertical_first_frame: dict[tuple[str, str], int] = {}
+        horizontal: dict[tuple[str, int], set[str]] = {}
+        horizontal_first_frame: dict[tuple[str, int], int] = {}
+        # the conn log knows who opened each connection (Zeek's id.orig_*); flows only know a sorted key
+        first_frame = {frozenset(((f.endpoint_a, f.port_a), (f.endpoint_b, f.port_b))): f.first_frame
+                       for f in index.flows.values() if f.proto == "tcp"}
+        for row in log_rows(index, "conn"):
+            if row.get("proto") != "tcp":
+                continue
+            src, dst, port = row["id.orig_h"], row["id.resp_h"], row["id.resp_p"]
+            if not src or not dst or port is None:
+                continue
+            frame = first_frame.get(frozenset(((src, row["id.orig_p"]), (dst, port))), 0)
+            vertical.setdefault((src, dst), set()).add(port)
+            vertical_first_frame[(src, dst)] = min(vertical_first_frame.get((src, dst), frame), frame)
+            horizontal.setdefault((src, port), set()).add(dst)
+            horizontal_first_frame[(src, port)] = min(horizontal_first_frame.get((src, port), frame), frame)
+        out: list[Finding] = []
+        for (src, dst), ports in sorted(vertical.items()):
+            count = len(ports)
+            if count < SCAN_MIN:
+                continue
+            frame = vertical_first_frame[(src, dst)]
+            out.append(
+                self.finding(
+                    code="PORT_SCAN_VERTICAL",
+                    title=f"{src} connected to {count} ports on {dst}",
+                    severity="medium",
+                    confidence="medium",
+                    summary=(
+                        f"{src} connected to {count} ports on {dst} (scanning), "
+                        f"suggesting host reconnaissance."
+                    ),
+                    scope=f"vscan|{src}|{dst}",
+                    subjects=[src, dst],
+                    evidence=[ev(frame, "tcp.dstport", f"{count} ports")],
+                    remediation="Block or rate-limit the source; if authorised, record the window.",
+                    references=[],
+                    tags=["network", "scan"],
+                )
+            )
+        for (src, port), hosts in sorted(horizontal.items()):
+            count = len(hosts)
+            if count < SCAN_MIN:
+                continue
+            frame = horizontal_first_frame[(src, port)]
+            out.append(
+                self.finding(
+                    code="PORT_SCAN_HORIZONTAL",
+                    title=f"{src} connected to port {port} on {count} hosts",
+                    severity="medium",
+                    confidence="medium",
+                    summary=(
+                        f"{src} connected to port {port} on {count} hosts (scanning), "
+                        f"suggesting network-wide reconnaissance."
+                    ),
+                    scope=f"hscan|{src}|{port}",
+                    subjects=[src],
+                    evidence=[ev(frame, "tcp.dstport", f"{count} hosts")],
+                    remediation="Block or rate-limit the source; if authorised, record the window.",
                     references=[],
                     tags=["network", "scan"],
                 )
