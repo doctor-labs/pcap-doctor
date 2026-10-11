@@ -35,9 +35,20 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
   `S3`, `RSTOS0`, `OTH`) from the same counts.
 - `uid` is `C` plus 16 hex characters derived from the flow key, stable across runs, not Zeek's random id.
 - Secrets are never written: FTP `PASS` is `<hidden>`, no HTTP Authorization or cookie values, no SMTP AUTH data.
-- `weird` names are slugs of tshark's own expert messages, not Zeek's weird names (a catalog is tracked in #210),
+- `weird` names are slugs of tshark's own expert messages, not Zeek's weird names (see the table below),
   except bad checksums, which use Zeek's `bad_IP_checksum` / `bad_TCP_checksum` / `bad_UDP_checksum` /
   `bad_ICMP_checksum`. Checksums are validated for the conn and weird logs only; captures taken on the sending host
   with checksum offload show every outgoing packet as bad.
+
+  | tshark expert message starts with | Zeek weird |
+  |---|---|
+  | `Bad length value` | `UDP_datagram_length_mismatch` |
+  | `Bogus TCP Header length` | `bad_TCP_header_len` |
+  | `Window scale shift exceeds 14` | `TCP_scale_range` |
+  | `The Content-Length and Transfer-Encoding header must not be set together` | `HTTP_content_length_and_chunked` |
+  | `Bad checksum` (IP) | `bad_IP_checksum` |
+  | `Bad checksum` (TCP) | `bad_TCP_checksum` |
+  | `Bad checksum` (UDP) | `bad_UDP_checksum` |
+  | `Bad checksum` (ICMP) | `bad_ICMP_checksum` |
 - `files` lists the files `extract` recovers, with `seen_bytes`, `md5`, `sha1`, `sha256` and a magic-byte `mime_type`; only HTTP files carry hosts and a connection uid.
 - `#open` / `#close` carry the capture's first and last packet time, so two runs give identical files.
