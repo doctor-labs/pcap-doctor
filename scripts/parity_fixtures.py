@@ -695,3 +695,23 @@ def fixture_tunnels() -> bytes:
         "10.30.0.1", "10.30.0.2", 17, udp_datagram("10.30.0.1", "10.30.0.2", 40000, 53, b"\x00" * 12))
     w.add(tagged)
     return w.write()
+
+
+def _arp_reply(sender_mac: str, sender_ip: str, target_mac: str, target_ip: str) -> bytes:
+    body = struct.pack("!HHBBH", 1, 0x0800, 6, 4, 2) + mac(sender_mac) + _ip4(sender_ip) + mac(target_mac) + _ip4(target_ip)
+    return ether(sender_mac, target_mac, body, ethertype=0x0806)
+
+
+@fixture("arp_icmp.pcap")
+def fixture_arp_icmp() -> bytes:
+    """The gateway 10.0.0.1 claimed by two MACs (ARP spoofing) and an ICMP redirect from 10.0.0.254 (#280)."""
+    w = Wire(start=1_701_200_000.0)
+    w.add(_arp_reply("02:00:00:00:00:01", "10.0.0.1", MAC_A, "10.0.0.20"))
+    w.add(_arp_reply("02:00:00:00:00:66", "10.0.0.1", MAC_A, "10.0.0.20"))
+    w.add(_arp_reply("02:00:00:00:00:66", "10.0.0.1", MAC_A, "10.0.0.20"))  # repeated claim, one finding
+    w.add(_arp_reply(MAC_B, "10.0.0.30", MAC_A, "10.0.0.20"))  # an ordinary, consistent reply
+    original = ip_packet("10.0.0.20", "8.8.8.8", 17, udp_datagram("10.0.0.20", "8.8.8.8", 40000, 53, b"\x00" * 12))[:28]
+    icmp = struct.pack("!BBH4s", 5, 1, 0, _ip4("10.0.0.66")) + original
+    icmp = icmp[:2] + struct.pack("!H", csum(icmp)) + icmp[4:]
+    w.add(ether("02:00:00:00:00:fe", MAC_A, ip_packet("10.0.0.254", "10.0.0.20", 1, icmp)))
+    return w.write()

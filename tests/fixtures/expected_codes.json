@@ -1,4 +1,8 @@
 {
+  "arp_icmp.pcap": [
+    "ARP_SPOOFING_SUSPECTED",
+    "ICMP_REDIRECT"
+  ],
   "beaconing.pcap": [
     "BEACONING_SHAPE"
   ],
