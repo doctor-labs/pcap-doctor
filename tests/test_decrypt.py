@@ -66,7 +66,7 @@ def test_no_key_material_reaches_any_artifact(cli_runner, tmp_path, cache_dir) -
             "--tls-key", str(key), "--json-out", str(tmp_path / "env.json"), "--sarif", str(tmp_path / "out.sarif")]
     assert cli_runner.invoke(app, args).exit_code == 0
     key_bytes = key.read_text()[:60]
-    blob = "".join(p.read_text(errors="ignore") for p in (tmp_path / "r").glob("*")) \
+    blob = "".join(p.read_text(errors="ignore") for p in (tmp_path / "r").glob("*") if p.is_file()) \
         + (tmp_path / "env.json").read_text() + (tmp_path / "out.sarif").read_text()
     assert str(key) not in blob  # the key path never appears
     assert "uat:ssl_keys" not in blob and "PRIVATE KEY" not in blob and key_bytes not in blob

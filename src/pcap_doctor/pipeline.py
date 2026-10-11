@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import ssl
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -86,6 +87,15 @@ def analyze(
     index = builder.build()
     if firmware_keys:
         index.firmware_keys = firmware_keys
+
+    # Export every TLS certificate seen as PEM, named by its SHA-256 (#212).
+    if index.cert_der:
+        cert_dir = outdir / "certificates"
+        cert_dir.mkdir(parents=True, exist_ok=True)
+        for fp in sorted(index.cert_der):
+            der = index.cert_der[fp]
+            pem = ssl.DER_cert_to_PEM_cert(bytes(der))
+            (cert_dir / f"{fp}.pem").write_text(pem)
 
     if signatures:
         from .signatures import load_rules, match

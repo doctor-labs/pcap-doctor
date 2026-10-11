@@ -73,7 +73,7 @@ def test_firmware_key_material_never_reaches_an_artifact(cli_runner, tmp_path, c
                                 "--firmware", str(fw), "--json-out", str(tmp_path / "env.json"),
                                 "--sarif", str(tmp_path / "out.sarif")])
     assert r.exit_code == 0
-    blob = "".join(p.read_text(errors="ignore") for p in out.glob("*")) \
+    blob = "".join(p.read_text(errors="ignore") for p in out.glob("*") if p.is_file()) \
         + (tmp_path / "env.json").read_text() + (tmp_path / "out.sarif").read_text()
     assert "PRIVATE KEY" not in blob  # no key bytes
     assert str(fw) not in blob  # no absolute host path; only the firmware-relative path is evidence
