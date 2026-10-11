@@ -823,6 +823,41 @@ def _device_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+def capture_loss_stats(rows: list[Row]) -> tuple[int, int, int | None]:
+    """Aggregate a ``capture_loss`` pass into (acks, gaps, first_gap_frame).
+
+    * ``acks`` is the number of ACK rows seen.
+    * ``gaps`` is the number of segments that arrive after a hole in their own stream (tshark's
+      ``tcp.analysis.lost_segment``): data was captured on both sides of the hole, so it is real
+      mid-stream loss. ACKs of data never seen at all (``ack_lost_segment``) are not counted: they
+      are what any capture that starts mid-connection looks like.
+    * ``first_gap_frame`` is the frame number of the first such segment, or ``None``.
+    """
+    acks = len(rows)
+    gaps = 0
+    first_gap_frame: int | None = None
+    for row in rows:
+        if first(row, "tcp.analysis.lost_segment"):
+            gaps += 1
+            if first_gap_frame is None:
+                first_gap_frame = to_int(first(row, "frame.number"))
+    return acks, gaps, first_gap_frame
+
+
+def _capture_loss_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style capture_loss.log: ACKs, gaps (segments after a mid-stream hole) and percent lost (issue #240)."""
+    rows = ctx.runner.run("capture_loss")
+    acks, gaps, _first_gap_frame = capture_loss_stats(rows)
+    rows_sorted = sorted(rows, key=lambda r: (to_int(first(r, "frame.number")) or 0))
+    ts = to_float(first(rows_sorted[0], "frame.time_epoch")) if rows_sorted else None
+    table = LogTable(
+        "capture_loss",
+        [("ts", "time"), ("acks", "count"), ("gaps", "count"), ("percent_lost", "double")],
+        rows=[{"ts": ts, "acks": acks, "gaps": gaps, "percent_lost": round(100 * gaps / acks, 1) if acks else 0.0}],
+    )
+    return table
+
+
 def _resolve_vendor(oui_resolved: str | None, src_resolved: str | None, mac: str) -> str | None:
     """Pick a vendor string for a MAC.
 
@@ -866,7 +901,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "notice": _notice_log, "weird": _weird_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
-    "device": _device_log, "protocols": _protocols_log,
+    "device": _device_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 

@@ -27,6 +27,7 @@ _SIGNATURES = "d9.user_signatures"
 _SMB = "d10.smb"
 _BRUTE = "d11.brute_force"
 _ARP = "d12.arp_icmp"
+_CAPTURE_LOSS = "d13.capture_loss"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -88,6 +89,7 @@ RULES: dict[str, Rule] = {
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
         Rule("ARP_SPOOFING_SUSPECTED", _ARP, "Network", "ARP spoofing suspected"),
         Rule("ICMP_REDIRECT", _ARP, "Network", "ICMP redirect seen"),
+        Rule("CAPTURE_LOSS", _CAPTURE_LOSS, "Network", "Capture loss"),
     )
 }
 

@@ -25,6 +25,9 @@
     "DNS_CLEARTEXT",
     "DNS_TUNNEL_SHAPE"
   ],
+  "capture_loss.pcap": [
+    "CAPTURE_LOSS"
+  ],
   "devices.pcap": [],
   "files_mix.pcap": [
     "CLEARTEXT_CREDENTIAL",
