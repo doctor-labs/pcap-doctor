@@ -140,5 +140,8 @@
   "ftp_odd_port.pcap": [],
   "http_versions.pcap": [
     "HTTP_CLEARTEXT"
+  ],
+  "os_ttls.pcap": [
+    "SYN_SCAN_SHAPE"
   ]
 }

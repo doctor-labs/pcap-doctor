@@ -1012,6 +1012,67 @@ def _software_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+#: Candidate "initial TTL" values used by OS fingerprinting; the observed TTL is
+#: rounded up to the smallest candidate that is >= it.
+_TTL_CANDIDATES = (32, 64, 128, 255)
+
+
+def _initial_ttl(ttl: int) -> int:
+    """Round an observed TTL up to the nearest p0f-style initial TTL."""
+    for candidate in _TTL_CANDIDATES:
+        if ttl <= candidate:
+            return candidate
+    return _TTL_CANDIDATES[-1]
+
+
+#: Map an initial TTL to a human-readable OS family guess (p0f-style, TTL only).
+_OS_GUESS = {
+    32: "old Windows/embedded",
+    64: "Linux/Unix/Android/macOS",
+    128: "Windows",
+    255: "network device",
+}
+
+
+def _os_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style passive OS guess: one row per host, from the initial TTL of its SYNs (issue #244)."""
+    table = LogTable("os", [
+        ("ts", "time"), ("host", "addr"), ("ttl", "count"), ("initial_ttl", "count"),
+        ("hops", "count"), ("os_guess", "string"), ("window", "count"), ("syns", "count"),
+    ])
+    # host -> {"ts", "ttl", "initial_ttl", "hops", "os_guess", "window", "syns"}
+    seen: dict[str, dict[str, Any]] = {}
+    for row in ctx.runner.run("os"):
+        host = first(row, "ip.src")
+        if not host:
+            continue  # IPv4 only: skip rows without ip.ttl / ip.src
+        ttl = to_int(first(row, "ip.ttl"))
+        if ttl is None:
+            continue
+        ts = to_float(first(row, "frame.time_epoch"))
+        window = to_int(first(row, "tcp.window_size_value"))
+        info = seen.get(host)
+        if info is None:
+            initial = _initial_ttl(ttl)
+            info = {
+                "ts": ts, "ttl": ttl, "initial_ttl": initial,
+                "hops": initial - ttl,
+                "os_guess": _OS_GUESS[initial],
+                "window": window, "syns": 1,
+            }
+            seen[host] = info
+        else:
+            info["syns"] += 1
+            # keep the first-seen row's ts/ttl/window as recorded on first SYN
+    for host, info in sorted(seen.items(), key=lambda kv: (kv[1]["ts"] is None, kv[1]["ts"] or 0.0, kv[0])):
+        table.rows.append({
+            "ts": info["ts"], "host": host, "ttl": info["ttl"],
+            "initial_ttl": info["initial_ttl"], "hops": info["hops"],
+            "os_guess": info["os_guess"], "window": info["window"], "syns": info["syns"],
+        })
+    return table
+
+
 def _protocols_log(ctx: _Ctx) -> LogTable:
     """Protocol hierarchy breakdown: frames and bytes per protocol layer (issue #279)."""
     table = LogTable("protocols", [("protocol", "string"), ("frames", "count"), ("bytes", "count"), ("percent_frames", "double")])
@@ -1088,7 +1149,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
-    "device": _device_log, "software": _software_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
+    "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log,
 }
 LOG_NAMES = tuple(BUILDERS)
