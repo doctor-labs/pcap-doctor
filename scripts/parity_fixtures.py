@@ -534,3 +534,38 @@ def fixture_tcp_health() -> bytes:
     t.close()
     w.add(udp_frame(c, s, 47001, 9999, b"PF-UDP-BAD-SUM", bad_checksum=True))
     return w.write()
+
+
+@fixture("brute_force.pcap")
+def fixture_brute_force() -> bytes:
+    """Password guessing on three services, and one client that stays under the limits (#207)."""
+    w = Wire(start=1_700_600_000.0)
+    attacker, victim, quiet = "10.5.0.66", "10.5.0.20", "10.5.0.11"
+    for i in range(20):  # FTP: 20 connections, each a USER/PASS that the server rejects with 530
+        t = Tcp(w, attacker, victim, 48000 + i, 21).open()
+        t.send(False, b"220 ftp ready\r\n")
+        t.send(True, b"USER admin\r\n")
+        t.send(False, b"331 Password required\r\n")
+        t.send(True, b"PASS guess%02d\r\n" % i)
+        t.send(False, b"530 Login incorrect.\r\n")
+        t.close()
+    for i in range(12):  # HTTP: 12 Basic-auth requests answered 401
+        t = Tcp(w, attacker, victim, 49000 + i, 80).open()
+        t.send(True, b"GET /admin HTTP/1.1\r\nHost: victim\r\nAuthorization: Basic YWRtaW46Z3Vlc3M=\r\n\r\n")
+        t.send(False, b"HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"x\"\r\nContent-Length: 0\r\n\r\n")
+        t.close()
+    t = Tcp(w, attacker, victim, 49500, 445).open()  # SMB: 10 NTLM logons refused on one connection
+    t.send(True, smb2_negotiate_request())
+    t.send(False, smb2_negotiate_response())
+    for i in range(10):
+        t.send(True, smb2_session_setup(ntlm_authenticate("admin", "CORP", "KALI", bytes(24)), msg_id=2 + i))
+        t.send(False, smb2_session_setup(b"", response=True, msg_id=2 + i, status=0xC000006D))
+    t.close()
+    for i in range(3):  # a user mistyping a password three times stays below every limit
+        t = Tcp(w, quiet, victim, 50000 + i, 21).open()
+        t.send(True, b"USER alice\r\n")
+        t.send(False, b"331 Password required\r\n")
+        t.send(True, b"PASS typo\r\n")
+        t.send(False, b"530 Login incorrect.\r\n")
+        t.close()
+    return w.write()

@@ -2,6 +2,14 @@
   "beaconing.pcap": [
     "BEACONING_SHAPE"
   ],
+  "brute_force.pcap": [
+    "BRUTE_FORCE_SUSPECTED",
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE",
+    "HTTP_CLEARTEXT",
+    "HTTP_CLEARTEXT_AUTH",
+    "SMB_SIGNING_NOT_REQUIRED"
+  ],
   "dns_external.pcap": [
     "DNS_CLEARTEXT",
     "DNS_EXTERNAL_RESOLVER"
