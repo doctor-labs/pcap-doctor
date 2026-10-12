@@ -26,7 +26,7 @@ from .index import CaptureIndex, first, many
 from .models import flow_key, stable_id
 from .prompts import clean_capture_text
 from .smb import unc, unescape
-from .tshark import CHECKSUM_ARGS, Row, to_float, to_int, to_int_auto
+from .tshark import CHECKSUM_ARGS, Row, to_bool01, to_float, to_int, to_int_auto
 
 Column = tuple[str, str]  # (zeek field name, zeek type)
 
@@ -511,6 +511,47 @@ def _dhcp_log(ctx: _Ctx) -> LogTable:
         if lease is not None:
             r["lease_time"] = lease
     table.rows = [r for r in by_xid.values() if r["msg_types"]]
+    return table
+
+
+_NBNS_NAME_SUFFIX = re.compile(r"<[^>]*>\s*(\([^)]*\))?\s*$")
+
+
+def _netbios_log(ctx: _Ctx) -> LogTable:
+    table = LogTable("netbios", [
+        ("ts", "time"), *ID_COLS, ("name", "string"), ("addresses", "string"), ("is_group", "bool")])
+    by_name: dict[str, dict[str, Any]] = {}
+    for row in ctx.runner.run("netbios"):
+        name_raw = first(row, "nbns.name")
+        if not name_raw:
+            continue
+        name = _NBNS_NAME_SUFFIX.sub("", name_raw)
+        key = ctx.row_key(row, "udp")
+        if not key:
+            continue
+        ids = ctx.ids(key)
+        is_response = to_bool01(first(row, "nbns.flags.response"))
+        entry = by_name.get(name)
+        if entry is None:
+            entry = {"ts": to_float(first(row, "frame.time_epoch")),
+                     "uid": ids["uid"],
+                     "id.orig_h": ids["id.orig_h"], "id.orig_p": ids["id.orig_p"],
+                     "id.resp_h": ids["id.resp_h"], "id.resp_p": ids["id.resp_p"],
+                     "name": name, "addresses": [], "is_group": None}
+            by_name[name] = entry
+        if is_response:
+            addr = first(row, "nbns.addr")
+            if addr and addr not in entry["addresses"]:
+                entry["addresses"].append(addr)
+            group = to_bool01(first(row, "nbns.nb_flags.group"))
+            if group is not None:
+                entry["is_group"] = group
+    for entry in by_name.values():
+        if entry["addresses"]:
+            entry["addresses"] = ",".join(entry["addresses"])
+        else:
+            entry["addresses"] = None
+    table.rows = sorted(by_name.values(), key=lambda r: r["name"])
     return table
 
 
@@ -1189,7 +1230,7 @@ def _known_services_log(ctx: _Ctx) -> LogTable:
 
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
-    "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
+    "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,

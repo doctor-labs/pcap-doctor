@@ -18,6 +18,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `weird` | tshark expert warning or error (malformed packet, bad length...) | `weird` pass |
 | `expert` | every Wireshark expert-info item: severity (comment, chat, note, warn, error), group and message (an extension; `weird` keeps only warn and error) | `weird` pass |
 | `dhcp` | DHCP transaction (xid) | `dhcp` pass |
+| `netbios` | NBNS/NetBIOS name queried on the wire, with the address(s) the responder returned and the group flag from the NB flags | `netbios` pass |
 | `ftp` | FTP command and its reply | `ftp` pass |
 | `smtp` | mail transaction (`MAIL FROM` ... `QUIT`) | `smtp` pass |
 | `ssh` | SSH session: banners and the first-offered algorithms | `ssh` pass |
