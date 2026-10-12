@@ -864,3 +864,49 @@ def fixture_dns_plus_tls() -> bytes:
     t.close()
     return w.write()
 
+
+def _nbns_name(name: str) -> bytes:
+    """RFC 1002 first-level NetBIOS name: a 0x20 (32) length byte + 32 encoded bytes.
+
+    The 16-byte NetBIOS name (15 space-padded bytes plus a trailing 0x00) becomes two
+    ASCII characters ``0x41 + nibble`` per byte. The trailing 0x00 byte is what makes
+    tshark print the suffix as ``<00>`` (a workstation/redirector name) rather than ``<20>``.
+    """
+    padded = name.encode().ljust(15)[:15] + b"\x00"
+    out = bytearray(b"\x20")
+    for b in padded:
+        out += bytes((0x41 + (b >> 4), 0x41 + (b & 0x0F)))
+    return bytes(out)
+
+
+def _nbns_query(tid: int, name: str) -> bytes:
+    """NB name query (opcode 0): broadcast desired/available flags set."""
+    header = struct.pack("!HHHHHH", tid, 0x0300, 1, 0, 0, 0)
+    return header + _nbns_name(name) + b"\x00" + struct.pack("!HH", 0x0020, 0x0001)
+
+
+def _nbns_response(tid: int, name: str, addr: str, *, nb_flags: int) -> bytes:
+    """NB name query response carrying one NB (type 0x20) answer: name-type flags + 4-byte address."""
+    rdata = struct.pack("!H", nb_flags) + _ip4(addr)
+    header = struct.pack("!HHHHHH", tid, 0x8380, 0, 1, 0, 0)
+    answer = _nbns_name(name) + b"\x00" + struct.pack("!HH", 0x0020, 0x0001) + struct.pack("!IH", 300, len(rdata)) + rdata
+    return header + answer
+
+
+@fixture("netbios_names.pcap")
+def fixture_netbios_names() -> bytes:
+    """NBNS name resolution: two answered names (one group, one B-node server) and one unanswered query (#221).
+
+    Verified against tshark 4.6.6: frames 1-5 decode as NBNS with no malformed packets.
+    """
+    w = Wire(start=1_702_000_000.0)
+    client, server = "192.168.56.10", "192.168.56.1"
+    w.add(udp_frame(client, server, 137, 137, _nbns_query(0x1111, "WORKGROUP")))
+    w.add(udp_frame(server, client, 137, 137, _nbns_response(0x1111, "WORKGROUP", server, nb_flags=0x8400),
+                     smac=MAC_B, dmac=MAC_A))
+    w.add(udp_frame(client, server, 137, 137, _nbns_query(0x2222, "PF-FILESRV"), dmac="ff:ff:ff:ff:ff:ff"))
+    w.add(udp_frame(server, client, 137, 137, _nbns_response(0x2222, "PF-FILESRV", "192.168.56.20", nb_flags=0x0400),
+                     smac=MAC_B, dmac=MAC_A))
+    w.add(udp_frame(client, server, 137, 137, _nbns_query(0x3333, "GHOSTBOX"), dmac="ff:ff:ff:ff:ff:ff"))
+    return w.write()
+
