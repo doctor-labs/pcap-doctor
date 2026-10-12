@@ -6,7 +6,7 @@ exactly one request. The benign request (client 10.61.0.9) is the negative contr
 
 from __future__ import annotations
 
-from conftest import analyze_capture, fixture, requires_tshark
+from conftest import fixture, requires_tshark
 
 SQLI = "10.61.0.2"
 XSS = "10.61.0.3"
