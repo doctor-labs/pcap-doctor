@@ -1036,3 +1036,27 @@ def fixture_slice_hosts() -> bytes:
     Tcp(w, c, "10.96.0.3", 40001, 80, isn_c=2000, isn_s=6000).open()
     w.add(udp_frame("10.96.0.4", "10.96.0.9", 53000, 53, b"\xab\xcd\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"))
     return w.write()
+
+
+@fixture("http_headers.pcap")
+def fixture_http_headers() -> bytes:
+    """Two HTTP responses: one with no security headers, one with the full set (#271)."""
+    w = Wire(start=1_702_000_000.0)
+    s = "10.97.0.2"
+
+    def exchange(client: str, sport: int, resp_headers: bytes) -> None:
+        req = b"GET / HTTP/1.1\r\nHost: " + s.encode() + b"\r\n\r\n"
+        resp = b"HTTP/1.1 200 OK\r\n" + resp_headers + b"Content-Length: 2\r\n\r\nok"
+        w.add(ether(MAC_A, MAC_B, ip_packet(client, s, 6, tcp_segment(client, s, sport, 80, 1000, 0, 0x02))))
+        w.add(ether(MAC_B, MAC_A, ip_packet(s, client, 6, tcp_segment(s, client, 80, sport, 9000, 1001, 0x12))))
+        w.add(ether(MAC_A, MAC_B, ip_packet(client, s, 6, tcp_segment(client, s, sport, 80, 1001, 9001, 0x10))))
+        w.add(ether(MAC_A, MAC_B, ip_packet(client, s, 6, tcp_segment(client, s, sport, 80, 1001, 9001, 0x18, req))))
+        w.add(ether(MAC_B, MAC_A, ip_packet(s, client, 6, tcp_segment(s, client, 80, sport, 9001, 1001 + len(req), 0x18, resp))))
+
+    exchange("10.97.0.10", 42000, b"Server: nginx\r\n")
+    exchange("10.97.0.11", 42001,
+             b"Strict-Transport-Security: max-age=31536000\r\n"
+             b"Content-Security-Policy: default-src 'self'\r\n"
+             b"X-Content-Type-Options: nosniff\r\n"
+             b"X-Frame-Options: DENY\r\n")
+    return w.write()

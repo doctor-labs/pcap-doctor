@@ -507,6 +507,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 | `d13.capture_loss` | `detectors/capture_loss.py` | TCP segments after a mid-stream hole above 10% of ACKs (Zeek capture-loss) |
 | `d14.hostnames` | `detectors/hostnames.py` | hostnames with a login/admin/sign-in-style first label seen in DNS queries, TLS SNI and HTTP Host headers (Zeek Interesting_Hostname_Login / External_Name parity) |
 | `d4.dns_quic_ssh` | `detectors/dns_quic_ssh.py` | plaintext DNS leakage, DNS tunnelling heuristics (label depth + entropy + TXT/NULL volume), external resolvers (IPv4 and IPv6), QUIC version inventory and payload opacity, weak SSH kex/cipher/MAC/host-key offers, Terrapin exposure (CVE-2023-48795) |
+| `d14.http_headers` | `detectors/http_headers.py` | cleartext HTTP responses missing Strict-Transport-Security, Content-Security-Policy, X-Content-Type-Options or X-Frame-Options (HTTP_MISSING_SECURITY_HEADERS) |
 
 Every code a detector can emit is listed in the rule catalog (`rules.py`, `pcap-doctor rules list`)
 with its category and title, and explained in `rule_docs/<CODE>.md`.

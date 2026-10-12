@@ -12,6 +12,7 @@
     "CLEARTEXT_SERVICE",
     "HTTP_CLEARTEXT",
     "HTTP_CLEARTEXT_AUTH",
+    "HTTP_MISSING_SECURITY_HEADERS",
     "SMB_SIGNING_NOT_REQUIRED"
   ],
   "dns_external.pcap": [
@@ -43,6 +44,7 @@
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE",
     "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS",
     "SMB_SIGNING_NOT_REQUIRED"
   ],
   "ftp_ldap_creds.pcap": [
@@ -65,18 +67,26 @@
   ],
   "http_bare_token.pcap": [
     "HTTP_CLEARTEXT",
-    "HTTP_CLEARTEXT_AUTH"
+    "HTTP_CLEARTEXT_AUTH",
+    "HTTP_MISSING_SECURITY_HEADERS"
   ],
   "http_basic.pcap": [
     "HTTP_CLEARTEXT",
     "HTTP_CLEARTEXT_AUTH",
-    "HTTP_COOKIE_NO_SECURE"
+    "HTTP_COOKIE_NO_SECURE",
+    "HTTP_MISSING_SECURITY_HEADERS"
   ],
   "http_cleartext.pcap": [
-    "HTTP_CLEARTEXT"
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
   ],
   "http_firmware_headers.pcap": [
-    "HTTP_CLEARTEXT"
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
+  ],
+  "http_headers.pcap": [
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
   ],
   "ics_mix.pcap": [],
   "kerberos.pcap": [],
@@ -146,10 +156,12 @@
     "SYN_SCAN_SHAPE"
   ],
   "tcp_health.pcap": [
-    "HTTP_CLEARTEXT"
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
   ],
   "weird_mix.pcap": [
-    "HTTP_CLEARTEXT"
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
   ],
   "telnet_login.pcap": [
     "CLEARTEXT_CREDENTIAL",
@@ -164,7 +176,8 @@
   ],
   "ftp_odd_port.pcap": [],
   "http_versions.pcap": [
-    "HTTP_CLEARTEXT"
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
   ],
   "os_ttls.pcap": [
     "SYN_SCAN_SHAPE"
