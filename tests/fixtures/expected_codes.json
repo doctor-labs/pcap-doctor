@@ -208,5 +208,8 @@
     "HTTP_WEB_ATTACK_SQLI",
     "HTTP_WEB_ATTACK_TRAVERSAL",
     "HTTP_WEB_ATTACK_XSS"
+  ],
+  "radius_logins.pcap": [
+    "CLEARTEXT_CREDENTIAL"
   ]
 }

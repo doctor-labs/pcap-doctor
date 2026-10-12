@@ -1,7 +1,7 @@
 # CLEARTEXT_CREDENTIAL
 
 ## What it means
-A credential crossed the network unencrypted: an SNMP community string, an LDAP simple-bind password, a MySQL query's text, an FTP PASS argument, or a Telnet password (for Telnet only the password length and its frame are recorded, never the value itself).
+A credential crossed the network unencrypted: an SNMP community string, an LDAP simple-bind password, a MySQL query's text, an FTP PASS argument, a Telnet password (for Telnet only the password length and its frame are recorded, never the value itself), or a RADIUS User-Name (the User-Password is encrypted with the shared secret, not TLS, but the username itself is cleartext).
 
 ## Why it matters
 Anyone on-path can capture the credential. Treat every exposed credential as compromised.
