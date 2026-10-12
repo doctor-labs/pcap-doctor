@@ -6,6 +6,7 @@ quiet on them) unless a builder asks for a bad one. ``make_fixtures.py`` merges 
 
 from __future__ import annotations
 
+import hashlib
 import socket
 import struct
 from collections.abc import Callable
@@ -1133,3 +1134,48 @@ def fixture_ech_0rtt_handshake() -> bytes:
     t.close()
     return w.write()
 
+
+
+# -- RADIUS (#222) ---------------------------------------------------------------------------
+NAS, AAA = "10.90.0.1", "10.90.0.2"
+
+
+def radius(code: int, ident: int, attrs: bytes, authenticator: bytes) -> bytes:
+    return struct.pack("!BBH", code, ident, 20 + len(attrs)) + authenticator + attrs
+
+
+def attr(t: int, v: bytes) -> bytes:
+    return struct.pack("!BB", t, len(v) + 2) + v
+
+
+def radius_password(secret: bytes, request_authenticator: bytes, password: bytes) -> bytes:
+    """RFC 2865 s5.2 User-Password: the padded secret XORed with MD5(secret + Request Authenticator)."""
+    padded = secret + b"\x00" * ((16 - len(secret) % 16) % 16)
+    digest = hashlib.md5(secret + request_authenticator).digest()
+    stream = (digest * (len(padded) // 16 + 1))[: len(padded)]
+    return bytes(a ^ b for a, b in zip(padded, stream))
+
+
+@fixture("radius_logins.pcap")
+def fixture_radius_logins() -> bytes:
+    """Two RADIUS Access-Requests and an Access-Reject (#222)."""
+    w = Wire(start=1_701_800_000.0)
+    secret = b"s3cr3t-radius"
+    req_auth = bytes(range(16))
+
+    # Verified with tshark: username=alice, Calling-Station-Id=00-11-22-33-44-55, id=7.
+    req = radius(1, 7, attr(1, b"alice")
+                 + attr(2, radius_password(secret, req_auth, b""))
+                 + attr(31, b"00-11-22-33-44-55")
+                 + attr(40, b"tunnel-secret"), req_auth)
+    # Verified with tshark: username=bob, id=9, Framed-IP-Address carried in the reply.
+    second = radius(1, 9, attr(1, b"bob")
+                    + attr(2, radius_password(secret, req_auth, b""))
+                    + attr(31, b"00-11-22-33-44-66"), req_auth)
+    # Verified with tshark: code 3 Access-Reject, id 7, matching the first request.
+    reject = radius(3, 7, b"", req_auth)
+
+    w.add(udp_frame(NAS, AAA, 51234, 1812, req, smac=MAC_A, dmac=MAC_B))
+    w.add(udp_frame(NAS, AAA, 51234, 1812, second, smac=MAC_A, dmac=MAC_B))
+    w.add(udp_frame(AAA, NAS, 1812, 51234, reject, smac=MAC_B, dmac=MAC_A))
+    return w.write()
