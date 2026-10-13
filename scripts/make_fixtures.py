@@ -689,6 +689,14 @@ TLS_FIXTURES = {
         "minimum": "TLSv1_2",
         "maximum": "TLSv1_2",
     },
+    # Client offers a legacy CBC suite first, a modern AEAD second; the server
+    # picks the AEAD -- i.e. its own preference, not the client's top choice (#272).
+    "server_cipher_order.pcap": {
+        "ciphers": "AES128-SHA:ECDHE-RSA-AES128-GCM-SHA256",
+        "server_ciphers": "ECDHE-RSA-AES128-GCM-SHA256",
+        "minimum": "TLSv1_2",
+        "maximum": "TLSv1_2",
+    },
 }
 
 

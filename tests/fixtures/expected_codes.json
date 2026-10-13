@@ -82,7 +82,8 @@
   ],
   "mixed_ciphers.pcap": [
     "TLS_OFFERS_WEAK_CIPHERS",
-    "TLS_SELF_SIGNED_CHAIN"
+    "TLS_SELF_SIGNED_CHAIN",
+    "TLS_SERVER_CIPHER_PREFERENCE"
   ],
   "no_pfs_tls12.pcap": [
     "TLS_CIPHER_WEAK",
@@ -96,6 +97,7 @@
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",
     "TLS_OFFERS_WEAK_CIPHERS",
+    "TLS_SERVER_CIPHER_PREFERENCE",
     "TLS_VERSION_DEPRECATED"
   ],
   "sip_rtp.pcap": [
@@ -149,5 +151,10 @@
   ],
   "os_ttls.pcap": [
     "SYN_SCAN_SHAPE"
+  ],
+  "server_cipher_order.pcap": [
+    "TLS_OFFERS_WEAK_CIPHERS",
+    "TLS_SELF_SIGNED_CHAIN",
+    "TLS_SERVER_CIPHER_PREFERENCE"
   ]
 }
