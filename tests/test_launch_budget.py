@@ -53,6 +53,14 @@ def test_analyze_launch_budget(tmp_path: Path) -> None:
     )
     assert proc.returncode in (0, 1), f"analyze failed (exit {proc.returncode}):\n{proc.stderr[-600:]}"
     launches = count_launches(log_path)
+    # A lower bound keeps the guard from passing vacuously if the counter is broken
+    # (e.g. the tokenizer misclassifying every pass as a lookup): a real analyze
+    # launches about a dozen passes, so fewer than 8 means the counter is not
+    # recording passes. See issue #333.
+    assert launches >= 8, (
+        f"analyze launched only {launches} pass(es) on {PCAP.name}; the counter may be misclassifying "
+        "passes as lookups (see scripts/launch_counter.py classify)."
+    )
     assert launches <= BUDGET, (
         f"analyze launched {launches} tshark pass(es) on {PCAP.name}, over the budget of {BUDGET}; "
         "see #333 and the BUDGET comment in this test."

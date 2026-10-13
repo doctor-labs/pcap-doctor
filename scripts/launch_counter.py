@@ -22,10 +22,14 @@ import sys
 import tempfile
 from pathlib import Path
 
-#: Argument tokens that mark a non-pass lookup (capability discovery), not an
-#: analysis pass. ``-G`` lookups are explicitly excluded by the launch budget;
-#: ``-v`` is the version probe that the wrapper does not count either.
-_LOOKUP_FLAGS = ("-G", "-v")
+#: A real analysis pass always reads a capture with ``-r``; everything tshark is
+#: launched for that lacks it (``-v`` version, ``-G fields``/``protocols``/
+#: ``defaultprefs``) is capability discovery, not a pass. Classification is on
+#: whitespace-split tokens, never a substring match: a capture path such as
+#: ``/private/var/folders/xx/pytest-of-vaibhav/Desktop/x.pcap`` contains ``-v``
+#: and is a real pass, not a lookup.
+_PASS_TOKEN = "-r"
+
 
 _WRAPPER_TEMPLATE = """\
 #!/bin/sh
@@ -60,8 +64,13 @@ def make_wrapper(log_path: Path) -> Path:
 
 
 def classify(line: str) -> str:
-    """Return ``"lookup"`` for capability probes, ``"pass"`` for analysis launches."""
-    return "lookup" if any(flag in line for flag in _LOOKUP_FLAGS) else "pass"
+    """Classify one logged argv line.
+
+    Returns ``"pass"`` when the launch reads a capture (``-r`` token present) and
+    ``"lookup"`` otherwise (version / capability probes). Tokenised, so a path
+    containing ``-v`` is still a pass.
+    """
+    return "pass" if _PASS_TOKEN in line.split() else "lookup"
 
 
 def count_launches(log_path: Path) -> int:
