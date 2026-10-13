@@ -23,6 +23,7 @@ from ..output import json_envelope, sarif
 from ..pipeline import DecodeAsError, analyze, validate_decode_as
 from ..policy import PolicyError, validate
 from ..scoring import score
+from ..tshark import JOBS_ENV_VAR
 from ._browse import ICON, browse, supported
 from ._console import console, tshark_errors
 from ._progress import ProgressDisplay
@@ -102,6 +103,10 @@ def analyze_cmd(
         "well-known ports); protocols on non-standard ports are not covered. Falls back to the normal path if "
         "tcpdump is missing.",
     ),
+    jobs: int = typer.Option(
+        None, "--jobs", envvar=JOBS_ENV_VAR,
+        help="max concurrent tshark passes (default: max(1, min(3, cpu_count // 2)); see issue #331)",
+    ),
     safe: bool = typer.Option(
         False, "--safe", help="launch AI agents with their approval prompts (also PCAP_DOCTOR_HANDOFF_SAFE=1)"
     ),
@@ -174,6 +179,7 @@ def analyze_cmd(
                 signature_vars=sig_vars,
                 decode_as=tuple(decode_as or ()),
                 fast=fast,
+                jobs=jobs if jobs is not None else None,
                 progress=None,
                 on_event=on_event,
             )

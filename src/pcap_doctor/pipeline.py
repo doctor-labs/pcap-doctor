@@ -98,6 +98,7 @@ def analyze(
     signature_vars: dict[str, str] | None = None,
     decode_as: tuple[str, ...] = (),
     fast: bool = False,
+    jobs: int | None = None,
 ) -> RunResult:
     policy.validate(only=only, categories=categories, min_severity=min_severity)
     pcap = Path(pcap)
@@ -110,6 +111,7 @@ def analyze(
         use_cache=use_cache,
         extra_args=tuple(arg for spec in decode_as for arg in ("-d", spec)),
         fast=fast,
+        jobs=jobs,
     )
     decrypt_args = tuple(keys.tshark_args()) if keys is not None and not keys.is_empty() else ()
     builder = IndexBuilder(runner, decrypt_args=decrypt_args, on_event=on_event)

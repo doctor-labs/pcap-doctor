@@ -7,6 +7,7 @@ degrade into a note, never into a wrong answer.
 
 from __future__ import annotations
 
+import contextlib
 import shutil
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from pcap_doctor.tshark import (
     PASSES,
     SERVICE_FIELDS,
     TsharkRunner,
+    _low_priority_kwargs,
     default_prefs,
     parse_cipher_ids,
     parse_hex_bits,
@@ -26,6 +28,7 @@ from pcap_doctor.tshark import (
     to_bool01,
     to_int,
     valid_fields,
+    worker_count,
 )
 
 pytestmark = requires_tshark
@@ -336,3 +339,108 @@ def test_command_disables_sequence_analysis_only_for_transport_only_passes() -> 
                 f"pass {name!r} is not transport-only (app fields or filter); "
                 f"must keep tcp sequence analysis ON to avoid duplicate app-layer findings"
             )
+
+
+def test_worker_count_default_rule(monkeypatch) -> None:
+    """Issue #331: default worker count = max(1, min(3, cpu_count // 2))."""
+    for cpus, expected in (
+        (1, 1),
+        (2, 1),
+        (3, 1),
+        (4, 2),
+        (6, 3),
+        (8, 3),
+        (16, 3),
+        (32, 3),
+        (100, 3),
+    ):
+        mp = pytest.MonkeyPatch()
+        mp.setattr("os.cpu_count", lambda n=cpus: n)
+        assert worker_count(None, None) == expected
+        mp.undo()
+
+
+def test_worker_count_jobs_overrides_cpu_count(monkeypatch) -> None:
+    """--jobs N wins over the CPU-based default."""
+    monkeypatch.setattr("os.cpu_count", lambda n=8: n)
+    assert worker_count(5, None) == 5
+
+
+def test_worker_count_env_overrides_cpu_count(monkeypatch) -> None:
+    """PCAP_DOCTOR_JOBS env var wins over CPU default."""
+    monkeypatch.setattr("os.cpu_count", lambda n=8: n)
+    monkeypatch.setenv("PCAP_DOCTOR_JOBS", "4")
+    assert worker_count(None, None) == 4
+
+
+def test_worker_count_cli_wins_over_env(monkeypatch) -> None:
+    """CLI --jobs wins over env var."""
+    monkeypatch.setattr("os.cpu_count", lambda n=8: n)
+    monkeypatch.setenv("PCAP_DOCTOR_JOBS", "2")
+    assert worker_count(6, None) == 6
+
+
+def test_worker_count_rejects_below_one(monkeypatch) -> None:
+    """N < 1 is rejected with a ValueError."""
+    monkeypatch.setattr("os.cpu_count", lambda n=8: n)
+    with pytest.raises(ValueError):
+        worker_count(0, None)
+    with pytest.raises(ValueError):
+        worker_count(-1, None)
+
+
+def test_prefetch_uses_count_to_cap_workers(monkeypatch) -> None:
+    """prefetch() respects the count limit, never spawning more than that."""
+    import threading
+    import time
+
+    runner = TsharkRunner(fixture("weak_tls.pcap"), use_cache=False)
+    active, peak = [0], [0]
+    lock = threading.Lock()
+
+    def fake_run(spec, extra_args=()):
+        with lock:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        time.sleep(0.1)
+        with lock:
+            active[0] -= 1
+        return [{}]
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    runner.prefetch({"base": (), "tls": (), "http": (), "dns": (), "sip": ()}, count=2)
+    assert peak[0] <= 2
+    assert peak[0] >= 2  # with 5 jobs and 2 workers, we expect 2 concurrent
+
+
+def test_tshark_subprocess_runs_at_low_priority_posix(monkeypatch) -> None:
+    """On POSIX, tshark children get os.nice(10) via preexec_fn, never fatal."""
+    kwargs = _low_priority_kwargs()
+    assert "preexec_fn" in kwargs
+    called = []
+
+    def fake_nice(value):
+        called.append(value)
+        raise OSError("nice failed")
+
+    monkeypatch.setattr("os.nice", fake_nice)
+    # preexec_fn must be callable and must not raise to the caller
+    with contextlib.suppress(OSError):
+        kwargs["preexec_fn"]()
+    assert called == [10]
+
+
+def test_tshark_subprocess_runs_at_low_priority_windows(monkeypatch) -> None:
+    """On Windows, tshark children get BELOW_NORMAL_PRIORITY_CLASS."""
+    import sys
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    # subprocess doesn't define BELOW_NORMAL_PRIORITY_CLASS on non-Windows
+    fake_creationflags = 0x00000040
+    monkeypatch.setattr(
+        "subprocess.BELOW_NORMAL_PRIORITY_CLASS", fake_creationflags, raising=False
+    )
+
+    kwargs = _low_priority_kwargs()
+    assert kwargs.get("creationflags") == fake_creationflags
+    assert "preexec_fn" not in kwargs
