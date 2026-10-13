@@ -70,7 +70,7 @@ capture to hand? `make captures` fetches the Wireshark project's public samples.
 | `packets` / `packet` | per-packet explorer: the packet list (`-Y` display filter) and one frame's dissection tree plus hex view |
 | `follow` / `streams` | follow one TCP/UDP/TLS/HTTP stream (reassembled payload as text, hex or a file); list stream numbers |
 | `query CAPTURE EXPR` | filter flows, hosts, TLS/HTTP/DNS/SSH rows or findings with one expression (`flows -f` too); `packets -Y` for raw frames |
-| `logs CAPTURE` | Zeek-style per-protocol logs (conn, dns, http, ssl, x509, files, notice, weird, dhcp, netbios, ftp, smtp, ssh, smb, rdp, rfb, stun, rtsp, bittorrent) as TSV or JSON; see [docs/zeek-logs.md](https://github.com/doctor-labs/pcap-doctor/blob/main/docs/zeek-logs.md) |
+| `logs CAPTURE` | Zeek-style per-protocol logs (conn, dns, http, ssl, x509, files, notice, weird, dhcp, netbios, ftp, smtp, ssh, smb, rdp, rfb, stun, rtsp, bittorrent, syslog) as TSV or JSON; see [docs/zeek-logs.md](https://github.com/doctor-labs/pcap-doctor/blob/main/docs/zeek-logs.md) |
 | `eve CAPTURE` | Suricata EVE-compatible JSON events (alert, flow, dns, http, tls, fileinfo), one per line, for SIEM ingest |
 | `extract CAPTURE` | write the files a capture carries (HTTP, FTP, SMB, TFTP, SMTP/IMAP/POP3 mail and attachments, IRC chat) to a directory with a manifest |
 | `search CAPTURE PATTERN` | find a keyword or hex byte pattern across packet payloads; `--hex`, `--json`, exits 1 when nothing matches (#215) |

@@ -902,6 +902,10 @@ RESP_PASS = PassSpec(
     display_filter="resp && tcp.len > 0",
     fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport", "tcp.payload")),
 )
+SYSLOG_PASS = PassSpec(name="syslog", display_filter="syslog", fields=with_addr((
+    "frame.time_epoch", "udp.srcport", "udp.dstport", "syslog.facility", "syslog.level", "syslog.version",
+    "syslog.timestamp", "syslog.timestamp_rfc3164", "syslog.hostname", "syslog.appname", "syslog.procid",
+    "syslog.msgid", "syslog.msg")))
 
 VNC_PASS = PassSpec(
     name="vnc",
@@ -1215,6 +1219,7 @@ PASSES: dict[str, PassSpec] = {
         OPCUA_PASS,
         ICS_CONTROL_PASS,
         TUNNEL_PASS,
+        SYSLOG_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,
         SOFTWARE_PASS,

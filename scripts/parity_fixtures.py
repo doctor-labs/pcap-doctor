@@ -389,6 +389,19 @@ def fixture_logs_mix() -> bytes:
     return w.write()
 
 
+@fixture("syslog.pcap")
+def fixture_syslog() -> bytes:
+    """RFC 3164 and RFC 5424 syslog messages over UDP/514, one with a long message (#228)."""
+    r3164 = b"<34>Oct 11 22:14:15 myhost myapp[123]: hello world from rfc3164"
+    r5424 = b"<34>1 2023-10-11T22:14:15.003Z myhost2 myapp2 123 42 ID42 [example@12345 key=val] hello from rfc5424"
+    long_msg = b"<34>Oct 11 22:14:15 myhost3 myapp3[99]: " + (b"x" * 300)
+    w = Wire(start=1_702_000_000.0)
+    w.add(udp_frame("10.0.0.10", "10.0.0.20", 51400, 514, r3164))
+    w.add(udp_frame("10.0.0.10", "10.0.0.20", 51401, 514, r5424))
+    w.add(udp_frame("10.0.0.10", "10.0.0.20", 51402, 514, long_msg))
+    return w.write()
+
+
 def write_all(out: Path) -> None:  # pragma: no cover - used by make_fixtures
     for name, builder in FIXTURES.items():
         (out / name).write_bytes(builder())
