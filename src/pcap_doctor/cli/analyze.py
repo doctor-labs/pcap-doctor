@@ -25,6 +25,7 @@ from ..policy import PolicyError, validate
 from ..scoring import score
 from ._browse import ICON, browse, supported
 from ._console import console, tshark_errors
+from ._progress import ProgressDisplay
 from ._summary import render
 
 
@@ -144,8 +145,21 @@ def analyze_cmd(
         and supported()
     )
     started = time.monotonic()
+    # Issue #332: a structured progress callback. When stderr is a terminal we
+    # show a live rich display; otherwise (pipes, CI) we emit at most one plain
+    # line per stage to stderr and touch nothing on stdout, so the report and
+    # score stay byte-identical whether progress is on or off. In --json mode
+    # stdout is a JSON document, so progress is suppressed entirely to keep it
+    # clean for consumers that merge stdout/stderr.
+    # machine/silent modes keep stdout exact; otherwise TTY shows a live bar and
+    # non-TTY prints one plain line per stage to stderr (issue #332).
+    show_progress = not (as_json or show_score or quiet)
+    progress_display = ProgressDisplay() if show_progress else None
+    on_event = progress_display.callback if progress_display is not None else None
+    if progress_display is not None:
+        progress_display.start()
     try:
-        with tshark_errors(), (console.status("Scanning…") if interactive else nullcontext()) as status:
+        with tshark_errors(), (console.status("Scanning…") if interactive else nullcontext()):
             result = analyze(
                 pcap,
                 out,
@@ -160,10 +174,14 @@ def analyze_cmd(
                 signature_vars=sig_vars,
                 decode_as=tuple(decode_as or ()),
                 fast=fast,
-                progress=(lambda stage: status.update(f"{stage}…")) if status is not None else None,
+                progress=None,
+                on_event=on_event,
             )
     except KeyboardInterrupt:
         raise typer.Exit(code=130) from None
+    finally:
+        if progress_display is not None:
+            progress_display.stop()
 
     # The artifacts on disk stay complete; with a baseline everything shown or gated is the new findings only.
     shown = result.report

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import ssl
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -20,6 +21,33 @@ from .render import markdown
 from .tshark import TsharkRunner
 
 ARTIFACT_NAMES = ("index.md", "01-flows.md", "02-ciphers.md", "03-findings.md", "04-diagrams.md", "report.json")
+
+
+@dataclass(frozen=True)
+class ProgressEvent:
+    """A single structured event emitted during a scan (issue #332).
+
+    ``kind`` discriminates the event shape:
+
+    * ``"pass"``    -- a tshark decode pass started/finished. ``name`` is the
+      pass key (e.g. ``"tls"``), ``phase`` is ``"started"``/``"finished"``,
+      ``index``/``total`` are the pass position, ``elapsed`` is seconds since
+      ``started`` (only set on ``finished``).
+    * ``"detector"`` -- a detector started/finished. ``name`` is the detector
+      name, ``index``/``total`` its position among the run detectors.
+    * ``"finding"`` -- a finding was produced. ``severity`` is its severity,
+      ``title``/``code`` identify it.
+    """
+
+    kind: str
+    name: str
+    phase: str = ""
+    index: int = 0
+    total: int = 0
+    elapsed: float | None = None
+    severity: str | None = None
+    code: str | None = None
+    title: str | None = None
 
 
 @dataclass
@@ -63,6 +91,7 @@ def analyze(
     use_cache: bool = True,
     config: Config | None = None,
     progress: Callable[[str], None] | None = None,
+    on_event: Callable[[ProgressEvent], None] | None = None,
     keys: KeyMaterial | None = None,
     firmware_keys: dict[str, str] | None = None,
     signatures: tuple[Path, ...] = (),
@@ -83,7 +112,7 @@ def analyze(
         fast=fast,
     )
     decrypt_args = tuple(keys.tshark_args()) if keys is not None and not keys.is_empty() else ()
-    builder = IndexBuilder(runner, decrypt_args=decrypt_args)
+    builder = IndexBuilder(runner, decrypt_args=decrypt_args, on_event=on_event)
     if progress:
         progress("Reading the capture with tshark")
     index = builder.build()
@@ -120,18 +149,40 @@ def analyze(
 
     detectors = enabled_detectors(include=only)
     findings: list[Finding] = []
-    for detector in detectors:
+    total_detectors = len(detectors)
+    for di, detector in enumerate(detectors, start=1):
         if progress:
             progress(f"Checking {detector.title}")
+        if on_event:
+            on_event(ProgressEvent(
+                kind="detector", name=detector.name, phase="started",
+                index=di, total=total_detectors,
+            ))
+        t0 = time.monotonic()
         try:
             found = detector.detect(index)
         except Exception as exc:  # one bad detector must not sink the run
             index.add_note(
                 f"[{detector.name}] detector raised {type(exc).__name__}: {exc} -- other detectors still ran"
             )
+            if on_event:
+                on_event(ProgressEvent(
+                    kind="detector", name=detector.name, phase="finished",
+                    index=di, total=total_detectors, elapsed=time.monotonic() - t0,
+                ))
             continue
         index.add_note(f"[{detector.name}] ran v{detector.version}: {len(found)} finding(s)")
         findings.extend(found)
+        if on_event:
+            for f in found:
+                on_event(ProgressEvent(
+                    kind="finding", name=f.code or "", phase="produced",
+                    severity=str(f.severity), code=f.code, title=f.title,
+                ))
+            on_event(ProgressEvent(
+                kind="detector", name=detector.name, phase="finished",
+                index=di, total=total_detectors, elapsed=time.monotonic() - t0,
+            ))
 
     if config is not None:
         findings, config_notes = apply_config(findings, config)
