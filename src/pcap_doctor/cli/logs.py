@@ -18,7 +18,7 @@ def logs(
     fmt: str = typer.Option("tsv", "--format", "-f", help="tsv (Zeek's own format), json (one object per line) or both"),
     only: str = typer.Option("", "--only", help=f"comma-separated subset of: {', '.join(LOG_NAMES)}"),
 ) -> None:
-    """Write conn, dns, http, ssl, x509, files, notice, weird, dhcp, ftp, smtp, ssh and smb logs."""
+    """Write conn, dns, http, ssl, x509, files, notice, weird, dhcp, dhcpv6, ftp, smtp, ssh and smb logs."""
     if fmt not in ("tsv", "json", "both"):
         console.print("[red]--format is tsv, json or both[/red]")
         raise typer.Exit(code=2)

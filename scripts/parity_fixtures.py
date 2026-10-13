@@ -146,6 +146,28 @@ def udp_frame(src: str, dst: str, sport: int, dport: int, payload: bytes, *, sma
     return ether(smac, dmac, ip_packet(src, dst, 17, udp_datagram(src, dst, sport, dport, payload, **kw)))  # type: ignore[arg-type]
 
 
+def _ip6(addr: str) -> bytes:
+    return socket.inet_pton(socket.AF_INET6, addr)
+
+
+def ipv6_packet(src: str, dst: str, payload: bytes, *, next_header: int = 17, hop_limit: int = 64) -> bytes:
+    header = struct.pack("!IHBB16s16s", 0x60000000, len(payload), next_header, hop_limit, _ip6(src), _ip6(dst))
+    return header + payload
+
+
+def udp6_datagram(src: str, dst: str, sport: int, dport: int, payload: bytes) -> bytes:
+    length = 8 + len(payload)
+    head = struct.pack("!HHHH", sport, dport, length, 0)
+    pseudo = _ip6(src) + _ip6(dst) + struct.pack("!II", 17, length)
+    c = csum(pseudo + head + payload) or 0xFFFF
+    return head[:6] + struct.pack("!H", c) + payload
+
+
+def udp6_frame(src: str, dst: str, sport: int, dport: int, payload: bytes, *, smac: str = MAC_A,
+               dmac: str = MAC_B) -> bytes:
+    return ether(smac, dmac, ipv6_packet(src, dst, udp6_datagram(src, dst, sport, dport, payload)), ethertype=0x86dd)
+
+
 # -- NTLM / SMB2 builders (also used by the Kerberos and NTLM fixtures) -------------------------------
 def utf16(text: str) -> bytes:
     return text.encode("utf-16-le")
@@ -240,6 +262,78 @@ def dhcp_message(op: int, xid: int, client_mac: str, msg_type: int, *, ciaddr: s
     head = struct.pack("!BBBBIHH4s4s4s4s", op, 1, 6, 0, xid, 0, 0x8000, _ip4(ciaddr), _ip4(yiaddr), bytes(4), bytes(4))
     head += mac(client_mac) + bytes(10) + bytes(64) + bytes(128) + b"\x63\x82\x53\x63"
     return head + bytes([53, 1, msg_type]) + options + b"\xff"
+
+
+# -- DHCPv6 builders (issue #220) ---------------------------------------------------------------
+
+def dhcpv6_opt(opt_type: int, data: bytes) -> bytes:
+    """A DHCPv6 option: 2-byte type + 2-byte length + data."""
+    return struct.pack("!HH", opt_type, len(data)) + data
+
+
+def duid_ll(mac_str: str) -> bytes:
+    """DUID-LL (type 3, hardware type 1 = Ethernet) carrying a MAC address (RFC 8415 §11.4)."""
+    return struct.pack("!HH", 3, 1) + mac(mac_str)
+
+
+def dns_encode(name: str) -> bytes:
+    """DNS label-encoded domain name (RFC 1035), null-terminated."""
+    out = b"".join(bytes([len(p)]) + p.encode() for p in name.split("."))
+    return out + b"\x00"
+
+
+def dhcpv6_message(msg_type: int, xid: int, *, options: bytes = b"") -> bytes:
+    """A minimal DHCPv6 message: 1-byte type + 3-byte XID + options."""
+    return struct.pack("!B", msg_type) + struct.pack("!I", xid)[1:] + options
+
+
+def dhcpv6_ia_na(iaid: int, addr: str, pref_life: int, valid_life: int) -> bytes:
+    """An IA_NA option (code 3) containing one IAADDR sub-option (code 5)."""
+    ia = struct.pack("!III", iaid, 0, 0)
+    iaaddr = _ip6(addr) + struct.pack("!II", pref_life, valid_life)
+    ia += dhcpv6_opt(5, iaaddr)
+    return dhcpv6_opt(3, ia)
+
+
+@fixture("dhcpv6.pcap")
+def fixture_dhcpv6() -> bytes:
+    """A DHCPv6 Solicit/Advertise/Request/Reply exchange with hostname (option 39), vendor class (option 16),
+    DNS server (option 23), and a delegated address (option 5 IAADDR), for host inventory (#220)."""
+    w = Wire(start=1_700_100_000.0)
+    cl_mac = "02:aa:bb:cc:dd:03"
+    srv_mac = "02:00:00:00:00:01"
+    cl_addr = "fe80::2aa:bbff:fecc:dd03"
+    srv_addr = "fe80::1"
+    xid = 0x42ab
+    client_iaid = 0x42424242
+    # SOLICIT (type 1): client -> ff02::1:2 (all DHCP servers/mcast)
+    solicit_opts = dhcpv6_opt(1, duid_ll(cl_mac))  # OPTION_CLIENTID (1) wrapping DUID
+    solicit_opts += dhcpv6_opt(6, struct.pack("!HH", 23, 24))  # ORO: request DNS_SERVERS(23) and DOMAIN_LIST(24)
+    solicit_opts += dhcpv6_opt(39, bytes([0x01]) + dns_encode("pf-v6-laptop.example"))  # CLIENT_FQDN
+    solicit_opts += dhcpv6_opt(16, struct.pack("!I", 9) + b"\x00\x00DHCPv6 client\x00")  # VENDOR_CLASS (16): ent + sub-option-len + data
+    w.add(udp6_frame(cl_addr, "ff02::1:2", 546, 547, dhcpv6_message(1, xid, options=solicit_opts),
+                     smac=cl_mac, dmac="33:33:ff:00:00:02"))
+    # ADVERTISE (type 2): server -> client
+    advertise_opts = dhcpv6_opt(2, duid_ll(srv_mac))  # OPTION_SERVERID (2)
+    advertise_opts += dhcpv6_opt(1, duid_ll(cl_mac))  # OPTION_CLIENTID (1)
+    advertise_opts += dhcpv6_ia_na(client_iaid, "2001:db8::100", 0, 3600)
+    advertise_opts += dhcpv6_opt(23, _ip6("2001:4860:4860::8888") + _ip6("2001:4860:4860::8844"))  # DNS_SERVERS
+    w.add(udp6_frame(srv_addr, cl_addr, 547, 546, dhcpv6_message(2, xid, options=advertise_opts),
+                     smac=srv_mac, dmac=cl_mac))
+    # REQUEST (type 3): client -> server
+    request_opts = dhcpv6_opt(1, duid_ll(cl_mac))
+    request_opts += dhcpv6_opt(2, duid_ll(srv_mac))
+    request_opts += dhcpv6_ia_na(client_iaid, "2001:db8::100", 0, 3600)
+    w.add(udp6_frame(cl_addr, srv_addr, 546, 547, dhcpv6_message(3, xid, options=request_opts),
+                     smac=cl_mac, dmac=srv_mac))
+    # REPLY (type 7): server -> client
+    reply_opts = dhcpv6_opt(2, duid_ll(srv_mac))
+    reply_opts += dhcpv6_opt(1, duid_ll(cl_mac))
+    reply_opts += dhcpv6_ia_na(client_iaid, "2001:db8::100", 0, 3600)
+    reply_opts += dhcpv6_opt(23, _ip6("2001:4860:4860::8888") + _ip6("2001:4860:4860::8844"))
+    w.add(udp6_frame(srv_addr, cl_addr, 547, 546, dhcpv6_message(7, xid, options=reply_opts),
+                     smac=srv_mac, dmac=cl_mac))
+    return w.write()
 
 
 @fixture("logs_mix.pcap")
