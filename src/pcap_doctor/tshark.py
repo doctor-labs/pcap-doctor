@@ -47,6 +47,11 @@ class PassSpec:
     fields: tuple[str, ...]
     display_filter: str | None = None
     columns: str | None = None  # for -z passes
+    #: Protocol tokens from ``frame.protocols`` that justify running this pass.
+    #: When none of them appear in the capture, the pass is skipped (returns empty
+    #: rows) instead of re-dissecting the whole file (#328). ``None`` means
+    #: always run (e.g. ``base``).
+    skip_protocols: tuple[str, ...] | None = None
 
 
 #: Every protocol pass needs addresses; IPv4 and IPv6 both, because a capture
@@ -64,6 +69,36 @@ ADDR_FIELDS: tuple[str, ...] = (
 def with_addr(fields: tuple[str, ...]) -> tuple[str, ...]:
     rest = tuple(f for f in fields if f not in ADDR_FIELDS)
     return ADDR_FIELDS + rest
+
+
+#: Protocol tokens that should never gate a skip decision: transport layers
+#: (always present with IP traffic) and pseudo-protocols/keywords that are not
+#: application dissectors.
+_SKIP_EXCLUDED: frozenset[str] = frozenset({
+    "tcp", "udp", "ip", "ipv6", "eth", "ethertype", "data", "arp", "icmp", "ip-udp",
+    "frame", "_ws",
+})
+
+
+def protocols_in_filter(display_filter: str) -> tuple[str, ...]:
+    """Bare protocol names referenced by a display filter, stripped of fields/ops and transport-only layers.
+
+    ``"sip || sdp"`` -> ``("sdp", "sip")``; ``"telnet && tcp.len > 0"`` -> ``("telnet",)``
+    (``tcp`` is a transport layer present in every IP capture, so it is dropped).
+    ``"frame"`` and ``"_ws"`` are not application dissectors, so they are dropped too.
+    """
+    tokens: set[str] = set()
+    for clause in display_filter.replace("&&", "||").split("||"):
+        token = clause.strip()
+        if not token:
+            continue
+        head = token.split(".", 1)[0]  # "tls.handshake" -> "tls"
+        if not head or any(ch in head for ch in " ()=<>!"):
+            continue
+        if head in _SKIP_EXCLUDED:
+            continue
+        tokens.add(head)
+    return tuple(sorted(tokens))
 
 
 BASE_PASS = PassSpec(
@@ -655,6 +690,30 @@ PASSES: dict[str, PassSpec] = {
 _HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
 
 
+def _fill_skip_protocols() -> dict[str, PassSpec]:
+    """Derive ``skip_protocols`` for every pass that has a display filter but no explicit set (#328).
+
+    A pass with ``skip_protocols = None`` is never skipped (``base``, ``protocols``,
+    ``frames``, ``device`` read the whole frame set).  A pass whose filter references
+    only transport layers has no skip protocols either -- it would run on every capture.
+    """
+    from dataclasses import replace
+
+    out: dict[str, PassSpec] = {}
+    for name, spec in PASSES.items():
+        if spec.skip_protocols is None and spec.display_filter:
+            out[name] = replace(spec, skip_protocols=protocols_in_filter(spec.display_filter))
+        else:
+            out[name] = spec
+    return out
+
+
+#: Passes whose protocol tokens are absent from a capture can be skipped (#328).
+SKIP_PROTOCOLS: dict[str, tuple[str, ...]] = {
+    name: (spec.skip_protocols or ()) for name, spec in _fill_skip_protocols().items()
+}
+
+
 @lru_cache(maxsize=1)
 def tshark_path() -> str:
     found = shutil.which("tshark")
@@ -910,12 +969,34 @@ class TsharkRunner:
         self.sha = file_sha256(pcap) if pcap.is_file() else "unknown"
         self.stats: dict[str, dict[str, int | float | str]] = {}
         self.dropped_fields: list[str] = []
+        self.skipped_passes: list[str] = []
         self._field_blacklist: set[str] = set()
         self._banned_protocols: set[str] = set()
+        self._seen_protocols: set[str] | None = None  # populated from the base pass; None until then
         # ponytail: every prefetched pass stays in memory until the build ends; pop on read if huge captures OOM.
         self._prefetched: dict[tuple[str, tuple[str, ...]], list[Row]] = {}
 
     # -- internals ---------------------------------------------------------
+    def _collect_protocols(self, rows: list[Row]) -> None:
+        """Populate the protocol set from the base pass's ``frame.protocols`` column (#328)."""
+        seen: set[str] = set()
+        for row in rows:
+            for chunk in row.get("frame.protocols", []):
+                seen.update(chunk.split(":"))
+        self._seen_protocols = seen
+
+    def _should_skip(self, pass_name: str) -> bool:
+        """True when the pass's protocol tokens are all absent from the capture (#328).
+
+        A pass with no skip protocols (``base``, ``conn``, ...) always runs.
+        Until the base pass has been read, the protocol set is unknown and every
+        pass runs, so the first caller (always ``base``) is never skipped.
+        """
+        need = SKIP_PROTOCOLS.get(pass_name, ())
+        if not need or self._seen_protocols is None:
+            return False
+        return not (set(need) & self._seen_protocols)
+
     def usable_fields(self, spec: PassSpec) -> tuple[str, ...]:
         """Drop fields this tshark build does not know, recording the drift."""
         known = valid_fields()
@@ -1006,10 +1087,23 @@ class TsharkRunner:
                     and payload.get("fields") == list(fields)
                     and payload.get("extra") == list(extra_args)
                 ):
-                    self.stats[spec.name] = {"rows": len(payload["rows"]), "cached": 1}
-                    return [Row(r) for r in payload["rows"]]
+                    rows = [Row(r) for r in payload["rows"]]
+                    if spec.name == "base":
+                        self._collect_protocols(rows)
+                    self.stats[spec.name] = {"rows": len(rows), "cached": 1}
+                    return rows
             except (json.JSONDecodeError, KeyError, TypeError):
                 cache.unlink(missing_ok=True)
+
+        # Skip the tshark process entirely when none of the pass's protocols appear
+        # in the capture.  A skipped pass yields the same empty rows it would have
+        # produced, so reports stay byte-identical (#328).
+        # Extra args (decode-as, TLS-key decryption) can reveal protocols that the
+        # base pass cannot see, so never skip a pass that is invoked with them.
+        if not extra_args and self._should_skip(spec.name):
+            self.skipped_passes.append(spec.name)
+            self.stats[spec.name] = {"rows": 0, "cached": 0, "skipped": 1}
+            return []
 
         cmd = self._command(spec, extra_args)
         for _attempt in range(6):
@@ -1045,6 +1139,8 @@ class TsharkRunner:
         else:
             raise TsharkRunError(f"tshark pass {spec.name!r} kept hitting unknown preferences")
         rows = self._parse(proc.stdout, fields)
+        if spec.name == "base":
+            self._collect_protocols(rows)
         if self.use_cache:
             cache.parent.mkdir(parents=True, exist_ok=True)
             tmp = cache.with_suffix(".tmp")
@@ -1094,18 +1190,34 @@ class TsharkRunner:
         """Run independent passes (name -> per-call extra args) concurrently; ``run`` then returns their rows.
 
         Each pass is its own tshark process re-reading the capture, so threads are enough: they only wait.
+
+        The ``base`` pass is always run first so its ``frame.protocols`` column can
+        seed the protocol set (#328).  Once that set is known, every other pass
+        whose protocols are absent from the capture is skipped instead of
+        launched, saving a full re-dissection.
         """
         for name in jobs:
             if name not in PASSES:
                 raise KeyError(f"unknown pass {name!r}; known: {sorted(PASSES)}")
         valid_fields(), protocol_names(), default_prefs()  # warm the `tshark -G` lookups once, not per thread
-        with ThreadPoolExecutor(max_workers=max(1, min(len(jobs), os.cpu_count() or 4))) as pool:
-            futures = {(name, args): pool.submit(self._run, PASSES[name], args) for name, args in jobs.items()}
+        # Run base first so the protocol set is available for skip decisions.
+        remaining: dict[str, tuple[str, ...]] = dict(jobs)
+        if "base" in remaining:
+            base_args = remaining.pop("base")
+            self._prefetched[("base", base_args)] = self._run(PASSES["base"], base_args)
+        # Remaining passes run concurrently; _run skips each whose protocols are absent.
+        if not remaining:
+            return
+        with ThreadPoolExecutor(max_workers=max(1, min(len(remaining), os.cpu_count() or 4))) as pool:
+            futures = {(name, args): pool.submit(self._run, PASSES[name], args) for name, args in remaining.items()}
             for key, future in futures.items():
                 self._prefetched[key] = future.result()
 
     def all_passes(self) -> dict[str, list[Row]]:
-        return {name: self._run(spec) for name, spec in PASSES.items()}
+        out = {}
+        for name, spec in PASSES.items():
+            out[name] = self._run(spec)
+        return out
 
     @staticmethod
     def rtp_decode_args(ports: list[int]) -> tuple[str, ...]:

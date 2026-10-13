@@ -837,3 +837,30 @@ def fixture_os_ttls() -> bytes:
             w.add(ether(MAC_A, MAC_B, ip_packet(host, server, 6, tcp_segment(host, server, 52000 + i * 10 + n, 443, 7000, 0, 0x02), ttl=ttl)))
     return w.write()
 
+
+@fixture("dns_plus_tls.pcap")
+def fixture_dns_plus_tls() -> bytes:
+    """A capture with only DNS and TLS traffic, used to prove protocol-based skip of absent-protocol passes (#328).
+
+    Three DNS queries over UDP and one TLS ClientHello over TCP. No SIP, SMB, SSH, QUIC, RTP, Telnet, NTP, etc.
+    """
+    w = Wire(start=1_701_950_000.0)
+    c, r = "10.99.0.10", "10.99.0.53"
+    for i, name in enumerate(("host1.example", "host2.example", "host3.example")):
+        w.add(udp_frame(c, r, 44000 + i, 53, dns_wire(name, 0x3000 + i)))
+        w.add(udp_frame(r, c, 53, 44000 + i, b"\x00" * 12, smac=MAC_B, dmac=MAC_A))
+    t = Tcp(w, c, "10.99.0.20", 45000, 443).open()
+    # A TLS 1.3 ClientHello record (content type 0x16, version 0x0303, then the hello).
+    hello = bytes.fromhex(
+        "010001880303" + "00" * 32 +  # handshake type 1, length, version, random
+        "00"  # session id length
+        + "0010"  # cipher suites length
+        + "1301130213031304c02f"  # a few cipher suites
+        + "01"  # extensions length
+        + "0000"  # server_name extension (empty for this test)
+    )
+    record = bytes([0x16, 0x03, 0x03]) + struct.pack("!H", len(hello)) + hello
+    t.send(True, record)
+    t.close()
+    return w.write()
+
