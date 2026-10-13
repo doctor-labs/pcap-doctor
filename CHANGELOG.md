@@ -22,6 +22,8 @@ All notable changes to this project are documented here. The format follows
 - `pcap-doctor logs` now exports `netbios`: NBNS/NetBIOS name resolution (UDP/137), one row per queried
   name with the addresses the responder(s) returned, `is_group` from the NB flags group bit, and the
   originator/responder endpoints. Unresolved queries still get a row with no address.
+- `pcap_doctor.slice.slice_capture`: cut a subset capture out of a classic pcap by host, frame numbers or flow, frames copied byte for byte. Library function only; no CLI command yet (#256).
+
 - Cleartext POP3 USER/PASS, IMAP LOGIN and SMTP AUTH PLAIN credentials are now reported as CLEARTEXT_CREDENTIAL findings by the transport-exposure detector.
 - `pcap-doctor analyze --fast`: an opt-in flag that pre-splits the capture with a libpcap BPF filter (`tcpdump -r in.pcap -w sub.pcap`) for passes whose protocols live on well-known ports (DNS on 53, NTP on 123, SSH on 22, Telnet on 23, SIP on 5060, SMB on 445, and the cleartext services pass), then runs only those passes on the small sub-capture. Default behaviour is unchanged. Falls back to the normal full-capture scan if tcpdump is missing, and prints a note that protocols on non-standard ports are not covered (#334).
 - `pcap-doctor packets` and `pcap-doctor packet`: a per-packet explorer over the capture. `packets` lists frames (number, time, source, destination, protocol, length, info) and takes a Wireshark display filter with `-Y`; `packet CAPTURE FRAME` prints the full dissection tree and the hex view of one frame (`--json` for the nested tree, `--no-hex` to drop the dump). Read-only: tshark is asked for exactly what was requested.
