@@ -17,12 +17,6 @@ from typing import TYPE_CHECKING
 from rich.console import Console, RenderableType
 from rich.live import Live
 from rich.markup import escape
-from rich.progress import (
-    BarColumn,
-    Progress,
-    TextColumn,
-    TimeElapsedColumn,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -61,14 +55,13 @@ class ProgressDisplay:
         *,
         tty: bool | None = None,
         console: Console | None = None,
+        transient: bool = True,
     ) -> None:
         self._console = console or Console(file=sys.stderr, stderr=True, highlight=False)
         self._tty = sys.stderr.isatty() if tty is None else tty
         self._tracker = _StageTracker()
         self._live: Live | None = None
-        self._progress: Progress | None = None
-        self._pass_task: int = 0
-        self._detector_task: int = 0
+        self._transient = transient
 
     def is_tty(self) -> bool:
         return self._tty
@@ -79,20 +72,11 @@ class ProgressDisplay:
 
     def start(self) -> None:
         if self._tty:
-            self._progress = Progress(
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TextColumn("{task.completed}/{task.total}"),
-                TimeElapsedColumn(),
-                console=self._console,
-                transient=True,
-                disable=not self._tty,
-            )
             self._live = Live(
                 self._render(),
                 console=self._console,
                 refresh_per_second=8,
-                transient=True,
+                transient=self._transient,
                 screen=False,
             )
             self._live.start()
@@ -101,9 +85,6 @@ class ProgressDisplay:
         if self._live is not None:
             self._live.stop()
             self._live = None
-        if self._progress is not None:
-            self._progress.stop()
-            self._progress = None
 
     def _on_event(self, event: ProgressEvent) -> None:
         t = self._tracker
@@ -134,7 +115,7 @@ class ProgressDisplay:
             self._plain_line(event)
 
     def _render(self) -> RenderableType:
-        from rich.text import Text as _Text
+        from rich.text import Text
 
         t = self._tracker
 
@@ -153,7 +134,7 @@ class ProgressDisplay:
             f"[bold]{pass_desc}[/bold]  {sev_str}",
             f"[dim]{det_desc} · {t.detector_elapsed:.1f}s elapsed[/dim]{latest_tag} {latest}",
         ]
-        return _Text("\n".join(lines))
+        return Text.from_markup("\n".join(lines))
 
     def _plain_line(self, event: ProgressEvent) -> None:
         """One plain stderr line per stage in non-TTY / machine mode."""
