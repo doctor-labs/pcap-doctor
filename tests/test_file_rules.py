@@ -141,3 +141,16 @@ def test_empty_files_match_nothing() -> None:
     rules = _rules()
     matches = file_rules_match([], rules)
     assert matches == {}
+
+
+def test_size_bounds_are_inclusive_and_exact_one_either_side() -> None:
+    """Pin the off-by-one behaviour: min and max are inclusive, the value one outside each bound is rejected."""
+    rules = [FileRule(code="SIZE_IN_RANGE", min_size=10, max_size=100)]
+    expected = {9: False, 10: True, 11: True, 99: True, 100: True, 101: False}
+    for size, should_match in expected.items():
+        f = _file(f"f{size}.bin", size, "deadbeef", "application/octet-stream")
+        got = [m.code for m in file_rules_match([f], rules)[f.name]]
+        assert got == (["SIZE_IN_RANGE"] if should_match else []), f"size {size}: expected match={should_match}, got {got}"
+    # max-only rule: one above the bound is rejected
+    f6 = _file("six.bin", 6, "deadbeef", "application/octet-stream")
+    assert file_rules_match([f6], [FileRule(code="SIZE_TOO_SMALL", max_size=5)])[f6.name] == []
