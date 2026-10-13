@@ -840,6 +840,26 @@ STUN_PASS = PassSpec(name="stun", display_filter="stun", fields=with_addr(("fram
 #: RTSP requests and responses over TCP (#224).
 RTSP_PASS = PassSpec(name="rtsp", display_filter="rtsp", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
        "rtsp.method", "rtsp.url", "rtsp.status")))
+#: BitTorrent DHT (UDP, heuristic) and peer-wire handshakes (TCP 6881-6889). The bt-dht
+#: dissector exposes the bencoded message as a flat key/value sequence in bt-dht.bencoded.string;
+#: the query type ("q"), transaction id ("t") and info_hash have no dedicated field, so the
+#: log builder parses that sequence. The bittorrent handshake exposes bittorrent.info_hash and peer_id.
+BT_DHT_PASS = PassSpec(
+    name="bt-dht",
+    display_filter="bt-dht || bittorrent",
+    fields=with_addr((
+        "frame.time_epoch",
+        "udp.srcport",
+        "udp.dstport",
+        "tcp.srcport",
+        "tcp.dstport",
+        "udp.payload",
+        "bt-dht.id",
+        "bt-dht.port",
+        "bittorrent.info_hash",
+        "bittorrent.peer_id",
+    )),
+)
 
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
@@ -962,6 +982,7 @@ PASSES: dict[str, PassSpec] = {
         VNC_PASS,
         STUN_PASS,
         RTSP_PASS,
+        BT_DHT_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,

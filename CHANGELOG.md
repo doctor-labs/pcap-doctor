@@ -42,6 +42,10 @@ All notable changes to this project are documented here. The format follows
   (success/failure), and the desktop name from ServerInit. The `vnc` tshark pass backs it, and `pcap-doctor query
   ... -s log:rfb` reads the table.
 - `stun.log` and `rtsp.log`: Zeek-style per-protocol logs for STUN (message type and the XOR-MAPPED-ADDRESS when present) and RTSP (method, URL and response status) as `pcap-doctor logs` rows or TSV/JSON (#224).
+- `bittorrent` log: Zeek-style log for BitTorrent DHT messages (query type — ping, find_node,
+  get_peers, announce_peer — transaction id and, for get_peers/announce_peer, the info_hash as hex)
+  and peer-wire handshakes (info_hash and peer-id version prefix), parsed passively from the bt-dht
+  heuristic dissector and the bittorrent handshake (#276).
 - Cleartext POP3 USER/PASS, IMAP LOGIN and SMTP AUTH PLAIN credentials are now reported as CLEARTEXT_CREDENTIAL findings by the transport-exposure detector.
 - `pcap-doctor analyze --fast`: an opt-in flag that pre-splits the capture with a libpcap BPF filter (`tcpdump -r in.pcap -w sub.pcap`) for passes whose protocols live on well-known ports (DNS on 53, NTP on 123, SSH on 22, Telnet on 23, SIP on 5060, SMB on 445, and the cleartext services pass), then runs only those passes on the small sub-capture. Default behaviour is unchanged. Falls back to the normal full-capture scan if tcpdump is missing, and prints a note that protocols on non-standard ports are not covered (#334).
 - RADIUS `radius.log` (ts, uid, id.orig_h/id.orig_p/id.resp_h/id.resp_p, username, mac, result) and a `d18.radius` detector that raises CLEARTEXT_CREDENTIAL findings for Access-Request exchanges carrying a cleartext User-Name.

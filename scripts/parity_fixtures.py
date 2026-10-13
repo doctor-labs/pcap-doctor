@@ -1556,3 +1556,53 @@ def fixture_stun_rtsp() -> bytes:
     t.close()
     return w.write()
 
+
+def _bencode(v: object) -> bytes:
+    """Minimal bencode encoder with sorted dict keys (as the bt-dht spec and tshark's dissector demand)."""
+    if isinstance(v, bool):
+        return b"i%d" % int(v) + b"e"
+    if isinstance(v, int):
+        return b"i%d" % v + b"e"
+    if isinstance(v, bytes):
+        return b"%d:" % len(v) + v
+    if isinstance(v, str):
+        b = v.encode()
+        return b"%d:" % len(b) + b
+    if isinstance(v, dict):
+        out = b"d"
+        for k in sorted(v):  # bencode requires sorted keys; tshark's bt-dht heuristic only fires on sorted input
+            out += _bencode(k) + _bencode(v[k])
+        return out + b"e"
+    if isinstance(v, list):
+        out = b"l"
+        for item in v:
+            out += _bencode(item)
+        return out + b"e"
+    raise TypeError(f"cannot bencode {type(v)!r}")
+
+
+@fixture("bt_dht.pcap")
+def fixture_bt_dht() -> bytes:
+    """BitTorrent DHT queries (ping, find_node, get_peers, announce_peer) and one peer-wire handshake (#276)."""
+    w = Wire(start=1_702_000_000.0)
+    c, s = "10.50.0.2", "10.50.0.3"
+    tid = b"\xaa\xbb"
+    node_id = b"\xcc" * 20
+    info_hash = b"\x11" * 20
+    messages = [
+        _bencode({"t": tid, "y": "q", "q": "ping", "a": {"id": node_id}}),
+        _bencode({"t": tid, "y": "r", "r": {"id": node_id}}),
+        _bencode({"t": tid, "y": "q", "q": "find_node", "a": {"id": node_id, "target": b"\xdd" * 20}}),
+        _bencode({"t": tid, "y": "q", "q": "get_peers", "a": {"id": node_id, "info_hash": info_hash}}),
+        _bencode({"t": tid, "y": "q", "q": "announce_peer", "a": {"id": node_id, "info_hash": info_hash, "port": 6881, "token": b"tokn"}}),
+    ]
+    for payload in messages:
+        w.add(udp_frame(c, s, 6881, 6881, payload))
+    # A BitTorrent peer-wire handshake carries the info_hash and a peer-id prefix.
+    handshake = bytes([0x13]) + b"BitTorrent protocol" + b"\x00" * 8 + info_hash + b"-AZ1234-1234567890ab"
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 6881, 6889, 1000, 0, 0x02))))  # TCP SYN
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 6889, 6881, 2000, 1001, 0x12))))  # SYN-ACK
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 6881, 6889, 1001, 2001, 0x10))))  # ACK
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 6881, 6889, 1001, 2001, 0x18, handshake))))
+    return w.write()
+

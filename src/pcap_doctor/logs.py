@@ -12,6 +12,7 @@ Secrets stay out: FTP ``PASS`` arguments, HTTP credentials and SMTP AUTH data ar
 
 from __future__ import annotations
 
+import binascii
 import json
 import re
 from collections import defaultdict
@@ -1139,6 +1140,141 @@ def capture_loss_stats(rows: list[Row]) -> tuple[int, int, int | None]:
     return acks, gaps, first_gap_frame
 
 
+def _bdecode(data: bytes) -> object:
+    """A tiny, bounds-checked bencode parser. Raises ``ValueError`` on anything malformed.
+
+    Used to read the query type, transaction id and info_hash that tshark's bt-dht dissector
+    does not expose as dedicated fields. Input is attacker-controlled capture data, so every
+    length is bounds-checked and a parse error yields ``None`` upstream instead of crashing.
+    """
+    idx = 0
+
+    def take(n: int) -> bytes:
+        nonlocal idx
+        if idx + n > len(data):
+            raise ValueError("bencode: truncated")
+        out = data[idx:idx + n]
+        idx += n
+        return out
+
+    def parse() -> object:
+        nonlocal idx
+        c = data[idx:idx + 1]
+        if not c:
+            raise ValueError("bencode: empty")
+        if c == b"i":
+            idx += 1
+            end = data.index(b"e", idx)
+            val = int(data[idx:end])
+            idx = end + 1
+            return val
+        if c == b"l":
+            idx += 1
+            items: list[object] = []
+            while data[idx:idx + 1] != b"e":
+                items.append(parse())
+            idx += 1
+            return items
+        if c == b"d":
+            idx += 1
+            d: dict[bytes, object] = {}
+            while data[idx:idx + 1] != b"e":
+                key = parse()
+                if not isinstance(key, bytes):
+                    raise ValueError("bencode: non-string dict key")
+                d[key] = parse()
+            idx += 1
+            return d
+        # string: "<len>:<bytes>"
+        colon = data.index(b":", idx)
+        length = int(data[idx:colon])
+        idx = colon + 1
+        return take(length)
+
+    return parse()
+
+
+def _peer_id_prefix(peer_id: str | None) -> str | None:
+    """The version prefix of a BitTorrent peer id, e.g. ``-AZ1234-`` for μTorrent/LS-DHT (#276).
+
+    tshark exposes ``bittorrent.peer_id`` as hex (``-AZ1234-...`` -> ``2d415a31...``), so decode it
+    to ASCII first and read the 8-byte version prefix.
+    """
+    if not peer_id:
+        return None
+    try:
+        decoded = bytes.fromhex(peer_id).decode("ascii", "replace")
+    except ValueError:
+        decoded = peer_id
+    if len(decoded) >= 8 and decoded.startswith("-") and decoded[6:7] == "-":
+        return decoded[:8]
+    return decoded[:8] if decoded else None
+
+
+def _bdecode_str(val: object) -> str | None:
+    """Decode a bencoded string value to ASCII, ignoring bytes that aren't valid text (#276)."""
+    if isinstance(val, bytes):
+        try:
+            return val.decode("ascii")
+        except UnicodeDecodeError:
+            return val.hex()
+    return None
+
+
+def _bdecode_hex(val: object) -> str | None:
+    """Render a bencoded 20-byte info_hash as hex (tshark exposes it that way elsewhere)."""
+    return val.hex() if isinstance(val, (bytes, bytearray)) else None
+
+
+def _bittorrent_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style bittorrent.log: DHT queries/replies and peer-wire handshakes (issue #276).
+
+    The bt-dht dissector does not expose the query type (``q``), transaction id (``t``) or
+    ``info_hash`` as dedicated fields, so the DHT payload is parsed directly from ``udp.payload``.
+    BitTorrent peer-wire handshakes expose ``bittorrent.info_hash`` and ``bittorrent.peer_id``
+    directly; values are already hex, so no conversion is needed.
+    """
+    table = LogTable("bittorrent", [
+        ("ts", "time"), *ID_COLS, ("msg_type", "enum"), ("query", "string"), ("txid", "string"),
+        ("info_hash", "string"), ("peer_id_prefix", "string"), ("node_id", "string"), ("port", "port")])
+    for row in ctx.runner.run("bt-dht"):
+        ts = to_float(first(row, "frame.time_epoch"))
+        key = ctx.row_key(row, "udp")
+        if not key:
+            key = ctx.row_key(row, "tcp")
+        if not key:
+            continue
+        ids = ctx.ids(key)
+        payload_hex = first(row, "udp.payload")
+        # bt-dht messages: parse the raw bencoded UDP payload for query type, txid and info_hash.
+        msg = None
+        if payload_hex:
+            try:
+                msg = _bdecode(bytes.fromhex(payload_hex))
+            except (ValueError, binascii.Error):
+                msg = None
+        if isinstance(msg, dict):
+            args = msg.get(b"a")
+            args = args if isinstance(args, dict) else None
+            q = _bdecode_str(msg.get(b"q"))
+            txid = _bdecode_str(msg.get(b"t"))
+            node_id = _bdecode_str(args.get(b"id")) if args else None
+            if q:  # a request
+                ih = _bdecode_hex(args.get(b"info_hash")) if q in ("get_peers", "announce_peer") and args else None
+                table.rows.append({"ts": ts, **ids, "msg_type": "request", "query": q, "txid": txid,
+                                   "info_hash": ih, "node_id": node_id, "port": to_int(first(row, "bt-dht.port"))})
+            elif _bdecode_str(msg.get(b"y")) == "r":  # a response
+                table.rows.append({"ts": ts, **ids, "msg_type": "response", "txid": txid,
+                                   "node_id": node_id, "port": to_int(first(row, "bt-dht.port"))})
+            continue
+        # BitTorrent peer-wire handshake.
+        ih = first(row, "bittorrent.info_hash")
+        if ih:
+            table.rows.append({"ts": ts, **ids, "msg_type": "handshake", "info_hash": ih,
+                               "peer_id_prefix": _peer_id_prefix(first(row, "bittorrent.peer_id") or "")})
+    return table
+
+
 def _capture_loss_log(ctx: _Ctx) -> LogTable:
     """Zeek-style capture_loss.log: ACKs, gaps (segments after a mid-stream hole) and percent lost (issue #240)."""
     rows = ctx.runner.run("capture_loss")
@@ -1775,7 +1911,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }
