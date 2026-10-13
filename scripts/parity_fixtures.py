@@ -1473,6 +1473,47 @@ def fixture_irc_socks_creds() -> bytes:
     socks.send(False, bytes([0x05, 0x02]))  # version 5, user/pass auth selected
     socks.send(True, socks_auth)
     socks.send(False, bytes([0x05, 0x00]))  # version 5, status 0 = succeeded
-    
+    return w.write()
+
+
+@fixture("rfb_vnc.pcap")
+def fixture_rfb_vnc() -> bytes:
+    """A complete RFB/VNC handshake: version 3.8, server offers None (1) + VNC (2) auth,
+    client picks None, auth succeeds, ServerInit carries desktop name 'Test Desktop' (#219).
+
+    Security types: 1 = None, 2 = VNC (challenge/response). The None auth path is used so
+    tshark emits a clean 4-byte auth-result field and a full ServerInit with a desktop name.
+    """
+    w = Wire(start=1_702_000_000.0)
+    c, s = "10.100.0.10", "10.100.0.20"
+    seq = {"c": 1000, "s": 5000}
+
+    def send(from_client: bool, payload: bytes) -> None:
+        sport, dport = (59000, 5900) if from_client else (5900, 59000)
+        src, dst = (c, s) if from_client else (s, c)
+        side, other = ("c", "s") if from_client else ("s", "c")
+        w.add(ether(MAC_A if from_client else MAC_B, MAC_B if from_client else MAC_A,
+                    ip_packet(src, dst, 6, tcp_segment(src, dst, sport, dport, seq[side], seq[other], 0x18, payload))))
+        seq[side] += len(payload)
+
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 59000, 5900, 1000, 0, 0x02))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 5900, 59000, 5000, 1001, 0x12))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 59000, 5900, 1001, 5001, 0x10))))
+    # RFB version string exchange (3.8)
+    send(False, b"RFB 003.008\n")
+    send(True, b"RFB 003.008\n")
+    # Server lists security types: None (1) and VNC (2)
+    send(False, struct.pack("B", 2) + bytes([1, 2]))
+    # Client selects None auth (1)
+    send(True, bytes([1]))
+    # Server auth result for None: 4 bytes, 0 = OK
+    send(False, struct.pack(">I", 0))
+    # ClientInit: shared desktop flag (1 = True)
+    send(True, bytes([1]))
+    # ServerInit: width(2) + height(2) + pixel_format(16) + name_len(4) + name
+    pixel_format = bytes([8, 1, 0, 0, 7, 0, 7, 0, 3, 0, 3, 0, 0, 0, 0, 0])
+    name = b"Test Desktop"
+    server_init = struct.pack(">HH", 800, 600) + pixel_format + struct.pack(">I", len(name)) + name
+    send(False, server_init)
     return w.write()
 

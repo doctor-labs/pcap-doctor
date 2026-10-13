@@ -223,5 +223,6 @@
   "irc_socks_creds.pcap": [
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"
-  ]
+  ],
+  "rfb_vnc.pcap": []
 }

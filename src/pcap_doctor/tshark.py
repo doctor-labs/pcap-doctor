@@ -811,6 +811,28 @@ RESP_PASS = PassSpec(
     fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport", "tcp.payload")),
 )
 
+VNC_PASS = PassSpec(
+    name="vnc",
+    display_filter="vnc",
+    fields=with_addr((
+        "frame.time_epoch",
+        "tcp.srcport",
+        "tcp.dstport",
+        "tcp.stream",
+        "vnc.server_proto_ver",
+        "vnc.client_proto_ver",
+        "vnc.num_security_types",
+        "vnc.security_type",
+        "vnc.client_security_type",
+        "vnc.auth_result",
+        "vnc.auth_error",
+        "vnc.desktop_name",
+        "vnc.width",
+        "vnc.height",
+        "vnc.share_desktop_flag",
+    )),
+)
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -929,6 +951,7 @@ PASSES: dict[str, PassSpec] = {
         DNP3_PASS,
         PGSQL_PASS,
         RESP_PASS,
+        VNC_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,
