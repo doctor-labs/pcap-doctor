@@ -7,18 +7,20 @@ degrade into a note, never into a wrong answer.
 
 from __future__ import annotations
 
-import contextlib
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
 
 from conftest import fixture, requires_tshark
 from pcap_doctor.tshark import (
+    JOBS_ENV_VAR,
     PASSES,
     SERVICE_FIELDS,
     TsharkRunner,
     _low_priority_kwargs,
+    _low_priority_prefix,
     default_prefs,
     parse_cipher_ids,
     parse_hex_bits,
@@ -389,6 +391,14 @@ def test_worker_count_rejects_below_one(monkeypatch) -> None:
         worker_count(-1, None)
 
 
+def test_worker_count_rejects_non_numeric_env(monkeypatch) -> None:
+    """PCAP_DOCTOR_JOBS='abc' raises ValueError naming the variable."""
+    monkeypatch.delenv(JOBS_ENV_VAR, raising=False)
+    monkeypatch.setenv(JOBS_ENV_VAR, "abc")
+    with pytest.raises(ValueError, match="PCAP_DOCTOR_JOBS"):
+        worker_count(None, None)
+
+
 def test_prefetch_uses_count_to_cap_workers(monkeypatch) -> None:
     """prefetch() respects the count limit, never spawning more than that."""
     import threading
@@ -414,26 +424,26 @@ def test_prefetch_uses_count_to_cap_workers(monkeypatch) -> None:
 
 
 def test_tshark_subprocess_runs_at_low_priority_posix(monkeypatch) -> None:
-    """On POSIX, tshark children get os.nice(10) via preexec_fn, never fatal."""
-    kwargs = _low_priority_kwargs()
-    assert "preexec_fn" in kwargs
-    called = []
+    """On POSIX, tshark children get nice -n 10 as a command prefix (no preexec_fn)."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/nice" if name == "nice" else None)
 
-    def fake_nice(value):
-        called.append(value)
-        raise OSError("nice failed")
+    prefix = _low_priority_prefix()
+    assert prefix == ["nice", "-n", "10"]
+    # POSIX must never use preexec_fn (unsafe with threads in prefetch)
+    assert _low_priority_kwargs() == {}
 
-    monkeypatch.setattr("os.nice", fake_nice)
-    # preexec_fn must be callable and must not raise to the caller
-    with contextlib.suppress(OSError):
-        kwargs["preexec_fn"]()
-    assert called == [10]
+
+def test_tshark_subprocess_runs_at_low_priority_posix_no_nice(monkeypatch) -> None:
+    """If nice(1) is missing on POSIX, the command runs unchanged (graceful degradation)."""
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr("shutil.which", lambda name: None)
+
+    assert _low_priority_prefix() == []
 
 
 def test_tshark_subprocess_runs_at_low_priority_windows(monkeypatch) -> None:
-    """On Windows, tshark children get BELOW_NORMAL_PRIORITY_CLASS."""
-    import sys
-
+    """On Windows, tshark children get BELOW_NORMAL_PRIORITY_CLASS, no command prefix."""
     monkeypatch.setattr(sys, "platform", "win32")
     # subprocess doesn't define BELOW_NORMAL_PRIORITY_CLASS on non-Windows
     fake_creationflags = 0x00000040
@@ -441,6 +451,7 @@ def test_tshark_subprocess_runs_at_low_priority_windows(monkeypatch) -> None:
         "subprocess.BELOW_NORMAL_PRIORITY_CLASS", fake_creationflags, raising=False
     )
 
+    assert _low_priority_prefix() == []
     kwargs = _low_priority_kwargs()
     assert kwargs.get("creationflags") == fake_creationflags
     assert "preexec_fn" not in kwargs

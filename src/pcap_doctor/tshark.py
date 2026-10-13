@@ -13,7 +13,6 @@ pass name) so re-runs and test loops are cheap.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
@@ -61,7 +60,12 @@ def worker_count(jobs: int | None, env: dict[str, str] | None = None) -> int:
     if raw is None:
         env_jobs = environ.get(JOBS_ENV_VAR)
         if env_jobs:
-            raw = int(env_jobs)
+            try:
+                raw = int(env_jobs)
+            except ValueError:
+                raise ValueError(
+                    f"{JOBS_ENV_VAR} must be an integer, got {env_jobs!r}"
+                ) from None
     if raw is not None:
         if raw < 1:
             raise ValueError(f"--jobs must be >= 1, got {raw}")
@@ -70,21 +74,31 @@ def worker_count(jobs: int | None, env: dict[str, str] | None = None) -> int:
     return max(1, min(3, cpus // 2))
 
 
-def _low_priority_kwargs() -> dict[str, Any]:
-    """kwargs to launch tshark at low priority — never fatal (issue #331).
+def _low_priority_prefix() -> list[str]:
+    """Prefix the tshark argv with ``nice`` on POSIX so children run at low priority (issue #331).
 
-    POSIX: ``preexec_fn`` calls ``os.nice(10)``. If ``nice`` fails we swallow the
-    OSError inside the child-pre-exec hook so the parent never sees it.  Windows:
-    ``creationflags=BELOW_NORMAL_PRIORITY_CLASS``.
+    ``preexec_fn`` is unsafe here because ``prefetch`` calls ``subprocess.run`` from a
+    ``ThreadPoolExecutor`` and Python docs warn that ``preexec_fn`` can deadlock the child
+    when the parent has threads.  Prefixing the command with the ``nice`` binary avoids
+    forking Python code in the child: if ``shutil.which("nice")`` is missing we return
+    an empty prefix and the process runs at the parent's priority (graceful degradation).
+    """
+    if sys.platform == "win32":
+        return []
+    if shutil.which("nice") is not None:
+        return ["nice", "-n", "10"]
+    return []
+
+
+def _low_priority_kwargs() -> dict[str, Any]:
+    """Extra kwargs for ``subprocess.run`` to lower child priority on Windows (issue #331).
+
+    POSIX uses the ``nice`` prefix (``_low_priority_prefix``) instead; this returns an
+    empty dict on POSIX.  Windows uses ``creationflags=BELOW_NORMAL_PRIORITY_CLASS``.
     """
     if sys.platform == "win32":
         return {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}
-
-    def _preexec() -> None:
-        with contextlib.suppress(OSError):
-            os.nice(10)
-
-    return {"preexec_fn": _preexec}
+    return {}
 
 
 @dataclass(frozen=True)
@@ -1448,7 +1462,7 @@ class TsharkRunner:
     def _command(
         self, spec: PassSpec, extra_args: tuple[str, ...] = (), pcap: Path | None = None
     ) -> list[str]:
-        cmd = [tshark_path(), "-r", str(pcap or self.pcap), "-n", "-l"]
+        cmd = [*_low_priority_prefix(), tshark_path(), "-r", str(pcap or self.pcap), "-n", "-l"]
         display_filter = self._filter_for(spec)
         if display_filter:
             cmd += ["-Y", display_filter]

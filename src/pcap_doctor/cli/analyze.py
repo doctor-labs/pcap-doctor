@@ -134,6 +134,10 @@ def analyze_cmd(
     # Flags win over the config, which wins over its profile.
     category = category or list(config.categories)
     fail_on = fail_on or config.fail_on or "none"
+    # Validate --jobs / PCAP_DOCTOR_JOBS early, before we start spawning processes.
+    if jobs is not None and jobs < 1:
+        console.print(f"[red]--jobs must be >= 1, got {jobs}[/red]")
+        raise typer.Exit(code=2)
     try:
         baseline = load_baseline(baseline_path) if baseline_path is not None else None
     except (OSError, ValueError) as exc:
@@ -179,10 +183,13 @@ def analyze_cmd(
                 signature_vars=sig_vars,
                 decode_as=tuple(decode_as or ()),
                 fast=fast,
-                jobs=jobs if jobs is not None else None,
+                jobs=jobs,
                 progress=None,
                 on_event=on_event,
             )
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
     except KeyboardInterrupt:
         raise typer.Exit(code=130) from None
     finally:
