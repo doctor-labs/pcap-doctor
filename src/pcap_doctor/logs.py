@@ -1239,6 +1239,32 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
 LOG_NAMES = tuple(BUILDERS)
 
 
+def pivot(logs: dict[str, LogTable], value: str) -> list[tuple[str, int, str]]:
+    """Pivot search: every (log_name, row_index, field_name) whose field equals ``value`` (issue #250).
+
+    Exact match after normalising case, so hostnames and IP text match regardless of case; numbers,
+    booleans and other non-string fields are compared as their text. Rows are returned in table order
+    (the order of ``logs``), then row order, then column order.
+    """
+    wanted = value.casefold()
+    hits: list[tuple[str, int, str]] = []
+    for log_name, table in logs.items():
+        for index, row in enumerate(table.rows):
+            for field_name, _ztype in table.columns:
+                cell = row.get(field_name)
+                if cell is None:
+                    continue
+                if isinstance(cell, str):
+                    if cell.casefold() == wanted:
+                        hits.append((log_name, index, field_name))
+                elif isinstance(cell, list):
+                    if any(isinstance(item, str) and item.casefold() == wanted for item in cell):
+                        hits.append((log_name, index, field_name))
+                elif str(cell) == value:
+                    hits.append((log_name, index, field_name))
+    return hits
+
+
 def build_logs(index: CaptureIndex, names: tuple[str, ...] = ()) -> dict[str, LogTable]:
     unknown = [n for n in names if n not in BUILDERS]
     if unknown:
