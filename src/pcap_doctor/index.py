@@ -419,7 +419,7 @@ class IndexBuilder:
         runner.prefetch({
             "base": (), "tls": (), "dtls": (), "http": self.decrypt_args, "dns": (), "sip": (),
             "ssh": (), "quic": (), "services": (), "telnet": (), "smb": (),
-            "device": (), "os": (), "dhcp": (),
+
         })
         raw_stats = runner.capture_stats()
         capture = CaptureInfo(
@@ -452,12 +452,7 @@ class IndexBuilder:
         self._build_smb(index, runner.run("smb"))
 
         # Enrich host inventory with MAC, vendor, hostname, and OS guess
-        self._build_host_inventory(
-            index,
-            runner.run("device"),
-            runner.run("os"),
-            runner.run("dhcp"),
-        )
+        self._build_host_inventory(index, runner.run("base"))
 
         if self.decrypt_args:
             tls_keys = {s.key for s in index.tls.values()}
@@ -1137,45 +1132,32 @@ class IndexBuilder:
                 index.telnet_logins.append(login)
 
     # -- host inventory ----------------------------------------------------
-    def _build_host_inventory(
-        self,
-        index: CaptureIndex,
-        device_rows: list[Row],
-        os_rows: list[Row],
-        dhcp_rows: list[Row],
-    ) -> None:
-        """Enrich hosts with MAC, vendor, hostname, and OS guess."""
-        # Build MAC, vendor, and hostname lookups from device pass
+    def _build_host_inventory(self, index: CaptureIndex, base_rows: list[Row]) -> None:
+        """Enrich hosts with MAC, vendor, hostname (TLS SNI) and OS guess.
+
+        Everything comes from the existing ``base`` pass (no extra tshark launch): ``eth.src`` and its
+        resolved names, and the TTL of the first SYN (SYN set, ACK clear) a host sent.
+        """
         mac_by_ip: dict[str, str] = {}
         vendor_by_ip: dict[str, str | None] = {}
-        for row in device_rows:
+        os_guess_by_ip: dict[str, str] = {}
+        for row in base_rows:
             ip = first(row, "ip.src") or first(row, "ipv6.src")
+            if not ip:
+                continue
             mac = first(row, "eth.src")
-            oui_resolved = first(row, "eth.src.oui_resolved")
-            src_resolved = first(row, "eth.src_resolved")
-            if ip and mac:
+            if mac and ip not in mac_by_ip:
                 mac_lower = mac.lower()
                 mac_by_ip[ip] = mac_lower
-                vendor_by_ip[ip] = _resolve_vendor(oui_resolved, src_resolved, mac_lower)
-
-        # Build IP->OS guess from OS pass (first SYN per host)
-        os_guess_by_ip: dict[str, str] = {}
-        seen_ttl: dict[str, int] = {}
-        for row in os_rows:
-            ip = first(row, "ip.src")
+                vendor_by_ip[ip] = _resolve_vendor(
+                    first(row, "eth.src.oui_resolved"), first(row, "eth.src_resolved"), mac_lower
+                )
+            is_syn = first(row, "tcp.flags.syn") in ("1", "True") and first(row, "tcp.flags.ack") not in ("1", "True")
             ttl = to_int(first(row, "ip.ttl"))
-            if ip and ttl is not None and ip not in seen_ttl:
-                seen_ttl[ip] = ttl
-                initial = _initial_ttl(ttl)
-                os_guess_by_ip[ip] = _OS_GUESS.get(initial, "unknown")
+            if is_syn and ttl is not None and ip not in os_guess_by_ip:
+                os_guess_by_ip[ip] = _OS_GUESS.get(_initial_ttl(ttl), "unknown")
 
-        # Build IP->hostname from DHCP pass
-        hostname_by_ip: dict[str, str] = {}
-        for row in dhcp_rows:
-            ip = first(row, "dhcp.ip.client") or first(row, "dhcp.ip.your")
-            hostname = first(row, "dhcp.option.hostname")
-            if ip and hostname:
-                hostname_by_ip[ip] = hostname
+        hostname_by_ip: dict[str, str] = {}  # DHCP option 12 would need the dhcp pass; left out on purpose
 
         # Also extract SNI from TLS sessions for hostname
         # SNI is available in TlsSession.sni, which we can access after _build_tls

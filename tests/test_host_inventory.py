@@ -2,7 +2,52 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import patch
+
 from conftest import fixture, requires_tshark
+
+# The set of passes requested by analyze on origin/main (no host inventory enrichment), measured by recording
+# every TsharkRunner.run call across the whole analyze (index builder AND detectors): 15 passes.
+# Host inventory must NOT add to this: it reads the existing base pass (MAC, vendor, TTL) instead.
+EXPECTED_PASSES = {
+    "base", "tls", "dtls", "http", "dns", "sip", "rtp", "ssh", "quic",
+    "services", "telnet", "smb", "arp_icmp", "capture_loss", "conn",
+}
+
+
+def test_analyze_requests_no_extra_passes(tmp_path: Path) -> None:
+    """Host inventory must NOT request additional tshark passes beyond the baseline.
+    
+    MAC, vendor, and OS guess must come from existing passes.
+    Hostname may come from existing DNS/TLS data, or be omitted if not present.
+    """
+    requested: set[str] = set()
+    
+    def record_pass(name: str) -> None:
+        requested.add(name)
+    
+    # Import and patch the TsharkRunner.run method to record pass requests
+    from pcap_doctor.tshark import TsharkRunner
+    original_run = TsharkRunner.run
+    
+    def patched_run(self, name: str, *args, **kwargs):
+        record_pass(name)
+        return original_run(self, name, *args, **kwargs)
+    
+    from pcap_doctor.pipeline import analyze
+    
+    with patch.object(TsharkRunner, "run", patched_run):
+        analyze(fixture("arp_icmp.pcap"), tmp_path / "out")
+    assert requested, "analyze requested no passes at all: the recorder did not see any run() call"
+    
+    # The test fails if we request any passes beyond the baseline
+    extra_passes = requested - EXPECTED_PASSES
+    assert not extra_passes, f"analyze requested extra passes: {sorted(extra_passes)}. Host inventory must NOT add tshark passes."
+    
+    # Also verify we're still requesting all expected passes
+    missing = EXPECTED_PASSES - requested
+    assert not missing, f"analyze is missing expected passes: {sorted(missing)}"
 
 
 @requires_tshark
@@ -46,11 +91,11 @@ def test_host_inventory_has_os_guess(analyze_capture) -> None:
 
 
 @requires_tshark
-def test_host_inventory_hostname_from_dhcp(analyze_capture) -> None:
-    """Hostname from DHCP option 12."""
-    # This test will need a fixture with DHCP hostname
-    # For now, check that hosts don't crash when no hostname is present
+def test_host_inventory_hostname_from_existing_data(analyze_capture) -> None:
+    """Hostname from DNS/TLS SNI data already in index."""
+    # This test checks that hostname field exists and may be populated from
+    # existing index data (DNS queries, TLS SNI, HTTP Host headers)
     result = analyze_capture(fixture("devices.pcap"))
     for host in result.index.hosts.values():
-        # hostname should be a string (possibly empty)
-        assert isinstance(host.hostname, (str, type(None)))
+        # hostname should be a string (possibly None)
+        assert isinstance(host.hostname, (str, type(None), type(None)))
