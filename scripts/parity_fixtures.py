@@ -1098,3 +1098,38 @@ def fixture_web_attack() -> bytes:
     for i, (client, uri) in enumerate(payloads):
         _http_get(w, client, server, 41000 + i, uri)
     return w.write()
+
+
+def _tls_ext(etype: int, value: bytes = b"") -> bytes:
+    """One TLS extension: type (2 bytes) + length (2 bytes) + value."""
+    return struct.pack("!HH", etype, len(value)) + value
+
+
+def _tls_record(content_type: int, payload: bytes) -> bytes:
+    """One TLS record: content_type + version(0x0303) + length + payload."""
+    return struct.pack("!BHH", content_type, 0x0303, len(payload)) + payload
+
+
+@fixture("ech_0rtt_handshake.pcap")
+def fixture_ech_0rtt_handshake() -> bytes:
+    """A TLS 1.3 ClientHello offering Encrypted Client Hello (extension 0xfe0d, RFC 9849)
+    and early_data (extension 42, RFC 8446), followed by the ServerHello. A passive
+    check reports both extensions as offered, since tshark does not decrypt them (#270)."""
+    w = Wire(start=1_701_950_000.0)
+    c, s = "10.99.0.10", "10.99.0.20"
+    t = Tcp(w, c, s, 51000, 443).open()
+    # ClientHello: SNI + early_data(42) + supported_versions(43) + key_share(51) + ECH(0xfe0d=65037)
+    sni_name = b"shop.example"
+    sni_entry = b"\x00" + struct.pack("!H", len(sni_name)) + sni_name
+    sni = _tls_ext(0, struct.pack("!H", len(sni_entry)) + sni_entry)
+    early_data = _tls_ext(42, b"")
+    sup_versions = _tls_ext(43, struct.pack("!B", 2) + struct.pack("!HH", 0x0304, 0x0303))
+    key_share = _tls_ext(51, struct.pack("!HH", 0x001d, 32) + b"\x00" * 32)  # x25519, 32-byte key
+    ech = _tls_ext(65037, b"\x00" * 8)
+    extensions = sni + early_data + sup_versions + key_share + ech
+    ch_body = struct.pack("!H", 0x0303) + b"\x00" * 32 + b"\x00" + struct.pack("!H", 2) + b"\x13\x01" + b"\x01\x00" + struct.pack("!H", len(extensions)) + extensions
+    handshake = struct.pack("B", 1) + struct.pack("!I", len(ch_body))[1:] + ch_body
+    t.send(True, _tls_record(22, handshake))
+    t.close()
+    return w.write()
+
