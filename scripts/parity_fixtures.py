@@ -862,6 +862,62 @@ def fixture_dns_plus_tls() -> bytes:
     record = bytes([0x16, 0x03, 0x03]) + struct.pack("!H", len(hello)) + hello
     t.send(True, record)
     t.close()
+def tls_clienthello(sni: str) -> bytes:
+    """A minimal TLS 1.2 ClientHello carrying one cipher and an SNI extension (#239)."""
+    # Record: content-type 0x16 (handshake), version 0x0301, length, body.
+    # Handshake body: type(1) + length(3) + ClientHello(version(2) + random(32) + session + ciphers + comps + extensions).
+    rand = b"\x5a" * 32  # 32-byte TLS random (GMT unix time + 28 random bytes)
+    session_id = b"\x00"  # empty session id
+    ciphers = struct.pack("!H", 0x1301)  # TLS_AES_128_GCM_SHA256
+    comps = b"\x01\x00"  # one compression method: null
+    name_bytes = sni.encode()
+    sni_ext = (
+        struct.pack("!HH", 0x0000, 5 + len(name_bytes))  # extension type=0 (SNI), length
+        + struct.pack("!H", len(name_bytes) + 3)  # server_name list length
+        + b"\x00"  # name_type=0 (host_name)
+        + struct.pack("!H", len(name_bytes)) + name_bytes
+    )
+    ext_block = struct.pack("!H", len(sni_ext)) + sni_ext
+    hs_payload = (
+        struct.pack("!H", 0x0303)  # ClientHello version TLS 1.2
+        + rand
+        + session_id
+        + struct.pack("!H", 0x0002) + ciphers  # cipher_suites
+        + comps
+        + ext_block
+    )
+    hs_body = b"\x01" + struct.pack("!I", len(hs_payload))[1:] + hs_payload  # type + 3-byte length + payload
+    record = b"\x16\x03\x01" + struct.pack("!H", len(hs_body)) + hs_body
+    return record
+
+
+@fixture("hostnames.pcap")
+def fixture_hostnames() -> bytes:
+    """Interesting hostnames in DNS, TLS SNI and HTTP Host that Zeek would call Interesting_Hostname_Login (#239).
+
+    Carries three hostnames whose first label is login/admin/signin-style (must be flagged), and one
+    that is not (www.example.com, must stay silent), across all three surfaces.
+    """
+    w = Wire(start=1_701_950_000.0)
+    c, r = "10.7.0.10", "10.7.0.53"  # client and DNS resolver
+    # DNS queries (cleartext): login, www (boring), admin-panel, signin
+    for i, name in enumerate(("login.example.com", "www.example.com", "admin-panel.example.com", "signin.internal.corp")):
+        q = dns_wire(name, 0x4000 + i, 1)
+        w.add(udp_frame(c, r, 42000 + i, 53, q))
+        labels = b"".join(bytes([len(p)]) + p.encode() for p in name.split(".")) + b"\x00"
+        question = labels + struct.pack("!HH", 1, 1)
+        answer = b"\xc0\x0c" + struct.pack("!HHIH", 1, 1, 60, 4) + _ip4("93.184.216.34")
+        reply = struct.pack("!HHHHHH", 0x4000 + i, 0x8180, 1, 1, 0, 0) + question + answer
+        w.add(udp_frame(r, c, 53, 42000 + i, reply, smac=MAC_B, dmac=MAC_A))
+    # TLS ClientHello with SNI admin-panel.example.com
+    srv = "10.7.0.20"
+    t = Tcp(w, c, srv, 49000, 443).open()
+    t.send(True, tls_clienthello("admin-panel.example.com"))
+    t.close()
+    # HTTP request with Host: signin.internal.corp
+    h = Tcp(w, c, srv, 49001, 80).open()
+    h.send(True, b"GET / HTTP/1.1\r\nHost: signin.internal.corp\r\n\r\n")
+    h.close()
     return w.write()
 
 

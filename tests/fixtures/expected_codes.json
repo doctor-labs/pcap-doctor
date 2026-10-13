@@ -53,6 +53,12 @@
     "TLS_HEARTBLEED_PROBE",
     "TLS_LEGACY_RECORD_VERSION"
   ],
+  "hostnames.pcap": [
+    "DNS_CLEARTEXT",
+    "HTTP_CLEARTEXT",
+    "INTERESTING_HOSTNAME",
+    "TLS_HANDSHAKE_TRUNCATED"
+  ],
   "http_bare_token.pcap": [
     "HTTP_CLEARTEXT",
     "HTTP_CLEARTEXT_AUTH"
