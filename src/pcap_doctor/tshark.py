@@ -244,6 +244,23 @@ HTTP_PASS = PassSpec(
     ),
 )
 
+HTTP2_PASS = PassSpec(
+    name="http2",
+    display_filter="http2",
+    fields=with_addr((
+        "tcp.stream",
+        "tcp.srcport",
+        "tcp.dstport",
+        "http2.streamid",
+        "http2.type",
+        "http2.headers.method",
+        "http2.headers.path",
+        "http2.headers.authority",
+        "http2.headers.scheme",
+        "http2.headers.status",
+    )),
+)
+
 DNS_PASS = PassSpec(
     name="dns",
     display_filter="dns",
@@ -955,6 +972,7 @@ PASSES: dict[str, PassSpec] = {
         TLS_PASS,
         DTLS_PASS,
         HTTP_PASS,
+        HTTP2_PASS,
         DNS_PASS,
         SIP_PASS,
         RTP_PASS,

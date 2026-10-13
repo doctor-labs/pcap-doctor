@@ -32,6 +32,7 @@ from .models import (
     Flow,
     Handshake,
     Host,
+    Http2Exchange,
     HttpExchange,
     QuicSession,
     RecordVersion,
@@ -330,6 +331,7 @@ class CaptureIndex:
         self.hosts: dict[str, Host] = {}
         self.tls: dict[str, TlsSession] = {}
         self.http: list[HttpExchange] = []
+        self.http2: list[Http2Exchange] = []
         self.dns: list[DnsQuery] = []
         self.sip: list[SipMessage] = []
         self.rtp: list[RtpStream] = []
@@ -442,7 +444,7 @@ class IndexBuilder:
         # Every pass but RTP is independent (RTP needs the SIP pass's SDP ports), so run them concurrently (#127).
         # Also prefetch device, os, and dhcp for host inventory enrichment.
         runner.prefetch({
-            "base": (), "tls": (), "dtls": (), "http": self.decrypt_args, "dns": (), "sip": (),
+            "base": (), "tls": (), "dtls": (), "http": self.decrypt_args, "http2": (), "dns": (), "sip": (),
             "ssh": (), "quic": (), "services": (), "telnet": (), "smb": (),
 
         })
@@ -471,6 +473,7 @@ class IndexBuilder:
             ("base", lambda: self._build_flows(index, runner.run("base"))),
             ("tls", lambda: self._build_tls(index, runner.run("tls"), runner.run("dtls"))),
             ("http", lambda: self._build_http(index, runner.run("http", self.decrypt_args))),
+            ("http2", lambda: self._build_http2(index, runner.run("http2"))),
             ("dns", lambda: self._build_dns(index, runner.run("dns"))),
             ("sip", lambda: self._build_sip(index, runner.run("sip"))),
             ("rtp", lambda: self._build_rtp(index, runner.run("rtp", runner.rtp_decode_args(self._sdp_media_ports)))),
@@ -903,6 +906,65 @@ class IndexBuilder:
             if not exch.is_encrypted:
                 index.mark_cleartext(exch.key, f"http {exch.method or 'traffic'}")
 
+    # -- HTTP/2 ---------------------------------------------------------------
+    def _build_http2(self, index: CaptureIndex, rows: list[Row]) -> None:
+        """Decode cleartext HTTP/2 (h2c, prior-knowledge) streams: one Http2Exchange per stream.
+
+        TLS-encrypted HTTP/2 stays encrypted and is not reported here (out of scope for #226).
+
+        tshark emits one row per TCP segment carrying HTTP/2 frames. A single row may hold
+        several frames (e.g. the SETTINGS on stream 0 plus two HEADERS frames), so ``http2.streamid``
+        and ``http2.type`` list one entry per frame. The pseudo-header value fields
+        (``http2.headers.method`` etc.) list one entry *per HEADERS frame only*, so they do not
+        line up positionally with streamid/type: we walk those together and hand each pseudo-header
+        value to the next HEADERS frame we meet.
+        """
+        by_stream: dict[tuple[str, int], Http2Exchange] = {}
+        for row in rows:
+            key = self._stream_key(index, row) or ""
+            if not key:
+                continue
+            frame = to_int(first(row, "frame.number")) or 0
+            streamids = row.get("http2.streamid", [])
+            types = row.get("http2.type", [])
+            methods = row.get("http2.headers.method", [])
+            paths = row.get("http2.headers.path", [])
+            authorities = row.get("http2.headers.authority", [])
+            schemes = row.get("http2.headers.scheme", [])
+            statuses = row.get("http2.headers.status", [])
+            flow = index.flows.get(key)
+            is_encrypted = bool(flow and flow.encrypted)
+            mi = pi = ai = si = sti = 0
+            limit = max(len(streamids), len(types))
+            for i in range(limit):
+                sid = to_int(streamids[i]) if i < len(streamids) else None
+                kind = types[i] if i < len(types) else ""
+                if not sid or kind != "1":  # type 1 is HEADERS; only HEADERS carry pseudo-headers
+                    continue
+                exch = by_stream.get((key, sid))
+                if exch is None:
+                    exch = Http2Exchange(key=key, frame=frame, stream_id=sid, is_encrypted=is_encrypted)
+                    by_stream[(key, sid)] = exch
+                if mi < len(methods) and methods[mi]:
+                    exch.method = methods[mi]
+                    mi += 1
+                if si < len(schemes) and schemes[si]:
+                    exch.scheme = schemes[si]
+                    si += 1
+                if ai < len(authorities) and authorities[ai]:
+                    exch.authority = authorities[ai]
+                    ai += 1
+                if pi < len(paths) and paths[pi]:
+                    exch.path = paths[pi]
+                    pi += 1
+                if sti < len(statuses) and statuses[sti]:
+                    exch.status = statuses[sti]
+                    sti += 1
+        for exch in by_stream.values():
+            index.http2.append(exch)
+            if not exch.is_encrypted:
+                index.mark_cleartext(exch.key, f"http2 stream {exch.stream_id}")
+
     # -- DNS ---------------------------------------------------------------
     def _build_dns(self, index: CaptureIndex, rows: list[Row]) -> None:
         pending: dict[tuple[str, int], list[DnsQuery]] = defaultdict(list)
@@ -1259,6 +1321,7 @@ class IndexBuilder:
             rtp_streams=len(index.rtp),
             dns_queries=len(index.dns),
             http_exchanges=len(index.http),
+            http2_exchanges=len(index.http2),
             ssh_sessions=len(index.ssh),
             findings_by_severity=dict(sorted(sev.items())),
             findings_by_detector=dict(sorted(det.items())),

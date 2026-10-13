@@ -280,6 +280,24 @@ class HttpExchange(BaseModel):
     response_header_names: list[str] = Field(default_factory=list)
 
 
+class Http2Exchange(BaseModel):
+    """One HTTP/2 stream's pseudo-header block, decoded by tshark's HPACK dissector (#226).
+
+    Cleartext HTTP/2 (h2c, prior-knowledge) only: TLS-encrypted HTTP/2 is out of scope
+    and stays under TLS where it is already modelled as encrypted.
+    """
+
+    key: str
+    frame: int
+    stream_id: int = 0
+    method: str | None = None
+    scheme: str | None = None
+    authority: str | None = None
+    path: str | None = None
+    status: str | None = None
+    is_encrypted: bool = False
+
+
 class DnsQuery(BaseModel):
     key: str
     frame: int
@@ -499,6 +517,7 @@ class Stats(BaseModel):
     rtp_streams: int = 0
     dns_queries: int = 0
     http_exchanges: int = 0
+    http2_exchanges: int = 0
     ssh_sessions: int = 0
     findings_by_severity: dict[str, int] = Field(default_factory=dict)
     findings_by_detector: dict[str, int] = Field(default_factory=dict)
