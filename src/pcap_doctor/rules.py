@@ -118,3 +118,66 @@ def category_of(code: str) -> str:
     """User-facing category of a finding code; "Other" for a code missing from the catalog."""
     rule = RULES.get(code)
     return rule.category if rule else "Other"
+
+
+#: Suricata-style classtype vocabulary (Suricata ``classification.config``), shown next to the existing
+#: fields in the JSON and EVE outputs (issue #241).
+CLASS_TYPES: tuple[str, ...] = (
+    "attempted-recon", "trojan-activity", "policy-violation", "protocol-command-decode",
+    "misc-activity", "attempted-admin",
+)
+DEFAULT_CLASSTYPE = "misc-activity"
+
+#: One mapping table keyed by exact code; codes missing from it take the ``misc-activity`` default.
+_CLASSTYPES: dict[str, str] = {
+    "SYN_SCAN_SHAPE": "attempted-recon",
+    "PORT_SCAN_VERTICAL": "attempted-recon",
+    "PORT_SCAN_HORIZONTAL": "attempted-recon",
+    "BEACONING_SHAPE": "trojan-activity",
+    "ARP_SPOOFING_SUSPECTED": "trojan-activity",
+    "ICMP_REDIRECT": "trojan-activity",
+    "DNS_TUNNEL_SHAPE": "trojan-activity",
+    "TLS_HEARTBLEED_PROBE": "trojan-activity",
+    "DNS_CLEARTEXT": "policy-violation",
+    "TLS_VERSION_DEPRECATED": "policy-violation",
+    "TLS_LEGACY_RECORD_VERSION": "policy-violation",
+    "TLS_CIPHER_WEAK": "policy-violation",
+    "TLS_OFFERS_WEAK_CIPHERS": "policy-violation",
+    "TLS_NO_FORWARD_SECRECY": "policy-violation",
+    "TLS_CERT_EXPIRED": "policy-violation",
+    "TLS_CERT_EXPIRED_NOW": "policy-violation",
+    "TLS_CERT_EXPIRING": "policy-violation",
+    "TLS_CERT_WEAK_KEY": "policy-violation",
+    "TLS_CERT_WEAK_SIGALG": "policy-violation",
+    "TLS_CERT_NOT_YET_VALID": "policy-violation",
+    "TLS_NO_EXTENDED_MASTER_SECRET": "policy-violation",
+    "TLS_WEAK_DH_GROUP": "policy-violation",
+    "TLS_COMPRESSION_ENABLED": "policy-violation",
+    "TLS_INSECURE_RENEGOTIATION": "policy-violation",
+    "CLEARTEXT_CREDENTIAL": "policy-violation",
+    "HTTP_BASIC_AUTH": "policy-violation",
+    "HTTP_CLEARTEXT_AUTH": "policy-violation",
+    "HTTP_COOKIE_NO_SECURE": "policy-violation",
+    "BRUTE_FORCE_SUSPECTED": "policy-violation",
+    "SMB_SIGNING_NOT_REQUIRED": "policy-violation",
+    "SMB_NULL_SESSION": "policy-violation",
+    "SIP_CLEARTEXT_SIGNALLING": "policy-violation",
+    "SDP_NO_CRYPTO_ATTR": "policy-violation",
+    "RTP_MEDIA_UNPROTECTED": "policy-violation",
+    "SSH_WEAK_KEX": "attempted-admin",
+    "SSH_WEAK_CIPHER": "attempted-admin",
+    "SSH_WEAK_MAC": "attempted-admin",
+    "SSH_WEAK_HOSTKEY": "attempted-admin",
+    "SMB_ADMIN_SHARE_ACCESS": "attempted-admin",
+    "SMB_REMOTE_EXEC_PIPE": "attempted-admin",
+    "SIGNATURE_MATCH": "attempted-admin",
+    "TLS_SELF_SIGNED_CHAIN": "protocol-command-decode",
+    "TLS_SNI_CERT_MISMATCH": "protocol-command-decode",
+    "SMB1_IN_USE": "protocol-command-decode",
+    "SMB_EXECUTABLE_ON_SHARE": "protocol-command-decode",
+}
+
+
+def classtype_of(code: str) -> str:
+    """Suricata-style classtype of a finding code; ``misc-activity`` for a code without a mapping."""
+    return _CLASSTYPES.get(code, DEFAULT_CLASSTYPE)
