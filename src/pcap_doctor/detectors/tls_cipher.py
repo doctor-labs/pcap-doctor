@@ -24,6 +24,10 @@ from ..index import CaptureIndex
 from ..models import Finding, RecordVersion, Severity, TlsSession
 from .base import Detector, ev
 
+#: OID 1.3.6.1.4.1.11129.2.4.2 (CT Precertificate SCTs) as a DER TLV ``06 0a ...``.
+#: Verified with ``openssl asn1parse`` -- decodes to "CT Precertificate SCTs" (#265).
+SCT_LIST_OID_DER = bytes.fromhex("060a2b06010401d679020402")
+
 CIPHER_POLICY_DOC = "docs/cipher-policy.md"
 
 VERSION_FINDING = {
@@ -66,6 +70,7 @@ class TlsCipherDetector(Detector):
             findings += self._forward_secrecy(session, subjects)
             findings += self._key_in_firmware(index, session, subjects)
             findings += self._certificates(session, subjects, index.capture.last_seen, index.capture.first_seen)
+            findings += self._sct(session, subjects, index)
             findings += self._sni_mismatch(session, subjects)
             findings += self._extended_master_secret(session, subjects)
             findings += self._compression(session, subjects)
@@ -645,6 +650,55 @@ class TlsCipherDetector(Detector):
                 )
             )
         return out
+
+    def _sct(self, session: TlsSession, subjects: list[str], index: CaptureIndex) -> list[Finding]:
+        """Certificate Transparency SCT presence (#265).
+
+        RFC 6962 section 6.1 defines the ``SignedCertificateTimestampList`` extension OID
+        ``1.3.6.1.4.1.11129.2.4.2``. A certificate that omits it was not embedded with SCTs,
+        so the transparency guarantee CT provides does not apply. tshark does not expose this
+        extension as a typed field, so it is detected by scanning the certificate DER directly
+        (the DER is already in the index for export, #212).
+        """
+        if not session.certs:
+            return []
+        leaf = session.certs[0]
+        der = index.cert_der.get(leaf.fingerprint or "")
+        if der is None:
+            return []
+        if SCT_LIST_OID_DER in der:
+            return []
+        frame = leaf.frame or self._server_hello_frame(session) or self._client_hello_frame(session)
+        return [
+            self.finding(
+                code="TLS_NO_SCT",
+                title=f"Certificate without SCTs on {session.key}",
+                severity="low",
+                confidence="high",
+                summary=(
+                    f"The leaf certificate on {session.key} (chain position {leaf.chain_index}) does not carry the "
+                    "Certificate Transparency SignedCertificateTimestampList extension "
+                    "(OID 1.3.6.1.4.1.11129.2.4.2, RFC 6962 section 6.1). It was not embedded with SCTs from "
+                    "CT logs, so the transparency auditability CT is meant to provide does not apply to it."
+                ),
+                scope=f"{session.key}|sct",
+                flow_key=session.key,
+                subjects=subjects,
+                evidence=[
+                    ev(
+                        frame,
+                        "x509ce.id",
+                        "1.3.6.1.4.1.11129.2.4.2 (SignedCertificateTimestampList) absent from certificate extensions",
+                    )
+                ],
+                remediation=(
+                    "Reissue the certificate with a CA that embeds SCTs (most CA/B-Forum-compliant CAs do), "
+                    "or add SCTs at the load balancer via the TLS extension (RFC 6962 section 6.1)."
+                ),
+                references=["RFC 6962"],
+                tags=["tls", "certificate", "ct"],
+            )
+        ]
 
     def _sni_mismatch(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
         if session.hostname_match is not False or not session.certs:
