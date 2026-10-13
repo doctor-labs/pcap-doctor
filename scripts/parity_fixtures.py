@@ -716,6 +716,47 @@ def fixture_dns_records() -> bytes:
     return w.write()
 
 
+@fixture("dns_dnssec.pcap")
+def fixture_dns_dnssec() -> bytes:
+    """SVCB, HTTPS, RRSIG, DNSKEY, DS, NSEC and NSEC3 answers (#229)."""
+    import os
+
+    from scapy.layers.dns import (
+        DNS,
+        DNSQR,
+        DNSRRDNSKEY,
+        DNSRRDS,
+        DNSRRHTTPS,
+        DNSRRNSEC,
+        DNSRRNSEC3,
+        DNSRROPT,
+        DNSRRRSIG,
+        DNSRRSVCB,
+    )
+
+    w = Wire(start=1_700_800_000.0)
+    c, r = "10.7.0.10", "10.7.0.53"
+    # (qtype, record, extra tshark fields to check)
+    records = [
+        ("SVCB", DNSRRSVCB(rrname="example.org", ttl=300, svc_priority=1, target_name="svc.example.org")),
+        ("HTTPS", DNSRRHTTPS(rrname="example.org", ttl=300, svc_priority=1, target_name="cdn.example.org")),
+        ("DNSKEY", DNSRRDNSKEY(rrname="example.org", ttl=300, flags=257, protocol=3, algorithm=13, publickey=b"\x01\x02")),
+        ("DS", DNSRRDS(rrname="example.org", ttl=300, keytag=12345, algorithm=13, digesttype=2, digest=b"\xab\xcd")),
+        ("NSEC", DNSRRNSEC(rrname="example.org", ttl=300, nextname="www.example.org", typebitmaps=[1])),
+        ("NSEC3", DNSRRNSEC3(rrname="example.org", ttl=300, hashalg=1, flags=0, iterations=0, salt=b"",
+                              hashlength=20, nexthashedownername=os.urandom(20))),
+        ("RRSIG", DNSRRRSIG(rrname="example.org", ttl=300, typecovered=1, algorithm=13, labels=3, originalttl=300,
+                            expiration=1234567890, inception=1234500000, keytag=12345, signersname="example.org",
+                            signature=b"\xab\xcd\xef")),
+    ]
+    for i, (qtype, rr) in enumerate(records):
+        query = DNS(id=0x300 + i, rd=1, qd=DNSQR(qname="example.org", qtype=qtype), ar=DNSRROPT(rclass=1232))
+        reply = DNS(id=0x300 + i, qr=1, aa=1, rd=1, ra=1, qd=DNSQR(qname="example.org", qtype=qtype), an=rr)
+        w.add(udp_frame(c, r, 42000 + i, 53, bytes(query)))
+        w.add(udp_frame(r, c, 53, 42000 + i, bytes(reply), smac=MAC_B, dmac=MAC_A))
+    return w.write()
+
+
 def dnp3_crc(data: bytes) -> bytes:
     """CRC-16/DNP (reflected 0x3D65, init 0, xor out 0xFFFF), little-endian, as DNP3 link frames carry it."""
     crc = 0
