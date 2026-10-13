@@ -154,6 +154,7 @@
     "SSH_WEAK_KEX",
     "SSH_WEAK_MAC"
   ],
+  "stun_rtsp.pcap": [],
   "strong_tls13.pcap": [],
   "rtp_quality.pcap": [
     "RTP_MEDIA_UNPROTECTED",
