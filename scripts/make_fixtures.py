@@ -384,6 +384,30 @@ def fixture_ftp_ldap_creds() -> bytes:
     )
 
 
+def fixture_ftp_retransmit() -> bytes:
+    """An FTP login where the PASS segment is retransmitted once (same seq/payload).
+
+    With tcp.analyze_sequence_numbers ON, tshark marks the retransmission and does
+    not re-dissect the payload, so PASS appears once. With it OFF, tshark hands the
+    payload to the FTP dissector twice, so PASS would be reported twice. The FTP
+    detector must report exactly one CLEARTEXT_CREDENTIAL regardless of the flag.
+    (issue #329)
+    """
+    packets = [
+        eth_ip_tcp(CLIENT, SERVER, 42200, 21, 1, 0, 0x02, b""),       # SYN
+        eth_ip_tcp(SERVER, CLIENT, 21, 42200, 1, 2, 0x12, b""),       # SYN-ACK
+        eth_ip_tcp(SERVER, CLIENT, 21, 42200, 2, 2, 0x18, b"220 ftp ready\r\n"),
+        eth_ip_tcp(CLIENT, SERVER, 42200, 21, 2, 17, 0x18, b"USER admin\r\n"),
+        eth_ip_tcp(SERVER, CLIENT, 21, 42200, 17, 14, 0x18, b"331 password required\r\n"),
+        eth_ip_tcp(CLIENT, SERVER, 42200, 21, 14, 40, 0x18, b"PASS pf-ftp-pw-7c2a\r\n"),
+        eth_ip_tcp(CLIENT, SERVER, 42200, 21, 14, 40, 0x18, b"PASS pf-ftp-pw-7c2a\r\n"),  # retrans (same seq/payload)
+        eth_ip_tcp(SERVER, CLIENT, 21, 42200, 40, 40, 0x18, b"230 logged in\r\n"),
+    ]
+    return _pcap_header() + b"".join(
+        _packet(p, 1_700_001_600.0 + i * 0.02) for i, p in enumerate(packets)
+    )
+
+
 def fixture_telnet_login() -> bytes:
     """Telnet login typed one key per packet: echoed username, unechoed password with a backspace (issue #37)."""
     seq = {"c": 1, "s": 1}
@@ -657,6 +681,7 @@ STATIC_FIXTURES = {
     "http_firmware_headers.pcap": fixture_http_firmware_headers,
     "ftp_ldap_creds.pcap": fixture_ftp_ldap_creds,
     "telnet_login.pcap": fixture_telnet_login,
+    "ftp_retransmit.pcap": fixture_ftp_retransmit,
     "dns_tunnel.pcap": fixture_dns_tunnel,
     "sip_rtp.pcap": fixture_sip_rtp,
     "syn_scan.pcap": fixture_syn_scan,

@@ -147,6 +147,18 @@ def test_ftp_and_ldap_passwords_are_reported_and_redacted(analyze_capture) -> No
     assert "redacted" in joined
 
 
+def test_ftp_retransmitted_pass_segment_reports_one_credential(analyze_capture) -> None:
+    """A retransmitted FTP PASS segment (same seq + payload) must not duplicate
+    the credential finding. tcp.sequence analysis marks retransmissions so tshark
+    does not re-dissect the payload; with analysis OFF tshark would hand PASS
+    to the FTP dissector twice. The detector must report exactly one, regardless.
+    (issue #329)
+    """
+    result = analyze_capture(fixture("ftp_retransmit.pcap"))
+    ftp_creds = [f for f in result.report.findings if f.code == "CLEARTEXT_CREDENTIAL" and f.evidence[0].field == "ftp.request.arg"]
+    assert len(ftp_creds) == 1, f"expected 1 FTP credential, got {len(ftp_creds)}: {[f.title for f in ftp_creds]}"
+
+
 def test_telnet_login_password_is_reported_and_never_shown(analyze_capture) -> None:
     """A typed Telnet password is a credential; only its length is kept; a shell with no login prompt is not (issue #37)."""
     result = analyze_capture(fixture("telnet_login.pcap"))
