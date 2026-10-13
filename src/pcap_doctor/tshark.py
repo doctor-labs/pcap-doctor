@@ -389,11 +389,15 @@ SERVICE_FIELDS: tuple[str, ...] = (
     "mysql.query",
     "mysql.user",
     "telnet.cmd",
+    "irc.request.command",
+    "irc.request.command_parameter",
+    "socks.username",
+    "socks.password",
 )
 
 SERVICE_PASS = PassSpec(
     name="services",
-    display_filter="ntp || tftp || ftp || ftp-data || telnet || snmp || ldap || smtp || imap || pop || resp || mysql",
+    display_filter="ntp || tftp || ftp || ftp-data || telnet || snmp || ldap || smtp || imap || pop || resp || mysql || irc || socks",
     fields=with_addr(("tcp.srcport", "tcp.dstport", "udp.srcport", "udp.dstport", *SERVICE_FIELDS)),
 )
 

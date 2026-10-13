@@ -219,5 +219,9 @@
   ],
   "dhcpv6.pcap": [],
   "rdp_nat.pcap": [],
-  "pgsql_redis.pcap": []
+  "pgsql_redis.pcap": [],
+  "irc_socks_creds.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE"
+  ]
 }
