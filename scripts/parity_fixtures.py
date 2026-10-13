@@ -1179,3 +1179,50 @@ def fixture_radius_logins() -> bytes:
     w.add(udp_frame(NAS, AAA, 51234, 1812, second, smac=MAC_A, dmac=MAC_B))
     w.add(udp_frame(AAA, NAS, 1812, 51234, reject, smac=MAC_B, dmac=MAC_A))
     return w.write()
+
+
+# --------------------------------------------------------------------------
+# VPN handshakes (#223)
+# --------------------------------------------------------------------------
+@fixture("vpn_handshakes.pcap")
+def fixture_vpn_handshakes() -> bytes:
+    """IKE/IPsec (ISAKMP IKE_SA_INIT on UDP 500), WireGuard (handshake initiation on UDP 51820) and
+    OpenVPN (P_CONTROL_HARD_RESET_CLIENT_V1 on UDP 1194): the three VPN handshakes the issue asks for.
+    Each protocol gets its own flow so the detector attributes findings per flow."""
+    import struct as _s
+
+    w = Wire(start=1_702_000_000.0)
+    c, s = "10.0.0.10", "10.0.0.20"
+
+    # -- IKE/IPsec: ISAKMP IKE_SA_INIT on UDP 500 --
+    # ISAKMP header (RFC 2408, 28 bytes): SPIi(8) SPIr(8) next_payload(1) version(1)
+    #   exchange_type(1) flags(1) message_id(4) length(4)
+    # IKE_SA_INIT exchange type = 34 (verified from tshark -G values).
+    # A bare ISAKMP header is not dissected by tshark; it needs a trailing SA payload.
+    sa_payload = _s.pack("!BBHI", 13, 0, 20, 1) + _s.pack("!I", 1)  # next=13(last), len=20, DOI=1(ipsec), situation
+    isakmp = _s.pack("!QQ", 0x1122334455667788, 0)  # SPIi, SPIr
+    isakmp += _s.pack("!BBBI", 1, 0x10, 34, 0)  # next=SA(1), ver 1.0, IKE_SA_INIT(34), flags=0
+    isakmp += _s.pack("!I", 28 + len(sa_payload))
+    isakmp += sa_payload
+    w.add(udp_frame(c, s, 500, 500, isakmp))
+    w.add(udp_frame(s, c, 500, 500, isakmp))  # responder reply
+
+    # -- WireGuard: handshake initiation (message type 1) on UDP 51820 --
+    # Message type is a little-endian uint32 at offset 0; 1 = Handshake Initiation.
+    wg = _s.pack("<I", 1) + b"\x00" * 3 + _s.pack("<I", 0xAABBCCDD)
+    wg += b"\x00" * 32 + b"\x00" * 48 + b"\x00" * 36 + b"\x00" * 16 + b"\x00" * 16
+    w.add(udp_frame(c, s, 51820, 51820, wg))
+    wg_resp = _s.pack("<I", 2) + b"\x00" * 3 + _s.pack("<I", 0xAABBCCDD)
+    wg_resp += b"\x00" * 32 + b"\x00" * 48 + b"\x00" * 16 + b"\x00" * 16
+    w.add(udp_frame(s, c, 51820, 51820, wg_resp))
+
+    # -- OpenVPN: P_CONTROL_HARD_RESET_CLIENT_V1 (opcode=1, first byte 0x08) on UDP 1194 --
+    # OpenVPN opcode is the top 5 bits of the first payload byte.
+    # 0x08 >> 3 = 1 = P_CONTROL_HARD_RESET_CLIENT_V1.
+    ovpn = bytes([0x08]) + b"\x00" * 8 + b"\x01" + b"\x00" * 3 + b"\x00" * 32
+    w.add(udp_frame(c, s, 1194, 1194, ovpn))
+    ovpn_ack = bytes([0x08]) + b"\x00" * 8 + b"\x01" + b"\x00" * 3 + b"\x00" * 32
+    w.add(udp_frame(s, c, 1194, 1194, ovpn_ack))
+
+    return w.write()
+

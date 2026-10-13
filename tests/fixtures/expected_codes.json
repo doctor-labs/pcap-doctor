@@ -211,5 +211,10 @@
   ],
   "radius_logins.pcap": [
     "CLEARTEXT_CREDENTIAL"
+  ],
+  "vpn_handshakes.pcap": [
+    "VPN_IKE_HANDSHAKE",
+    "VPN_OPENVPN_HANDSHAKE",
+    "VPN_WIREGUARD_HANDSHAKE"
   ]
 }
