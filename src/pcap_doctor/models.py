@@ -400,6 +400,14 @@ class Host(BaseModel):
     last_seen: float = 0.0
     roles: list[str] = Field(default_factory=list)
     asn_note: str | None = None
+    #: MAC address from the first packet's ethernet source
+    mac: str | None = None
+    #: OUI vendor name resolved from eth.src.oui_resolved or eth.src_resolved
+    vendor: str | None = None
+    #: Observed hostname from DHCP option 12, NBNS name, or TLS SNI
+    hostname: str | None = None
+    #: OS family guess from initial TTL (p0f-style: Windows, Linux/Unix/Android/macOS, network device)
+    os_guess: str | None = None
 
 
 class Finding(BaseModel):

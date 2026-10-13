@@ -180,6 +180,18 @@ NON_CIPHER_VALUES: frozenset[int] = frozenset(
     {0x0000, 0x00FF} | {v for v in GREASE_VALUES if v}
 )
 
+#: Candidate "initial TTL" values used by OS fingerprinting; the observed TTL is
+#: rounded up to the smallest candidate that is >= it (p0f-style).
+_TTL_CANDIDATES = (32, 64, 128, 255)
+
+#: Map an initial TTL to a human-readable OS family guess (p0f-style, TTL only).
+_OS_GUESS: dict[int, str] = {
+    32: "old Windows/embedded",
+    64: "Linux/Unix/Android/macOS",
+    128: "Windows",
+    255: "network device",
+}
+
 
 def version_name(hex_or_int: str | int | None) -> str | None:
     if hex_or_int is None:
@@ -239,6 +251,30 @@ def _attach_dns_answers(pending: dict[tuple[str, int], list[DnsQuery]], row: Row
                 query.response_frame = frame
                 query.answers = answers
                 query.rcode = rcode or None
+
+
+def _initial_ttl(ttl: int) -> int:
+    """Round an observed TTL up to the nearest p0f-style initial TTL."""
+    for candidate in _TTL_CANDIDATES:
+        if ttl <= candidate:
+            return candidate
+    return _TTL_CANDIDATES[-1]
+
+
+def _resolve_vendor(oui_resolved: str | None, src_resolved: str | None, mac: str) -> str | None:
+    """Pick a vendor string for a MAC address.
+    
+    * eth.src.oui_resolved when non-empty;
+    * else eth.src_resolved when it is not the MAC itself: the part before the
+      last ``_`` (e.g. ``"Google_aa:bb:01"`` -> ``"Google"``);
+    * else None (locally administered or unknown).
+    """
+    if oui_resolved:
+        return oui_resolved
+    if src_resolved and src_resolved != mac.lower():
+        # The resolved name may include the MAC, e.g. "Google_aa:bb:01"
+        return src_resolved.rsplit("_", 1)[0]
+    return None
 
 
 def normalize_version_list(values: Iterable[str]) -> list[str]:
@@ -379,9 +415,11 @@ class IndexBuilder:
         if not pcap.exists():
             raise FileNotFoundError(f"capture not found: {pcap}")
         # Every pass but RTP is independent (RTP needs the SIP pass's SDP ports), so run them concurrently (#127).
+        # Also prefetch device, os, and dhcp for host inventory enrichment.
         runner.prefetch({
             "base": (), "tls": (), "dtls": (), "http": self.decrypt_args, "dns": (), "sip": (),
             "ssh": (), "quic": (), "services": (), "telnet": (), "smb": (),
+            "device": (), "os": (), "dhcp": (),
         })
         raw_stats = runner.capture_stats()
         capture = CaptureInfo(
@@ -412,6 +450,14 @@ class IndexBuilder:
         self._build_services(index, runner.run("services"))
         self._build_telnet(index, runner.run("telnet"))
         self._build_smb(index, runner.run("smb"))
+
+        # Enrich host inventory with MAC, vendor, hostname, and OS guess
+        self._build_host_inventory(
+            index,
+            runner.run("device"),
+            runner.run("os"),
+            runner.run("dhcp"),
+        )
 
         if self.decrypt_args:
             tls_keys = {s.key for s in index.tls.values()}
@@ -1089,6 +1135,77 @@ class IndexBuilder:
             )
             if login:
                 index.telnet_logins.append(login)
+
+    # -- host inventory ----------------------------------------------------
+    def _build_host_inventory(
+        self,
+        index: CaptureIndex,
+        device_rows: list[Row],
+        os_rows: list[Row],
+        dhcp_rows: list[Row],
+    ) -> None:
+        """Enrich hosts with MAC, vendor, hostname, and OS guess."""
+        # Build MAC, vendor, and hostname lookups from device pass
+        mac_by_ip: dict[str, str] = {}
+        vendor_by_ip: dict[str, str | None] = {}
+        for row in device_rows:
+            ip = first(row, "ip.src") or first(row, "ipv6.src")
+            mac = first(row, "eth.src")
+            oui_resolved = first(row, "eth.src.oui_resolved")
+            src_resolved = first(row, "eth.src_resolved")
+            if ip and mac:
+                mac_lower = mac.lower()
+                mac_by_ip[ip] = mac_lower
+                vendor_by_ip[ip] = _resolve_vendor(oui_resolved, src_resolved, mac_lower)
+
+        # Build IP->OS guess from OS pass (first SYN per host)
+        os_guess_by_ip: dict[str, str] = {}
+        seen_ttl: dict[str, int] = {}
+        for row in os_rows:
+            ip = first(row, "ip.src")
+            ttl = to_int(first(row, "ip.ttl"))
+            if ip and ttl is not None and ip not in seen_ttl:
+                seen_ttl[ip] = ttl
+                initial = _initial_ttl(ttl)
+                os_guess_by_ip[ip] = _OS_GUESS.get(initial, "unknown")
+
+        # Build IP->hostname from DHCP pass
+        hostname_by_ip: dict[str, str] = {}
+        for row in dhcp_rows:
+            ip = first(row, "dhcp.ip.client") or first(row, "dhcp.ip.your")
+            hostname = first(row, "dhcp.option.hostname")
+            if ip and hostname:
+                hostname_by_ip[ip] = hostname
+
+        # Also extract SNI from TLS sessions for hostname
+        # SNI is available in TlsSession.sni, which we can access after _build_tls
+        sni_by_ip: dict[str, str] = {}
+        for session in index.tls.values():
+            if session.sni:
+                # SNI is server-side, so we need to find the server IP
+                for flow in index.flows.values():
+                    if flow.key == session.key:
+                        # SNI is on the server side
+                        # b is the responder in our flow_key convention
+                        sni_by_ip[flow.endpoint_b] = session.sni
+
+        # Enrich hosts
+        for host in index.hosts.values():
+            # MAC and vendor
+            if host.ip in mac_by_ip:
+                host.mac = mac_by_ip[host.ip]
+                host.vendor = vendor_by_ip.get(host.ip)
+
+            # Hostname (DHCP takes precedence)
+            if host.hostname is None:
+                if host.ip in hostname_by_ip:
+                    host.hostname = hostname_by_ip[host.ip]
+                elif host.ip in sni_by_ip:
+                    host.hostname = sni_by_ip[host.ip]
+
+            # OS guess
+            if host.ip in os_guess_by_ip:
+                host.os_guess = os_guess_by_ip[host.ip]
 
     # -- stats -------------------------------------------------------------
     def compute_stats(self, findings: list[Finding]) -> Stats:
