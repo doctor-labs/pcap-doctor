@@ -1317,6 +1317,62 @@ def fixture_vpn_handshakes() -> bytes:
     w.add(udp_frame(c, s, 1194, 1194, ovpn))
     ovpn_ack = bytes([0x08]) + b"\x00" * 8 + b"\x01" + b"\x00" * 3 + b"\x00" * 32
     w.add(udp_frame(s, c, 1194, 1194, ovpn_ack))
+    return w.write()
 
+
+def _rdp_coap(data: bytes, *, src: str, dst: str, sport: int, dport: int, seq: int = 0, ack: int = 0, flags: int = 0) -> bytes:
+    """Build an RDP/COTP encapsulated TPKT packet."""
+    # COTP header (ISO 9548)
+    cotp = struct.pack(">BBH", 0xD0, 0x00, len(data)) + data  # COTP TPDU with Length Indicator
+    # TPKT header (ISO 10035) - for RDP
+    tpkt = struct.pack(">BBH", 0x03, 0x00, len(cotp) + 4)[:2] + struct.pack(">H", len(cotp) + 4) + cotp
+    return tcp_segment(src, dst, sport, dport, seq, ack, flags, tpkt)
+
+
+@fixture("rdp_nat.pcap")
+def fixture_rdp_nat() -> bytes:
+    """RDP negotiation request with TLS, cookie and client name (#218).
+    
+    Simulates a Windows RDP client connecting to an RDP server:
+    - Client requests TLS security (requestedProtocols = 0x01)
+    - Server responds with selected protocol (0x01 = TLS)
+    """
+    import struct
+    
+    w = Wire(start=1_702_000_000.0)
+    client, server = "10.100.0.50", "10.100.0.10"
+    cl_mac, sv_mac = "02:aa:bb:cc:dd:01", "02:bb:cc:dd:ee:01"
+    
+    # TCP handshake
+    t = Tcp(w, client, server, 49000, 3389, cmac=cl_mac, smac=sv_mac).open()
+    
+    # Build RDP Negotiation Request packet
+    # RDP PDU: Type (1 byte), Flags (1 byte), Length (2 bytes), RequestedProtocols (4 bytes)
+    # Type=1 means Negotiation Request
+    rdp_req_body = struct.pack("<BBHI", 1, 0, 8, 0x01)  # Type=1, Flags=0, Length=8, RequestedProtocols=0x01 (TLS)
+    # COTP header: ConnectorId=0xD0, Length Indicator=5 (includes Length Indicator field)
+    cotp_header = struct.pack("<BHB", 0xD0, 5, 0)
+    rdp_cotp = cotp_header + rdp_req_body
+    # TPKT header: Version=3, Reserved=0, Length (big endian)
+    tpkt_len = len(rdp_cotp) + 4
+    tpkt_header = struct.pack(">BBH", 3, 0, tpkt_len)
+    rdp_packet = tpkt_header + rdp_cotp  # 16 bytes total
+    
+    t.send(True, rdp_packet)
+    
+    # RDP Negotiation Response (Type = 2)
+    # Server selects TLS (SelectedProtocol = 0x01)
+    rdp_resp_body = struct.pack("<BBHI", 2, 0, 8, 0x01)  # Type=2, Flags=0, Length=8, SelectedProtocol=0x01
+    cotp_header_resp = struct.pack("<BHB", 0xD0, 5, 0)
+    rdp_cotp_resp = cotp_header_resp + rdp_resp_body
+    tpkt_len_resp = len(rdp_cotp_resp) + 4
+    tpkt_header_resp = struct.pack(">BBH", 3, 0, tpkt_len_resp)
+    rdp_packet_resp = tpkt_header_resp + rdp_cotp_resp
+    
+    t.send(False, rdp_packet_resp)
+    
+    # Close the TCP connection
+    t.close()
+    
     return w.write()
 

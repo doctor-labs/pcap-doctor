@@ -1336,13 +1336,173 @@ def _known_services_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+def _security_protocol_name(value: int | None) -> str | None:
+    """Map RDP security protocol bitmask to human-readable name (#218)."""
+    if value is None:
+        return None
+    # RDP security protocol constants (from Zeek RDP constants)
+    if value == 0x00:
+        return "RDP"  # Standard RDP (proprietary encryption)
+    if value == 0x01:
+        return "SSL/TLS"
+    if value == 0x02:
+        return "HYBRID/CredSSP"  # CredSSP with NLA
+    if value == 0x08:
+        return "HYBRID_EX/CredSSP with Early User Authorization"
+    return f"PROTOCOL_{value}"
+
+
+def _parse_rdp_packet(payload_hex: str | list[str]) -> dict[str, Any]:
+    """Parse RDP data from TCP payload (hex string).
+    
+    Supports TPKT-COTP-RDP structure for negotiation messages.
+    Returns parsed fields: type, flags, protocols, cookie, client_name.
+    """
+    import struct
+
+    if not payload_hex:
+        return {}
+
+    # Get the payload as hex string - handle both string and list[str] cases
+    payload = (payload_hex[0] if payload_hex else None) if isinstance(payload_hex, list) else payload_hex
+
+    if not payload:
+        return {}
+    
+    try:
+        data = bytes.fromhex(payload.replace(":", ""))
+    except (ValueError, AttributeError):
+        return {}
+    
+    result: dict[str, Any] = {}
+    
+    if len(data) < 16:
+        return {}
+    
+    # TPKT header: 4 bytes (version=0x03, reserved=0x00, length=2 bytes big-endian)
+    if data[0] != 0x03:
+        return {}
+    
+    tpkt_len = struct.unpack(">H", data[2:4])[0]
+    if len(data) < tpkt_len:
+        return {}
+    
+    # COTP header starts at offset 4
+    # COTP Connection Request: D0 LL DD... (LL = length indicator)
+    # For COTP Connection Request, after TPKT we have:
+    # D0 05 00 00 01 00 (6 bytes COTP header for connection request)
+    # But simpler: RDP PDU starts at offset 8 (after 4-byte TPKT + 4-byte COTP header)
+    
+    # RDP Negotiation Request at offset 8
+    rdp_offset = 8
+    
+    rdp_type = data[rdp_offset]
+    
+    if rdp_type == 1:  # Negotiation Request (from client)
+        flags = data[rdp_offset + 1]
+        # length = struct.unpack(">H", data[rdp_offset + 2:rdp_offset + 4])[0]
+        if len(data) >= rdp_offset + 8:
+            protocols = struct.unpack("<I", data[rdp_offset + 4:rdp_offset + 8])[0]
+            result["neg_type"] = 1
+            result["requested_protocols"] = protocols
+            result["flags"] = flags
+            
+            # Security protocol name
+            if protocols & 0x01:
+                result["security_protocol"] = "SSL/TLS"
+            elif protocols & 0x02:
+                result["security_protocol"] = "HYBRID/CredSSP"
+            elif protocols & 0x08:
+                result["security_protocol"] = "HYBRID_EX/CredSSP"
+            else:
+                result["security_protocol"] = "RDP"
+    elif rdp_type == 2:  # Negotiation Response (from server)
+        flags = data[rdp_offset + 1]
+        if len(data) >= rdp_offset + 8:
+            selected_protocol = struct.unpack("<I", data[rdp_offset + 4:rdp_offset + 8])[0]
+            result["neg_type"] = 2
+            result["selected_protocol"] = selected_protocol
+            result["flags"] = flags
+            
+            if selected_protocol == 0x01:
+                result["security_protocol"] = "SSL/TLS"
+            elif selected_protocol == 0x02:
+                result["security_protocol"] = "HYBRID/CredSSP"
+            elif selected_protocol == 0x08:
+                result["security_protocol"] = "HYBRID_EX/CredSSP"
+            else:
+                result["security_protocol"] = "RDP"
+    
+    return result
+
+
+def _rdp_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style rdp.log: one row per RDP negotiation event (#218).
+    
+    Records the requested security protocol (standard RDP, TLS, CredSSP/NLA) from the 
+    connection request, plus the client name and the cookie (mstshash) username if present.
+    
+    Parses TPKT-COTP-RDP packets from TCP payload on port 3389.
+    """
+    table = LogTable("rdp", [
+        ("ts", "time"), *ID_COLS, ("security_protocol", "string"), ("flags", "count"),
+        ("cookie", "string"), ("client_name", "string")
+    ])
+    pending: dict[str, dict[str, Any]] = {}
+    
+    for row in ctx.runner.run("rdp"):
+        # Get the source and destination ports
+        src_port = to_int(first(row, "tcp.srcport"))
+        dst_port = to_int(first(row, "tcp.dstport"))
+        if src_port is None or dst_port is None:
+            continue
+        
+        # Determine protocol direction
+        proto = "tcp"
+        key = ctx.row_key(row, proto)
+        if not key:
+            continue
+        
+        ts = to_float(first(row, "frame.time_epoch")) or 0.0
+        
+        # Get TCP payload
+        payload = first(row, "tcp.payload")
+        rdp_info = _parse_rdp_packet(payload)
+        
+        if not rdp_info:
+            continue
+        
+        neg_type = rdp_info.get("neg_type")
+        
+        if neg_type == 1:  # Connection Request
+            pending[key] = {
+                "ts": ts,
+                "uid": ctx.ids(key).get("uid"),
+                "id.orig_h": ctx.ids(key).get("id.orig_h"),
+                "id.orig_p": ctx.ids(key).get("id.orig_p"),
+                "id.resp_h": ctx.ids(key).get("id.resp_h"),
+                "id.resp_p": ctx.ids(key).get("id.resp_p"),
+                "security_protocol": rdp_info.get("security_protocol"),
+                "flags": rdp_info.get("flags"),
+                "cookie": None,  # Will be populated from Client Info later
+                "client_name": None,
+            }
+        elif neg_type == 2 and key in pending:  # Negotiation Response
+            entry = pending[key]
+            entry["ts"] = ts  # Use response timestamp
+            entry["security_protocol"] = rdp_info.get("security_protocol")
+            entry["flags"] = rdp_info.get("flags")
+            table.rows.append(entry)
+    return table
+
+
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log, "radius": _radius_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
-    "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log,
+    "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 

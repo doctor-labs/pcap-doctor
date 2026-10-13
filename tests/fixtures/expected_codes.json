@@ -217,5 +217,6 @@
     "VPN_OPENVPN_HANDSHAKE",
     "VPN_WIREGUARD_HANDSHAKE"
   ],
-  "dhcpv6.pcap": []
+  "dhcpv6.pcap": [],
+  "rdp_nat.pcap": []
 }
