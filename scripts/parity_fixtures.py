@@ -1153,7 +1153,7 @@ def radius_password(secret: bytes, request_authenticator: bytes, password: bytes
     padded = secret + b"\x00" * ((16 - len(secret) % 16) % 16)
     digest = hashlib.md5(secret + request_authenticator).digest()
     stream = (digest * (len(padded) // 16 + 1))[: len(padded)]
-    return bytes(a ^ b for a, b in zip(padded, stream))
+    return bytes(a ^ b for a, b in zip(padded, stream, strict=True))
 
 
 @fixture("radius_logins.pcap")

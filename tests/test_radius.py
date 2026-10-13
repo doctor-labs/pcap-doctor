@@ -27,8 +27,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from conftest import fixture, requires_tshark
 from pcap_doctor.cli import app
 from pcap_doctor.logs import LOG_NAMES
