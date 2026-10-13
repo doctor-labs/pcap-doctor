@@ -64,7 +64,7 @@ def build_large(src: Path, copies: int, tmp: Path) -> Path:
     return out
 
 
-def analyze(pcap: Path, cache_dir: Path, bin_dir: Path) -> subprocess.CompletedProcess:
+def analyze(pcap: Path, cache_dir: Path, bin_dir: Path) -> subprocess.CompletedProcess[str]:
     env = with_wrapped_path(bin_dir)
     env["PCAP_DOCTOR_CACHE"] = str(cache_dir)
     env["CI"] = "1"  # keep the analyzer non-interactive in CI
