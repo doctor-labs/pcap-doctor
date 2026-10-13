@@ -46,6 +46,7 @@ from .models import (
     endpoints_of,
     flow_key,
 )
+from .rtp_quality import estimate_mos, interarrival_jitter, packet_loss_percent
 from .tshark import (
     PASSES,
     SERVICE_FIELDS,
@@ -910,6 +911,9 @@ class IndexBuilder:
 
     def _build_rtp(self, index: CaptureIndex, rows: list[Row]) -> None:
         streams: dict[tuple[str, int | None], RtpStream] = {}
+        # Per-stream scratch pads for the RFC 3550 / ITU-T G.107 metrics (#253).
+        seqs_by_stream: dict[tuple[str, int | None], list[int]] = {}
+        samples_by_stream: dict[tuple[str, int | None], list[tuple[int, float]]] = {}
         for row in rows:
             key = self._stream_key(index, row)
             if not key:
@@ -917,8 +921,12 @@ class IndexBuilder:
             src = first(row, "ip.src") or first(row, "ipv6.src")
             dst = first(row, "ip.dst") or first(row, "ipv6.dst")
             ssrc = to_int_auto(first(row, "rtp.ssrc"))
+            stream_key = (key, ssrc)
+            seq = to_int_auto(first(row, "rtp.seq"))
+            ts = to_int_auto(first(row, "rtp.timestamp"))
+            ts_epoch = to_float(first(row, "frame.time_epoch"))
             bucket = streams.setdefault(
-                (key, ssrc),
+                stream_key,
                 RtpStream(
                     key=key,
                     ssrc=ssrc,
@@ -929,13 +937,27 @@ class IndexBuilder:
                     first_frame=to_int(first(row, "frame.number")) or 0,
                 ),
             )
-            ts = to_float(first(row, "frame.time_epoch")) or 0.0
+            if seq is not None:
+                seqs_by_stream.setdefault(stream_key, []).append(seq)
+            if ts is not None and ts_epoch:
+                samples_by_stream.setdefault(stream_key, []).append((ts, ts_epoch))
+            ts_val = to_float(first(row, "frame.time_epoch")) or 0.0
             length = to_int(first(row, "frame.len")) or 0
             bucket.packets += 1
             bucket.bytes += length
             if bucket.first_seen == 0.0:
-                bucket.first_seen = ts
-            bucket.last_seen = max(bucket.last_seen, ts)
+                bucket.first_seen = ts_val
+            bucket.last_seen = max(bucket.last_seen, ts_val)
+        # Derive loss, jitter and an estimated MOS per stream (#253).
+        for stream_key, stream in streams.items():
+            seqs = seqs_by_stream.get(stream_key, [])
+            samples = samples_by_stream.get(stream_key, [])
+            clock = RTP_CLOCK_RATES.get(stream.payload_type or -1, 0)
+            loss = packet_loss_percent(seqs)
+            jitter = interarrival_jitter(samples, clock_hz=clock)
+            stream.loss_percent = loss
+            stream.jitter = jitter
+            stream.mos = estimate_mos(loss)
         index.rtp.extend(streams.values())
         for stream in index.rtp:
             index.mark_cleartext(stream.key, f"rtp ssrc={stream.ssrc} pt={stream.payload_type}")
@@ -1227,6 +1249,16 @@ RTP_PAYLOAD_TYPES: dict[int, str] = {
     0: "PCMU", 3: "GSM", 4: "G723", 8: "PCMA", 9: "G722", 10: "L16-44100",
     14: "MPA", 15: "G728", 18: "G729", 31: "H261", 33: "MPV2", 34: "MP2T",
     96: "dynamic", 97: "dynamic", 98: "dynamic", 99: "dynamic",
+}
+
+#: RTP payload type -> clock rate in Hz, used to turn timestamp deltas into
+#: seconds for the interarrival-jitter estimate (RFC 3550 A.8). Unknown types
+#: fall back to 0 -> jitter is left at 0.0 (bounds-checked in the helper).
+RTP_CLOCK_RATES: dict[int, int] = {
+    0: 8000, 3: 8000, 4: 8000, 8: 8000, 9: 8000, 10: 44100, 11: 44100,
+    14: 90000, 15: 8000, 18: 8000, 25: 90000, 26: 32000, 31: 90000, 32: 90000,
+    33: 90000, 34: 90000, 35: 90000, 43: 90000, 45: 15360, 46: 90000,
+    96: 0, 97: 0, 98: 0, 99: 0,
 }
 
 

@@ -327,6 +327,12 @@ class RtpStream(BaseModel):
     last_seen: float = 0.0
     from_ip: str | None = None
     to_ip: str | None = None
+    #: Stream quality metrics (issue #253): packet loss from sequence-number
+    #: gaps (RFC 3550), interarrival jitter in ms (RFC 3550 A.8) and an
+    #: estimated MOS from the ITU-T G.107 E-model. 0.0 where unmeasurable.
+    loss_percent: float = 0.0
+    jitter: float = 0.0
+    mos: float = 0.0
 
     @property
     def duration(self) -> float:
