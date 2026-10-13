@@ -110,6 +110,7 @@ PROTO_ALIASES: dict[str, str] = {
     "ntp": "ntp",
     "tftp": "tftp",
     "redis": "redis",
+    "pgsql": "pgsql",
     "mysql": "mysql",
     "arp": "arp",
     "icmp": "icmp",
@@ -129,6 +130,7 @@ SENSITIVE_SERVICES: dict[str, bool] = {
     "imap": True,
     "pop3": True,
     "redis": True,
+    "pgsql": True,
     "mysql": True,
     "http": True,
 }
@@ -158,6 +160,7 @@ WELL_KNOWN_PORTS: dict[int, str] = {
     1194: "openvpn",
     1900: "ssdp",
     3306: "mysql",
+    5432: "pgsql",
     3389: "rdp",
     5060: "sip",
     5061: "sips",

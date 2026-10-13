@@ -218,5 +218,6 @@
     "VPN_WIREGUARD_HANDSHAKE"
   ],
   "dhcpv6.pcap": [],
-  "rdp_nat.pcap": []
+  "rdp_nat.pcap": [],
+  "pgsql_redis.pcap": []
 }

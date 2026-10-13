@@ -219,10 +219,12 @@ def _read_conns(rows: list[Row]) -> dict[str, _Conn]:
 # ---------------------------------------------------------------------------- builders
 _SERVICE = {"tls": "ssl", "dtls": "dtls", "http": "http", "dns": "dns", "ssh": "ssh", "ftp": "ftp", "smtp": "smtp",
             "smb": "smb", "smb2": "smb", "dhcp": "dhcp", "ntp": "ntp", "snmp": "snmp", "telnet": "telnet",
-            "ldap": "ldap", "sip": "sip", "quic": "quic", "mysql": "mysql", "modbus": "modbus", "mqtt": "mqtt"}
+            "ldap": "ldap", "sip": "sip", "quic": "quic", "mysql": "mysql", "pgsql": "pgsql", "redis": "redis",
+            "resp": "redis", "modbus": "modbus", "mqtt": "mqtt"}
 
 _PORT_SERVICE = {21: "ftp", 22: "ssh", 25: "smtp", 53: "dns", 67: "dhcp", 80: "http", 123: "ntp", 161: "snmp",
-                 389: "ldap", 443: "ssl", 445: "smb", 502: "modbus", 1883: "mqtt", 5060: "sip", 8080: "http"}
+                 389: "ldap", 443: "ssl", 445: "smb", 502: "modbus", 1883: "mqtt", 5060: "sip", 5432: "pgsql",
+                 6379: "redis", 8080: "http"}
 
 CONN_COLS: list[Column] = [
     ("ts", "time"), *ID_COLS, ("proto", "enum"), ("service", "string"), ("duration", "interval"),
@@ -1496,11 +1498,173 @@ def _rdp_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+# --------------------------------------------------------------------------- PostgreSQL (pgsql)
+#: PostgreSQL authentication request type field (#225), per the wire protocol
+#: (https://www.postgresql.org/docs/current/protocol-protocol.html). The numeric
+#: ``pgsql.authtype`` values are mapped here; tshark's own display label for type 1
+#: is wrong ("Kerberos V4"), so the canonical name comes from this table.
+_PGSQL_AUTHTYPE: dict[int, str] = {
+    0: "AuthenticationOk",
+    1: "AuthenticationCleartextPassword",
+    2: "AuthenticationMD5Password",
+    3: "AuthenticationSCMCredential",
+    4: "AuthenticationGSS",
+    5: "AuthenticationGSSContinue",
+    6: "AuthenticationSSPI",
+    7: "AuthenticationGSSAPI",
+    10: "AuthenticationSASL",
+    11: "AuthenticationSASLContinue",
+    12: "AuthenticationSASLFinal",
+}
+
+
+def _pgsql_log(ctx: _Ctx) -> LogTable:
+    """PostgreSQL startup parameters, the auth method the server requests, and simple-query text (#225).
+
+    Secrets are never written: ``pgsql.password`` is intentionally not extracted from the tshark pass,
+    and the startup-user / query text are the only values recorded.
+    """
+    table = LogTable("pgsql", [
+        ("ts", "time"), *ID_COLS, ("msg_type", "string"), ("parameter_name", "string"),
+        ("parameter_value", "string"), ("authtype", "string"), ("query", "string")])
+    for row in ctx.runner.run("pgsql"):
+        key = ctx.row_key(row, "tcp")
+        if not key:
+            continue
+        ts = to_float(first(row, "frame.time_epoch"))
+        msg_type = first(row, "pgsql.type") or None
+        authtype_val = to_int(first(row, "pgsql.authtype"))
+        authtype = _PGSQL_AUTHTYPE.get(authtype_val) if authtype_val is not None else None
+        query = first(row, "pgsql.query") or None
+        pnames = many(row, "pgsql.parameter_name")
+        pvalues = many(row, "pgsql.parameter_value")
+        if pnames or pvalues:
+            # Startup message: one row per (name, value) pair.
+            for pname, pvalue in zip(pnames, pvalues, strict=False):
+                table.rows.append({
+                    "ts": ts, **ctx.ids(key), "msg_type": msg_type,
+                    "parameter_name": pname, "parameter_value": pvalue,
+                    "authtype": authtype, "query": query,
+                })
+        else:
+            # Auth request or simple query: one row for the message.
+            table.rows.append({
+                "ts": ts, **ctx.ids(key), "msg_type": msg_type,
+                "parameter_name": None, "parameter_value": None,
+                "authtype": authtype, "query": query,
+            })
+    return table
+
+
+# --------------------------------------------------------------------------- Redis (RESP)
+# Redis commands that take a key as the first argument (used to decide which bulk string is the key).
+_REDIS_KEY_ARG_COMMANDS = frozenset({
+    "GET", "SET", "SETEX", "SETNX", "PSETEX", "GETSET", "RENAME", "RENAMENX", "EXISTS",
+    "TYPE", "STRLEN", "INCR", "DECR", "INCRBY", "DECRBY", "INCRBYFLOAT", "APPEND", "GETRANGE",
+    "SETRANGE", "SUBSTR", "LPUSH", "RPUSH", "LPUSHX", "RPUSHX", "LPOP", "RPOP", "LLEN", "LRANGE",
+    "LTRIM", "LINDEX", "LSET", "LREM", "BLPOP", "BRPOP", "RPOPLPUSH", "LMOVE", "LMPOP",
+    "HSET", "HGET", "HDEL", "HEXISTS", "HLEN", "HGETALL", "HRENAME",
+    "HSTRLEN", "HKEYS", "HVALS", "HMGET", "HMSET", "HINCRBY", "HINCRBYFLOAT",
+    "SADD", "SISMEMBER", "SREM", "SMEMBERS", "SINTER", "SUNION", "SDIFF", "SCARD", "SPOP",
+    "SRANDMEMBER", "ZADD", "ZRANGE", "ZREVRANGE", "ZREM", "ZCARD", "ZSCORE", "ZCOUNT",
+    "ZINCRBY", "ZRANK", "ZREVRANK", "EXPIRE", "PEXPIRE", "EXPIREAT", "PEXPIREAT", "TTL", "PTTL",
+    "PERSIST", "DEL", "UNLINK", "DUMP", "RESTORE", "MIGRATE", "OBJECT", "RANDOMKEY",
+    "DBSIZE", "FLUSHALL", "FLUSHDB", "COPY", "TOUCH", "SCAN", "SSCAN", "HSCAN", "ZSCAN",
+    "GEOADD", "GEORADIUS", "GEORADIUS_STORE", "GEOSEARCH", "GEOSEARCHSTORE",
+    "BITFIELD", "BITOP", "BITPOS", "BITCOUNT", "SETBIT", "GETBIT",
+    "PUBLISH", "SUBSCRIBE", "UNSUBSCRIBE", "PSUBSCRIBE", "PUNSUBSCRIBE", "CHANNEL",
+    "SELECT", "SWAPDB", "MEMORY", "STRALGO", "REPLICAOF", "SHUTDOWN", "SLAVEOF",
+})
+
+_REDIS_PASSWORD_COMMANDS = frozenset({"AUTH", "HELLO"})  # commands whose first arg is a credential
+
+
+def _redis_log(ctx: _Ctx) -> LogTable:
+    """Redis (RESP) command name and key #225. Values are never logged; AUTH passwords are never logged."""
+    table = LogTable("redis", [("ts", "time"), *ID_COLS, ("command", "string"), ("key", "string")])
+    for row in ctx.runner.run("resp"):
+        key = ctx.row_key(row, "tcp")
+        if not key:
+            continue
+        ts = to_float(first(row, "frame.time_epoch"))
+        payload_hex = first(row, "tcp.payload")
+        if not payload_hex:
+            continue
+        try:
+            data = bytes.fromhex(payload_hex)
+        except ValueError:
+            continue  # malformed hex, attacker-controlled; skip rather than crash
+        command, redis_key = _parse_resp_command(data)
+        if command is None:
+            continue
+        # AUTH and HELLO carry credentials: log the command but never the argument.
+        if command.upper() in _REDIS_PASSWORD_COMMANDS:
+            table.rows.append({"ts": ts, **ctx.ids(key), "command": command.upper(), "key": None})
+        elif redis_key is not None:
+            table.rows.append({"ts": ts, **ctx.ids(key), "command": command.upper(), "key": redis_key})
+        else:
+            table.rows.append({"ts": ts, **ctx.ids(key), "command": command.upper(), "key": None})
+    return table
+
+
+def _parse_resp_command(data: bytes) -> tuple[str | None, str | None]:
+    """Parse a single RESP command from TCP payload bytes.
+
+    Returns (command, key) or (command, None). The payload is attacker-controlled:
+    every read is bounds-checked and returns (None, None) on any malformation.
+    """
+    if not data:
+        return None, None
+    # RESP arrays start with '*<count>\r\n'. Bulk strings start with '$<len>\r\n<data>\r\n'.
+    if data[0:1] != b"*":
+        # Not an array (could be a simple string '+OK', integer ':', error '-', or bulk string '$').
+        return None, None
+    # Parse the array length.
+    nl = data.find(b"\r\n")
+    if nl == -1:
+        return None, None
+    try:
+        count = int(data[1:nl])
+    except ValueError:
+        return None, None
+    if count <= 0:
+        return None, None
+    pos = nl + 2
+    elements: list[str] = []
+    for _ in range(count):
+        if pos >= len(data) or data[pos:pos + 1] != b"$":
+            return None, None
+        nl = data.find(b"\r\n", pos + 1)
+        if nl == -1:
+            return None, None
+        try:
+            blen = int(data[pos + 1:nl])
+        except ValueError:
+            return None, None
+        pos = nl + 2
+        if blen < 0 or pos + blen > len(data):
+            return None, None
+        try:
+            value = data[pos:pos + blen].decode("utf-8", errors="replace")
+        except Exception:
+            return None, None
+        elements.append(value)
+        pos += blen + 2  # skip value + trailing \r\n
+    if not elements:
+        return None, None
+    command = elements[0]
+    redis_key: str | None = None
+    # For key-bearing commands, the key is the first argument (index 1).
+    if command.upper() in _REDIS_KEY_ARG_COMMANDS and len(elements) >= 2:
+        redis_key = elements[1]
+    return command, redis_key
+
+
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log, "radius": _radius_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "tunnel": _tunnel_log, "radius": _radius_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log,
 }

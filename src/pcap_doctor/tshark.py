@@ -789,6 +789,24 @@ RDP_PASS = PassSpec(
     )),
 )
 
+#: PostgreSQL wire protocol for pgsql.log (#225): startup parameters (user, database),
+#: the authentication method requested by the server, and simple-query text. Passwords are never extracted.
+PGSQL_PASS = PassSpec(
+    name="pgsql",
+    display_filter="pgsql",
+    fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
+                      "pgsql.type", "pgsql.parameter_name", "pgsql.parameter_value",
+                      "pgsql.authtype", "pgsql.query")),
+)
+
+#: Redis RESP protocol for redis.log (#225): raw TCP payload, parsed to extract the command name
+#: and key. Passwords (AUTH argument) and command arguments are never logged.
+RESP_PASS = PassSpec(
+    name="resp",
+    display_filter="resp && tcp.len > 0",
+    fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport", "tcp.payload")),
+)
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -905,6 +923,8 @@ PASSES: dict[str, PassSpec] = {
         RADIUS_PASS,
         MODBUS_PASS,
         DNP3_PASS,
+        PGSQL_PASS,
+        RESP_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,
