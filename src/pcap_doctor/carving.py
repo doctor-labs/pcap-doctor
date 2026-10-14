@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 from .filetypes import MAGIC
 from .index import CaptureIndex, first
-from .tshark import to_int
+from .tshark import TsharkRunner, to_int
 
 
 @dataclass(frozen=True)
@@ -54,8 +54,13 @@ def carve(index: CaptureIndex) -> list[CarveHit]:
     """
     if index.runner is None:
         return []
+    return carve_runner(index.runner)
+
+
+def carve_runner(runner: TsharkRunner) -> list[CarveHit]:
+    """``carve`` without the full index: the CLI only needs the payload pass, not every pass."""
     out: list[CarveHit] = []
-    for row in index.runner.run("payload"):
+    for row in runner.run("payload"):
         frame = to_int(first(row, "frame.number")) or 0
         protocol = "tcp" if first(row, "tcp.srcport") else "udp"
         field = "tcp.payload" if protocol == "tcp" else "udp.payload"
