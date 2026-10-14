@@ -1144,13 +1144,56 @@ def _io_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+def _known_services_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style known_services.log: one row per (host, port, proto) served by a well-known port,
+    with the service name from WELL_KNOWN_PORTS (or the flow's app_proto as a fallback)."""
+    from .index import WELL_KNOWN_PORTS
+
+    table = LogTable("known_services", [
+        ("ts", "time"), ("host", "addr"), ("port", "count"), ("proto", "string"), ("service", "string")])
+    seen: dict[tuple[str, int, str], dict[str, Any]] = {}
+    for flow in ctx.index.flows.values():
+        a_port, b_port = flow.port_a, flow.port_b
+        a_known = a_port in WELL_KNOWN_PORTS
+        b_known = b_port in WELL_KNOWN_PORTS
+        if not a_known and not b_known:
+            continue
+        if a_known and b_known:
+            if a_port <= b_port:
+                host, server_port = flow.endpoint_a, a_port
+            else:
+                host, server_port = flow.endpoint_b, b_port
+        elif a_known:
+            host, server_port = flow.endpoint_a, a_port
+        else:
+            host, server_port = flow.endpoint_b, b_port
+        proto: str = flow.proto
+        service = WELL_KNOWN_PORTS.get(server_port) or (flow.app_proto if flow.app_proto != "unknown" else None)
+        key = (host, server_port, proto)
+        ts = ctx.ts(flow.first_frame)
+        info = seen.get(key)
+        if info is None:
+            seen[key] = {"ts": ts, "service": service}
+        else:
+            if ts is not None and (info["ts"] is None or ts < info["ts"]):
+                info["ts"] = ts
+            if info["service"] is None and service is not None:
+                info["service"] = service
+    for item in sorted(seen.items(), key=lambda kv: (kv[0][0], kv[0][1])):
+        (host, port, proto), info = item
+        table.rows.append({
+            "ts": info["ts"], "host": host, "port": port, "proto": proto, "service": info["service"],
+        })
+    return table
+
+
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
-    "conversations": _conversations_log, "io": _io_log,
+    "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 
