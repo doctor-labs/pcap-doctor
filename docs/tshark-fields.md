@@ -37,6 +37,7 @@ token against `tshark -G protocols`, drops what a build does not know, and recor
 | `smtp` | `smtp \|\| imf` | commands, reply, IMF From/To/Subject/Date/Message-ID; only for `logs` |
 | `smb` | `smb \|\| smb2` | command, status, tree, file name, session/tree id, NTLMSSP user/domain/host; only for `logs` |
 | `weird` | `_ws.expert && frame` | expert message, severity, group; only for `logs` (`weird.log`) |
+| `netbios` | `nbns` | NBNS name, query/response flag, returned address, NB flags group bit; only for `logs` (`netbios.log`) |
 
 ## Fields with traps
 

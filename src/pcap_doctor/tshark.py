@@ -470,6 +470,22 @@ DHCP_PASS = PassSpec(
     ),
 )
 
+NBNS_PASS = PassSpec(
+    name="netbios",
+    display_filter="nbns",
+    fields=with_addr((
+        "frame.time_epoch",
+        "udp.srcport",
+        "udp.dstport",
+        "udp.stream",
+        "nbns.id",
+        "nbns.flags.response",
+        "nbns.name",
+        "nbns.addr",
+        "nbns.nb_flags.group",
+    )),
+)
+
 FTP_PASS = PassSpec(
     name="ftp",
     display_filter="ftp",
@@ -780,6 +796,7 @@ PASSES: dict[str, PassSpec] = {
         IPV6_ADDR_PASS,
         CONN_PASS,
         DHCP_PASS,
+        NBNS_PASS,
         FTP_PASS,
         SMTP_PASS,
         SMB_PASS,
