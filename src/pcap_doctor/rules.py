@@ -35,6 +35,7 @@ _ECH_0RTT = "d17.ech_early_data"
 _VPN = "d19.vpn_handshakes"
 _HTTP2 = "d5.http2"
 _ICS = "d20.ics_control"
+_IOC = "d21.ioc_match"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -98,6 +99,7 @@ RULES: dict[str, Rule] = {
         Rule("SMB_REMOTE_EXEC_PIPE", _SMB, "SMB", "Remote execution pipe opened over SMB"),
         Rule("SMB_EXECUTABLE_ON_SHARE", _SMB, "SMB", "Executable opened on an SMB share"),
         Rule("SIGNATURE_MATCH", _SIGNATURES, "Signatures", "User-supplied signature matched"),
+        Rule("IOC_MATCH", _IOC, "Signatures", "Local indicator (IP, domain or URL) matched"),
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
         Rule("ARP_SPOOFING_SUSPECTED", _ARP, "Network", "ARP spoofing suspected"),
         Rule("ICMP_REDIRECT", _ARP, "Network", "ICMP redirect seen"),
@@ -199,6 +201,7 @@ _CLASSTYPES: dict[str, str] = {
     "HTTP_WEB_ATTACK_LFI": "attempted-admin",
     "HTTP_WEB_ATTACK_TRAVERSAL": "attempted-admin",
     "HTTP_WEB_ATTACK_COMMAND_INJECTION": "attempted-admin",
+    "IOC_MATCH": "trojan-activity",
     "TLS_SELF_SIGNED_CHAIN": "protocol-command-decode",
     "TLS_SNI_CERT_MISMATCH": "protocol-command-decode",
     "SMB1_IN_USE": "protocol-command-decode",

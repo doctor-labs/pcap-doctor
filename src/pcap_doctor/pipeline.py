@@ -96,6 +96,7 @@ def analyze(
     firmware_keys: dict[str, str] | None = None,
     signatures: tuple[Path, ...] = (),
     signature_vars: dict[str, str] | None = None,
+    iocs: tuple[Path, ...] = (),
     decode_as: tuple[str, ...] = (),
     fast: bool = False,
     jobs: int | None = None,
@@ -148,6 +149,15 @@ def analyze(
             index.add_note(f"[signatures] {warning}")
         index.signature_hits = match(index, rules)
         index.add_note(f"[signatures] {len(rules)} rule(s) loaded, {len(index.signature_hits)} match(es)")
+
+    if iocs:
+        from .ioc import load_iocs, match_iocs
+
+        indicators, ioc_warnings = load_iocs(list(iocs))
+        for warning in ioc_warnings:
+            index.add_note(warning)
+        index.ioc_hits = match_iocs(index, indicators)
+        index.add_note(f"[ioc] {len(indicators)} indicator(s) loaded, {len(index.ioc_hits)} match(es)")
 
     detectors = enabled_detectors(include=only)
     findings: list[Finding] = []
