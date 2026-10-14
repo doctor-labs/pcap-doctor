@@ -266,6 +266,8 @@ class HttpExchange(BaseModel):
     version: str | None = None
     status: int | None = None
     user_agent: str | None = None
+    #: HTTP Server response header (#235): the software the server announces
+    server: str | None = None
     auth_scheme: str | None = None
     auth_present: bool = False
     auth_value_preview: str | None = None

@@ -253,5 +253,9 @@
   ],
   "rfb_vnc.pcap": [],
   "vnc_session.pcap": [],
-  "rdp_session.pcap": []
+  "rdp_session.pcap": [],
+  "vuln_versions.pcap": [
+    "HTTP_CLEARTEXT",
+    "SERVICE_VULNERABLE_VERSION"
+  ]
 }

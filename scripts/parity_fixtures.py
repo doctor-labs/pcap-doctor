@@ -917,6 +917,21 @@ def fixture_http_versions() -> bytes:
     return w.write()
 
 
+@fixture("vuln_versions.pcap")
+def fixture_vuln_versions() -> bytes:
+    """An HTTP server announcing Apache/2.4.49, a version with a published path-traversal CVE (#235)."""
+    w = Wire(start=1_701_800_000.0)
+    c, s = "10.90.0.1", "10.90.0.2"
+    req = b"GET / HTTP/1.1\r\nHost: 10.90.0.2\r\nUser-Agent: curl/8.4.0\r\n\r\n"
+    resp = b"HTTP/1.1 200 OK\r\nServer: Apache/2.4.49 (Unix)\r\nContent-Length: 2\r\n\r\nok"
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42100, 80, 1000, 0, 0x02))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 80, 42100, 9000, 1001, 0x12))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42100, 80, 1001, 9001, 0x10))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42100, 80, 1001, 9001, 0x18, req))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 80, 42100, 9001, 1001 + len(req), 0x18, resp))))
+    return w.write()
+
+
 @fixture("mail_logins.pcap")
 def fixture_mail_logins() -> bytes:
     """Cleartext POP3 USER/PASS, IMAP LOGIN and SMTP AUTH PLAIN logins (#230)."""

@@ -297,6 +297,7 @@ HTTP_PASS = PassSpec(
             "http.request.version",
             "http.response.code",
             "http.user_agent",
+            "http.server",
             "http.authorization",
             "http.cookie",
             "http.set_cookie",

@@ -36,6 +36,7 @@ _VPN = "d19.vpn_handshakes"
 _HTTP2 = "d5.http2"
 _ICS = "d20.ics_control"
 _IOC = "d21.ioc_match"
+_SOFTWARE = "d22.software_vulns"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -117,6 +118,7 @@ RULES: dict[str, Rule] = {
         Rule("VPN_WIREGUARD_HANDSHAKE", _VPN, "Network", "WireGuard handshake seen (UDP 51820)"),
         Rule("VPN_OPENVPN_HANDSHAKE", _VPN, "Network", "OpenVPN control-channel handshake seen (UDP/TCP 1194)"),
         Rule("HTTP2_CLEARTEXT", _HTTP2, "Cleartext", "HTTP/2 over cleartext (h2c) traffic is not encrypted"),
+        Rule("SERVICE_VULNERABLE_VERSION", _SOFTWARE, "Cleartext", "Software version announced in a banner or header has a known vulnerability"),
     )
 }
 
@@ -153,6 +155,7 @@ DEFAULT_CLASSTYPE = "misc-activity"
 #: One mapping table keyed by exact code; codes missing from it take the ``misc-activity`` default.
 _CLASSTYPES: dict[str, str] = {
     "SYN_SCAN_SHAPE": "attempted-recon",
+    "SERVICE_VULNERABLE_VERSION": "policy-violation",
     "PORT_SCAN_VERTICAL": "attempted-recon",
     "PORT_SCAN_HORIZONTAL": "attempted-recon",
     "BEACONING_SHAPE": "trojan-activity",

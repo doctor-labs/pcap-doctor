@@ -888,6 +888,7 @@ class IndexBuilder:
                 exch.user_agent = first(row, "http.user_agent") or exch.user_agent
             if status:
                 exch.status = status
+                exch.server = first(row, "http.server") or exch.server
                 content_type = first(row, "http.content_type").split(";", 1)[0].strip().lower()
                 if content_type and content_type not in exch.content_types:
                     exch.content_types.append(content_type)
