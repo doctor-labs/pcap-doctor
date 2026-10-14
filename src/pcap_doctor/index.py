@@ -39,6 +39,7 @@ from .models import (
     RecordVersion,
     Role,
     RtpStream,
+    ServiceGreeting,
     ServiceHit,
     SipMessage,
     SshSession,
@@ -348,6 +349,7 @@ class CaptureIndex:
         self.ssh: list[SshSession] = []
         self.quic: list[QuicSession] = []
         self.services: list[ServiceHit] = []
+        self.greetings: list[ServiceGreeting] = []
         self.telnet_logins: list[TelnetLogin] = []
         self.notes: list[str] = []
         self.smb: list[SmbOp] = []
@@ -1199,6 +1201,9 @@ class IndexBuilder:
             if not key:
                 continue
             frame = to_int(first(row, "frame.number")) or 0
+            for code_field, text_field in (("smtp.response.code", "smtp.rsp.parameter"), ("ftp.response.code", "ftp.response.arg")):
+                if first(row, code_field) == "220" and first(row, text_field):
+                    index.greetings.append(ServiceGreeting(key=key, frame=frame, field=text_field, text=first(row, text_field)))
             protocols = {
                 field: first(row, field)
                 for field in SERVICE_FIELDS

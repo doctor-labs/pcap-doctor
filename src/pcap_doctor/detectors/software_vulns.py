@@ -31,6 +31,16 @@ VULNERABLE: tuple[tuple[str, Version | None, Version | None, str], ...] = (
     ("Microsoft-IIS", (6, 0), (6, 1), "CVE-2017-7269"),
 )
 
+def greeting_announcements(text: str) -> list[tuple[str, str]]:
+    """(software, version) pairs named in an SMTP or FTP 220 greeting, for names in the table."""
+    found: list[tuple[str, str]] = []
+    for sw in dict.fromkeys(entry[0] for entry in VULNERABLE):
+        match = re.search(re.escape(sw) + r"[ /_-]+v?(\d+(?:\.\d+)*)", text, re.IGNORECASE)
+        if match:
+            found.append((sw, match.group(1)))
+    return found
+
+
 _NUMERIC = re.compile(r"\d+(?:\.\d+)*")
 
 
@@ -90,6 +100,15 @@ class SoftwareVulnsDetector(Detector):
                 if vulnerable_cve(name, version):
                     grouped.setdefault((client_ip, name or "", version or ""), []).append(
                         (exch.frame, "http.user_agent", exch.user_agent))
+        for greeting in index.greetings:
+            flow = index.flows.get(greeting.key)
+            if flow is None:
+                continue
+            server_ip, _ = _sides(flow)
+            for sw, version in greeting_announcements(greeting.text):
+                if vulnerable_cve(sw, version):
+                    grouped.setdefault((server_ip, sw, version), []).append(
+                        (greeting.frame, greeting.field, greeting.text))
         for session in index.ssh:
             flow = index.flows.get(session.key)
             if flow is None or not session.server_version:

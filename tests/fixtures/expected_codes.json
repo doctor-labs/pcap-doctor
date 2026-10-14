@@ -257,5 +257,9 @@
   "vuln_versions.pcap": [
     "HTTP_CLEARTEXT",
     "SERVICE_VULNERABLE_VERSION"
+  ],
+  "vuln_greetings.pcap": [
+    "CLEARTEXT_SERVICE",
+    "SERVICE_VULNERABLE_VERSION"
   ]
 }

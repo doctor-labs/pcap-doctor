@@ -932,6 +932,23 @@ def fixture_vuln_versions() -> bytes:
     return w.write()
 
 
+@fixture("vuln_greetings.pcap")
+def fixture_vuln_greetings() -> bytes:
+    """SMTP and FTP 220 greetings announcing Exim 4.89 and ProFTPD 1.3.5, both in known-vulnerable ranges (#235)."""
+    w = Wire(start=1_701_900_000.0)
+    c = "10.91.0.1"
+    sessions = (
+        ("10.91.0.2", 25, 41500, b"220 mail.lab ESMTP Exim 4.89 Mon, 1 Jan 2024 00:00:00 +0000\r\n"),
+        ("10.91.0.3", 21, 41600, b"220 ProFTPD 1.3.5 Server (lab) [10.91.0.3]\r\n"),
+    )
+    for s, dport, sport, greeting in sessions:
+        w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, sport, dport, 1000, 0, 0x02))))
+        w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, dport, sport, 9000, 1001, 0x12))))
+        w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, sport, dport, 1001, 9001, 0x10))))
+        w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, dport, sport, 9001, 1001, 0x18, greeting))))
+    return w.write()
+
+
 @fixture("mail_logins.pcap")
 def fixture_mail_logins() -> bytes:
     """Cleartext POP3 USER/PASS, IMAP LOGIN and SMTP AUTH PLAIN logins (#230)."""

@@ -481,10 +481,13 @@ SERVICE_FIELDS: tuple[str, ...] = (
     "socks.password",
 )
 
+#: 220 greeting text (#235): read by the index for banner inventory, never shown as a service detail
+GREETING_FIELDS: tuple[str, ...] = ("smtp.response.code", "smtp.rsp.parameter", "ftp.response.arg")
+
 SERVICE_PASS = PassSpec(
     name="services",
     display_filter="ntp || tftp || ftp || ftp-data || telnet || snmp || ldap || smtp || imap || pop || resp || mysql || irc || socks",
-    fields=with_addr(("tcp.srcport", "tcp.dstport", "udp.srcport", "udp.dstport", *SERVICE_FIELDS)),
+    fields=with_addr(("tcp.srcport", "tcp.dstport", "udp.srcport", "udp.dstport", *SERVICE_FIELDS, *GREETING_FIELDS)),
 )
 
 TELNET_PASS = PassSpec(

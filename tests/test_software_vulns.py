@@ -38,3 +38,21 @@ def test_vulnerable_server_is_reported_once_with_its_frame(analyze_capture) -> N
 def test_non_vulnerable_versions_are_silent(analyze_capture) -> None:
     result = analyze_capture(fixture("http_versions.pcap"))
     assert not [f for f in result.findings if f.code == "SERVICE_VULNERABLE_VERSION"]
+
+
+@requires_tshark
+def test_smtp_and_ftp_greetings_are_inventoried(analyze_capture) -> None:
+    result = analyze_capture(fixture("vuln_greetings.pcap"))
+    hits = {(f.subjects[0], f.evidence[0].field) for f in result.findings if f.code == "SERVICE_VULNERABLE_VERSION"}
+    assert hits == {("10.91.0.2", "smtp.rsp.parameter"), ("10.91.0.3", "ftp.response.arg")}
+    exim = [f for f in result.findings if f.subjects == ["10.91.0.2"] and f.code == "SERVICE_VULNERABLE_VERSION"]
+    assert exim[0].references == ["CVE-2019-10149"]
+
+
+def test_greeting_announcements_find_the_product_and_version() -> None:
+    from pcap_doctor.detectors.software_vulns import greeting_announcements
+
+    assert greeting_announcements("220 mail.lab ESMTP Exim 4.89 Mon, 1 Jan") == [("Exim", "4.89")]
+    assert greeting_announcements("220 ProFTPD 1.3.5 Server (lab)") == [("ProFTPD", "1.3.5")]
+    assert greeting_announcements("220 (vsFTPd 2.3.4)") == [("vsftpd", "2.3.4")]
+    assert greeting_announcements("220 Welcome to the lab") == []

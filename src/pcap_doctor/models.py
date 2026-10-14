@@ -413,6 +413,15 @@ class TelnetLogin(BaseModel):
     password_frame: int
 
 
+class ServiceGreeting(BaseModel):
+    """A 220 server greeting (SMTP or FTP) and its text, kept for banner-version inventory (#235)."""
+
+    key: str
+    frame: int
+    field: str
+    text: str
+
+
 class Host(BaseModel):
     ip: str
     flows: int = 0
