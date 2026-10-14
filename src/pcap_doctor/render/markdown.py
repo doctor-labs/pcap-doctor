@@ -187,9 +187,20 @@ def render_flows(report: Report, index: CaptureIndex) -> Path:
         "## Hosts",
         "",
         _table(
-            ["IP", "Flows", "Packets", "Bytes", "First seen", "Last seen"],
+            ["IP", "MAC", "Vendor", "Hostname", "OS guess", "Flows", "Packets", "Bytes", "First seen", "Last seen"],
             [
-                [h.ip, str(h.flows), f"{h.packets:,}", f"{h.bytes:,}", _ts(h.first_seen), _ts(h.last_seen)]
+                [
+                    h.ip,
+                    h.mac or "-",
+                    h.vendor or "-",
+                    h.hostname or "-",
+                    h.os_guess or "-",
+                    str(h.flows),
+                    f"{h.packets:,}",
+                    f"{h.bytes:,}",
+                    _ts(h.first_seen),
+                    _ts(h.last_seen),
+                ]
                 for h in sorted(index.hosts.values(), key=lambda x: -x.bytes)[:60]
             ],
         ),
