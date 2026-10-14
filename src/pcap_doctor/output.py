@@ -8,7 +8,7 @@ from typing import Any
 from .baseline import Baseline, finding_fingerprint
 from .models import SEVERITY_ORDER, Finding, Report
 from .prompts import clean
-from .rules import CATEGORIES, CATEGORY_IMPACT, RULES, category_of
+from .rules import CATEGORIES, CATEGORY_IMPACT, RULES, category_of, classtype_of
 from .scoring import MODEL, score
 
 
@@ -28,6 +28,7 @@ def contract_finding(f: Finding, state: str | None = None) -> dict[str, Any]:
         "severity": f.severity,
         "confidence": f.confidence,
         "category": category_of(f.code),
+        "classtype": classtype_of(f.code),
         "message": f.title,
         "location": _location(f),
         "evidence": [{"ref": f"frame {e.frame}", "value": f"{e.field} = {e.value}"} for e in f.evidence],

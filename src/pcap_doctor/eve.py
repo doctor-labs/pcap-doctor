@@ -16,6 +16,7 @@ from typing import Any
 
 from .index import CaptureIndex
 from .logs import build_logs
+from .rules import classtype_of
 
 EVENT_TYPES = ("alert", "flow", "dns", "http", "tls", "fileinfo")
 _SEVERITY = {"critical": 1, "high": 1, "medium": 2, "low": 3, "info": 3}
@@ -124,7 +125,8 @@ def build_eve(index: CaptureIndex, types: tuple[str, ...] = EVENT_TYPES) -> list
         for r in t["notice"].rows:
             ev = _base(r, "alert", fallback, protos.get(r.get("uid") or ""))
             ev["alert"] = {"action": "allowed", "gid": 1, "signature_id": signature_id(r["note"]), "rev": 1,
-                           "signature": r["msg"], "category": r["note"], "severity": _SEVERITY.get(r["severity"], 3)}
+                           "signature": r["msg"], "category": r["note"], "classtype": classtype_of(r["note"]),
+                           "severity": _SEVERITY.get(r["severity"], 3)}
             ev["metadata"] = {"summary": r["sub"]}
             events.append(ev)
     events.sort(key=lambda e: e["timestamp"])
