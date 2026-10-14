@@ -136,6 +136,7 @@
     "SIP_CLEARTEXT_SIGNALLING"
   ],
   "slice_hosts.pcap": [],
+  "search_bytes.pcap": [],
   "smb_attack.pcap": [
     "SMB1_IN_USE",
     "SMB_ADMIN_SHARE_ACCESS",

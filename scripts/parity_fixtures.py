@@ -1661,3 +1661,23 @@ def fixture_http2_cleartext() -> bytes:
     t.close()
     return w.write()
 
+
+@fixture("search_bytes.pcap")
+def fixture_search_bytes() -> bytes:
+    """Two flows carrying a literal keyword in a TCP payload and a hex pattern in a UDP payload (#215).
+
+    TCP: client -> server carries b"SESSION=secret-token" at offset 0; the server replies with b"echo: password".
+    UDP: a single datagram carries the 4-byte pattern b"\\xde\\xad\\xbe\\xef" followed by b"keep".
+    The keyword "secret-token" appears nowhere in UDP, and "keep" only in UDP, so direction and frame are
+    attributable.
+    """
+    w = Wire(start=1_701_950_000.0)
+    # TCP flow with a plaintext keyword.
+    t = Tcp(w, "10.20.0.10", "10.20.0.1", 40000, 80).open()
+    t.send(True, b"SESSION=secret-token")
+    t.send(False, b"echo: password")
+    t.close()
+    # UDP datagram with a hex byte pattern.
+    w.add(udp_frame("10.20.0.10", "10.20.0.1", 53000, 53, b"\xde\xad\xbe\xefkeep"))
+    return w.write()
+
