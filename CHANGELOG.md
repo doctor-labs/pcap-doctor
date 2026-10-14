@@ -15,6 +15,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `scripts/bench_large.py` and a fast regression guard `tests/test_launch_budget.py`: a repeatable large-capture benchmark (deterministic `mergecap` of N copies of a fixture, run through `analyze` with a tshark-launch counter that prints wall time, user+sys CPU seconds and peak child RSS) and a CI guard asserting the number of tshark pass launches (excluding `tshark -G` lookups) stays at or below today's measured budget of 15. (#333)
 - `analyze` skips tshark passes whose protocols are absent from the capture: the `base` pass reads every frame once, and each subsequent pass is launched only when at least one of its protocol tokens appears in `frame.protocols` (#328). A skipped pass yields the same empty rows it would have, so reports are byte-identical; passes invoked with decode-as or TLS-key decryption arguments are never skipped.
 - Cleartext POP3 USER/PASS, IMAP LOGIN and SMTP AUTH PLAIN credentials are now reported as CLEARTEXT_CREDENTIAL findings by the transport-exposure detector.
 - `pcap-doctor packets` and `pcap-doctor packet`: a per-packet explorer over the capture. `packets` lists frames (number, time, source, destination, protocol, length, info) and takes a Wireshark display filter with `-Y`; `packet CAPTURE FRAME` prints the full dissection tree and the hex view of one frame (`--json` for the nested tree, `--no-hex` to drop the dump). Read-only: tshark is asked for exactly what was requested.
