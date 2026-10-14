@@ -1009,6 +1009,24 @@ IEC104_PASS = PassSpec(
     ),
 )
 
+#: BACnet/IP BVLC function, APDU type, service choice and invoke id for bacnet.log (#206). No property values.
+BACNET_PASS = PassSpec(
+    name="bacnet",
+    display_filter="bvlc || bacapp",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "udp.srcport",
+            "udp.dstport",
+            "bvlc.function",
+            "bacapp.type",
+            "bacapp.invoke_id",
+            "bacapp.confirmed_service",
+            "bacapp.unconfirmed_service",
+        )
+    ),
+)
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -1052,7 +1070,7 @@ _TRANSPORT_PREFIXES: frozenset[str] = frozenset({
 _APP_PROTOCOLS: frozenset[str] = frozenset({
     "tls", "dtls", "http", "dns", "sip", "sdp", "rtp", "rtcp", "ssh", "quic",
     "ftp", "smtp", "smb", "smb2", "imf", "kerberos", "ntlmssp", "ntlm",
-    "modbus", "mbtcp", "dnp3", "mqtt", "enip", "cip", "iec60870_104", "telnet", "dhcp", "dhcpv6",
+    "modbus", "mbtcp", "dnp3", "mqtt", "enip", "cip", "iec60870_104", "bvlc", "bacapp", "telnet", "dhcp", "dhcpv6",
     "tftp", "ntp", "snmp", "mysql", "ldap", "imap", "pop", "radius", "ike",
     "nfs",
 })
@@ -1135,6 +1153,7 @@ PASSES: dict[str, PassSpec] = {
         MQTT_PASS,
         ENIP_PASS,
         IEC104_PASS,
+        BACNET_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,

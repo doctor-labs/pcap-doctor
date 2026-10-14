@@ -1,5 +1,5 @@
 """Zeek-style per-protocol logs (TSV or JSON): conn, dns, http, ssl, x509, files, notice, weird, dhcp, dhcpv6, ftp, smtp,
-ssh, smb (issue #199), mqtt (#206).
+ssh, smb (issue #199), mqtt, enip, iec104, bacnet (#206).
 
 The tables are built on demand from the :class:`CaptureIndex` plus a few extra tshark passes (``conn``, ``dhcp``,
 ``dhcpv6``, ``ftp``, ``smtp``, ``smb``, ``weird``) that ``analyze`` never runs. The column names and types follow Zeek's, so
@@ -1141,6 +1141,54 @@ def _iec104_log(ctx: _Ctx) -> LogTable:
         })
     return table
 
+# Names are tshark's own value strings (tshark -G values); a code tshark does not list prints as a number.
+# BVLC function (bvlc.function).
+_BVLC_FUNCTIONS = {0: 'BVLC-Result', 1: 'Write-Broadcast-Distribution-Table', 2: 'Read-Broadcast-Distribution-Table', 3: 'Read-Broadcast-Distribution-Table-Ack',
+    4: 'Forwarded-NPDU', 5: 'Register-Foreign-Device', 6: 'Read-Foreign-Device-Table', 7: 'Read-Foreign-Device-Table-Ack',
+    8: 'Delete-Foreign-Device-Table-Entry', 9: 'Distribute-Broadcast-To-Network', 10: 'Original-Unicast-NPDU', 11: 'Original-Broadcast-NPDU',
+    12: 'Secured-BVLL'}
+# APDU type (bacapp.type).
+_BACNET_APDU = {0: 'Confirmed-REQ', 1: 'Unconfirmed-REQ', 2: 'Simple-ACK', 3: 'Complex-ACK',
+    4: 'Segment-ACK', 5: 'Error', 6: 'Reject', 7: 'Abort'}
+# Confirmed service choice (bacapp.confirmed_service).
+_BACNET_CONFIRMED = {0: 'acknowledgeAlarm', 1: 'confirmedCOVNotification', 2: 'confirmedEventNotification', 3: 'getAlarmSummary',
+    4: 'getEnrollmentSummary', 5: 'subscribeCOV', 6: 'atomicReadFile', 7: 'atomicWriteFile',
+    8: 'addListElement', 9: 'removeListElement', 10: 'createObject', 11: 'deleteObject',
+    12: 'readProperty', 13: 'readPropertyConditional', 14: 'readPropertyMultiple', 15: 'writeProperty',
+    16: 'writePropertyMultiple', 17: 'deviceCommunicationControl', 18: 'confirmedPrivateTransfer', 19: 'confirmedTextMessage',
+    20: 'reinitializeDevice', 21: 'vtOpen', 22: 'vtClose', 23: 'vtData',
+    24: 'authenticate', 25: 'requestKey', 26: 'readRange', 27: 'lifeSafetyOperation',
+    28: 'subscribeCOVProperty', 29: 'getEventInformation', 30: 'subscribeCovPropertyMultiple', 31: 'confirmedCovNotificationMultiple',
+    32: 'confirmedAuditNotification', 33: 'auditLogQuery', 34: 'authRequest'}
+# Unconfirmed service choice (bacapp.unconfirmed_service).
+_BACNET_UNCONFIRMED = {0: 'i-Am', 1: 'i-Have', 2: 'unconfirmedCOVNotification', 3: 'unconfirmedEventNotification',
+    4: 'unconfirmedPrivateTransfer', 5: 'unconfirmedTextMessage', 6: 'timeSynchronization', 7: 'who-Has',
+    8: 'who-Is', 9: 'utcTimeSynchronization', 10: 'writeGroup', 11: 'unconfirmedCovNotificationMultiple',
+    12: 'unconfirmedAuditNotification', 13: 'who-am-I', 14: 'you-are'}
+
+
+def _bacnet_log(ctx: _Ctx) -> LogTable:
+    """One row per BACnet/IP APDU: BVLC function, APDU type, service and invoke id (#206). Property values are not read."""
+    table = LogTable("bacnet", [("ts", "time"), *ID_COLS, ("bvlc_function", "string"), ("apdu_type", "string"),
+                                ("service", "string"), ("invoke_id", "count")])
+    for row in ctx.runner.run("bacnet"):
+        key = ctx.row_key(row, "udp")
+        ptype = to_int(first(row, "bacapp.type"))
+        if not key or ptype is None:
+            continue
+        bfn = to_int_auto(first(row, "bvlc.function"))
+        unconfirmed = ptype == 1
+        code = to_int(first(row, "bacapp.unconfirmed_service" if unconfirmed else "bacapp.confirmed_service"))
+        names = _BACNET_UNCONFIRMED if unconfirmed else _BACNET_CONFIRMED
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "bvlc_function": None if bfn is None else _BVLC_FUNCTIONS.get(bfn, str(bfn)),
+            "apdu_type": _BACNET_APDU.get(ptype, str(ptype)),
+            "service": None if code is None else names.get(code, str(code)),
+            "invoke_id": to_int(first(row, "bacapp.invoke_id")),
+        })
+    return table
+
 _TUNNEL_TYPE = {
     "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
     "mpls": "Tunnel::MPLS", "erspan": "Tunnel::ERSPAN", "pppoes": "Tunnel::PPPOE", "vlan": "VLAN",
@@ -2029,7 +2077,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "bacnet": _bacnet_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }

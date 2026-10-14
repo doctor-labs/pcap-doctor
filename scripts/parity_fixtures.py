@@ -1901,3 +1901,25 @@ def fixture_iec104() -> bytes:
     t.send(False, bytes([0x68, 4, 0x83, 0, 0, 0]))  # U: TESTFR con
     t.close()
     return w.write()
+
+
+def bacnet_frame(apdu: bytes) -> bytes:
+    """BACnet/IP: BVLC Original-Unicast-NPDU (0x0A) around an NPDU with no routing."""
+    npdu = bytes([0x01, 0x00]) + apdu
+    return bytes([0x81, 0x0A]) + struct.pack("!H", 4 + len(npdu)) + npdu
+
+
+@fixture("bacnet.pcap")
+def fixture_bacnet() -> bytes:
+    """BACnet/IP over UDP 47808: Who-Is, I-Am, a ReadProperty with its Complex-ACK, and a WriteProperty acknowledged (#206)."""
+    w = Wire(start=1_702_400_000.0)
+    ctl, dev = "10.15.0.5", "10.15.0.20"
+    w.add(udp_frame(ctl, "10.15.0.255", 47808, 47808, bytes([0x81, 0x0B, 0, 12, 0x01, 0x20, 0xFF, 0xFF, 0x00, 0xFF, 0x10, 0x08])))  # Who-Is
+    w.add(udp_frame(dev, ctl, 47808, 47808, bacnet_frame(bytes([0x10, 0x00]) + bytes([0xC4, 0x02, 0x00, 0x00, 0x2A]))))  # I-Am
+    obj_ai1 = bytes([0x0C, 0x00, 0x00, 0x00, 0x01]) + bytes([0x19, 0x55])  # object analog-input 1, present-value
+    w.add(udp_frame(ctl, dev, 47808, 47808, bacnet_frame(bytes([0x00, 0x05, 0x01, 0x0C]) + obj_ai1)))  # ReadProperty invoke 1
+    w.add(udp_frame(dev, ctl, 47808, 47808, bacnet_frame(bytes([0x30, 0x01, 0x0C]) + obj_ai1 + bytes([0x3E, 0x44, 0x41, 0xB8, 0, 0, 0x3F]))))  # ACK
+    write_body = bytes([0x0C, 0x00, 0x00, 0x00, 0x05]) + bytes([0x19, 0x55, 0x3E, 0x44, 0x42, 0xC8, 0, 0, 0x3F])  # AV 5 := 100.0
+    w.add(udp_frame(ctl, dev, 47808, 47808, bacnet_frame(bytes([0x00, 0x05, 0x02, 0x0F]) + write_body)))  # WriteProperty invoke 2
+    w.add(udp_frame(dev, ctl, 47808, 47808, bacnet_frame(bytes([0x20, 0x02, 0x0F]))))  # Simple-ACK invoke 2
+    return w.write()
