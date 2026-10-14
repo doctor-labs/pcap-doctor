@@ -74,6 +74,7 @@ capture to hand? `make captures` fetches the Wireshark project's public samples.
 | `eve CAPTURE` | Suricata EVE-compatible JSON events (alert, flow, dns, http, tls, fileinfo), one per line, for SIEM ingest |
 | `extract CAPTURE` | write the files a capture carries (HTTP, FTP, SMB, TFTP, SMTP/IMAP/POP3 mail and attachments, IRC chat) to a directory with a manifest |
 | `search CAPTURE PATTERN` | find a keyword or hex byte pattern across packet payloads; `--hex`, `--json`, exits 1 when nothing matches (#215) |
+| `carve CAPTURE` | file signatures (magic bytes) in packet payloads, per frame; `--out DIR` writes the carved bytes, `--streams` carves reassembled TCP streams (a file split across segments is only found with `--streams`; per-packet output is truncated at the segment end) |
 | `smb CAPTURE` | NTLM users, shares and files seen in SMB/SMB2/SMB3 traffic |
 | `keys scan DIR` | inventory key material in an extracted firmware tree |
 | `watch -i IFACE` | capture live and analyze rolling files |
