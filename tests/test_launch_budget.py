@@ -26,10 +26,12 @@ from launch_counter import count_launches, make_wrapper, with_wrapped_path  # no
 #: small fixture with a cold cache. Measured today (tshark 4.x) as 15: 11
 #: prefetched passes + rtp + arp_icmp + capture_loss + the conn log pass that
 #: the transport-exposure detector reads. Later speed-up issues MUST lower it:
-#:  - #328: skip passes for protocols absent from the capture
+#:  - #328: skip passes for protocols absent from the capture (landed via #338)
 #:  - #330: merge several passes into one tshark invocation
 #: Do not raise this without first measuring the new count.
-BUDGET = 15
+#: PR #338 lowered the count on this fixture from 15 to 4 (base + 3 present-protocol
+#: passes; arp_icmp.pcap carries only ARP and ICMP on well-known ports).
+BUDGET = 4
 
 PCAP = FIXTURES / "arp_icmp.pcap"
 
@@ -47,17 +49,26 @@ def test_analyze_launch_budget(tmp_path: Path) -> None:
     env["PCAP_DOCTOR_CACHE"] = str(cache_dir)
     out = tmp_path / "report"
     proc = subprocess.run(
-        [shutil.which("pcap-doctor") or str(ROOT / ".venv" / "bin" / "pcap-doctor"),
-         "analyze", str(PCAP), "-o", str(out), "-q"],
-        capture_output=True, text=True, env=env, cwd=str(ROOT),
+        [
+            shutil.which("pcap-doctor") or str(ROOT / ".venv" / "bin" / "pcap-doctor"),
+            "analyze",
+            str(PCAP),
+            "-o",
+            str(out),
+            "-q",
+        ],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(ROOT),
     )
     assert proc.returncode in (0, 1), f"analyze failed (exit {proc.returncode}):\n{proc.stderr[-600:]}"
     launches = count_launches(log_path)
     # A lower bound keeps the guard from passing vacuously if the counter is broken
     # (e.g. the tokenizer misclassifying every pass as a lookup): a real analyze
-    # launches about a dozen passes, so fewer than 8 means the counter is not
+    # launches several passes, so fewer than 2 means the counter is not
     # recording passes. See issue #333.
-    assert launches >= 8, (
+    assert launches >= 2, (
         f"analyze launched only {launches} pass(es) on {PCAP.name}; the counter may be misclassifying "
         "passes as lookups (see scripts/launch_counter.py classify)."
     )
