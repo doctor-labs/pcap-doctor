@@ -72,6 +72,6 @@ def credentials(index: CaptureIndex) -> list[CredentialRow]:
                           f"password of {login.password_length} chars", login.key)
         )
     for op in index.smb:
-        if op.user is not None and not op.response and op.command == "SESSION_SETUP":
+        if op.user is not None and not op.anonymous and not op.response and op.command == "SESSION_SETUP":
             rows.append(CredentialRow(op.frame, "smb", op.user, "", op.key))
     return sorted(rows, key=lambda r: r.frame)

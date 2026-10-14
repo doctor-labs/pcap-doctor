@@ -45,3 +45,10 @@ def test_credentials_tab_redacts_http_basic_auth(cache_dir) -> None:
 def test_smb_identity_shows_as_credential_row(cache_dir) -> None:
     rows = browse_tabs.credentials(_index("files_mix.pcap"))
     assert any(r.source == "smb" and r.user == "bob" and r.secret == "" for r in rows)
+
+
+
+@requires_tshark
+def test_anonymous_smb_session_is_not_listed_as_a_credential(cache_dir) -> None:
+    rows = browse_tabs.credentials(_index("smb_attack.pcap"))
+    assert all(r.user != "NULL" for r in rows if r.source == "smb")
