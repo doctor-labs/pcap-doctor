@@ -761,6 +761,43 @@ CHECKSUM_ARGS: tuple[str, ...] = (
     "udp.check_checksum:TRUE",
 )
 
+#: Field prefixes that are transport- or link-layer only (no application dissection).
+_TRANSPORT_PREFIXES: frozenset[str] = frozenset({
+    "frame", "eth", "ip", "ipv6", "tcp", "udp", "arp", "icmp", "igmp",
+    "gre", "vlan", "vxlan", "geneve", "gtp", "mpls", "pppoe", "erspan",
+})
+
+#: Application-protocol tokens that, if present in a display filter, mean the pass
+#: dissects application-layer data and must keep tcp sequence analysis on.
+_APP_PROTOCOLS: frozenset[str] = frozenset({
+    "tls", "dtls", "http", "dns", "sip", "sdp", "rtp", "rtcp", "ssh", "quic",
+    "ftp", "smtp", "smb", "smb2", "imf", "kerberos", "ntlmssp", "ntlm",
+    "modbus", "mbtcp", "dnp3", "telnet", "dhcp", "dhcpv6",
+    "tftp", "ntp", "snmp", "mysql", "ldap", "imap", "pop", "radius", "ike",
+    "nfs",
+})
+
+def _is_transport_only(spec: PassSpec, fields: tuple[str, ...]) -> bool:
+    """True when the pass reads no tcp.analysis.* / _ws.expert.* fields, all of
+    its fields are transport/link-layer, and its display filter names no
+    application protocol (issue #329)."""
+    # Reads tcp.analysis.* or _ws.expert.* -> analysis produces those values.
+    if any(f.startswith("tcp.analysis.") or f.startswith("_ws.expert.") for f in fields):
+        return False
+    # Any field outside the transport/link-layer set -> app-layer work.
+    if any(f.split(".")[0] not in _TRANSPORT_PREFIXES for f in fields):
+        return False
+    # Display filter mentioning an app protocol -> app-layer filter.
+    if spec.display_filter:
+        # Split on operators and whitespace to get bare field/protocol tokens.
+        for token in re.split(r"[\s()=<>!&|]+", spec.display_filter):
+            if not token:
+                continue
+            root = token.split(".")[0]
+            if root in _APP_PROTOCOLS:
+                return False
+    return True
+
 #: Every TCP/UDP payload, for the user-supplied signature engine (#201). Only run when signatures are given.
 PAYLOAD_PASS = PassSpec(
     name="payload",
@@ -1224,6 +1261,16 @@ class TsharkRunner:
             ]
             for field in fields:
                 cmd += ["-e", field]
+        # tcp sequence analysis is expensive (issue #329); disable it only for
+        # transport-only passes: every field is a transport/frame-layer field AND
+        # the display filter names no application protocol. Passes that read any
+        # tcp.analysis.* or _ws.expert.* field must keep analysis on (those values
+        # are produced by the analysis layer). Passes with an application filter
+        # (ftp, http, tls, ...) must also keep analysis on, because with it off
+        # tshark re-hands retransmitted segments to the app dissector, producing
+        # duplicate application-row findings.
+        if _is_transport_only(spec, fields):
+            cmd += ["-o", "tcp.analyze_sequence_numbers:FALSE"]
         for pref in _supported_prefs():
             cmd += ["-o", f"{pref}:TRUE"]
         cmd += list(self.extra_args) + list(extra_args)

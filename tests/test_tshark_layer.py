@@ -314,3 +314,25 @@ def test_prefetch_runs_passes_concurrently_and_run_reuses_them(monkeypatch) -> N
     assert len(calls) == 3  # served from the prefetch, no second tshark
     runner.run("http")  # other per-call args: a real run, never the prefetched rows
     assert calls[-1] == ("http", ())
+
+
+def test_command_disables_sequence_analysis_only_for_transport_only_passes() -> None:
+    """(issue #329) tcp.analyze_sequence_numbers is expensive; turn it off only for
+    transport-only passes — those that read no tcp.analysis.* / _ws.expert.* field,
+    whose fields are all transport/link-layer, and whose display filter names no
+    application protocol. App-protocol passes must keep analysis on because with
+    it off tshark re-hands retransmitted segments to the app dissector, duplicating
+    findings such as FTP credentials."""
+    from pcap_doctor.tshark import _is_transport_only
+    runner = TsharkRunner(fixture("weak_tls.pcap"), use_cache=False)
+    for name, spec in PASSES.items():
+        fields = runner.usable_fields(spec)
+        cmd = runner._command(spec)
+        has_flag = "tcp.analyze_sequence_numbers:FALSE" in cmd
+        if _is_transport_only(spec, fields):
+            assert has_flag, f"transport-only pass {name!r} should have the FALSE flag"
+        else:
+            assert not has_flag, (
+                f"pass {name!r} is not transport-only (app fields or filter); "
+                f"must keep tcp sequence analysis ON to avoid duplicate app-layer findings"
+            )

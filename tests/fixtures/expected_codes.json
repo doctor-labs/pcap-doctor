@@ -49,6 +49,10 @@
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"
   ],
+  "ftp_retransmit.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE"
+  ],
   "heartbleed.pcap": [
     "TLS_HEARTBLEED_PROBE",
     "TLS_LEGACY_RECORD_VERSION"
