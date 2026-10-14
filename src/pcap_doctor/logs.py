@@ -1088,6 +1088,59 @@ def _enip_log(ctx: _Ctx) -> LogTable:
         })
     return table
 
+
+# Names are tshark's own value strings (tshark -G values); a code tshark does not list prints as a number.
+# U-frame function (iec60870_104.utype).
+_IEC_UTYPE = {1: 'STARTDT act', 2: 'STARTDT con', 4: 'STOPDT act', 8: 'STOPDT con', 16: 'TESTFR act', 32:
+    'TESTFR con'}
+# ASDU type identifier (iec60870_asdu.typeid).
+_IEC_TYPEID = {1: 'M_SP_NA_1', 2: 'M_SP_TA_1', 3: 'M_DP_NA_1', 4: 'M_DP_TA_1', 5: 'M_ST_NA_1', 6: 'M_ST_TA_1',
+    7: 'M_BO_NA_1', 8: 'M_BO_TA_1', 9: 'M_ME_NA_1', 10: 'M_ME_TA_1', 11: 'M_ME_NB_1', 12: 'M_ME_TB_1', 13:
+    'M_ME_NC_1', 14: 'M_ME_TC_1', 15: 'M_IT_NA_1', 16: 'M_IT_TA_1', 20: 'M_PS_NA_1', 21: 'M_ME_ND_1', 30:
+    'M_SP_TB_1', 31: 'M_DP_TB_1', 32: 'M_ST_TB_1', 33: 'M_BO_TB_1', 34: 'M_ME_TD_1', 35: 'M_ME_TE_1', 36:
+    'M_ME_TF_1', 37: 'M_IT_TB_1', 38: 'M_EP_TD_1', 39: 'M_EP_TE_1', 40: 'M_EP_TF_1', 41: 'S_IT_TC_1', 45:
+    'C_SC_NA_1', 46: 'C_DC_NA_1', 47: 'C_RC_NA_1', 48: 'C_SE_NA_1', 49: 'C_SE_NB_1', 50: 'C_SE_NC_1', 51:
+    'C_BO_NA_1', 58: 'C_SC_TA_1', 59: 'C_DC_TA_1', 60: 'C_RC_TA_1', 61: 'C_SE_TA_1', 62: 'C_SE_TB_1', 63:
+    'C_SE_TC_1', 64: 'C_BO_TA_1', 70: 'M_EI_NA_1', 81: 'S_CH_NA_1', 82: 'S_RP_NA_1', 83: 'S_AR_NA_1', 84:
+    'S_KR_NA_1', 85: 'S_KS_NA_1', 86: 'S_KC_NA_1', 87: 'S_ER_NA_1', 90: 'S_US_NA_1', 91: 'S_UQ_NA_1', 92:
+    'S_UR_NA_1', 93: 'S_UK_NA_1', 94: 'S_UA_NA_1', 95: 'S_UC_NA_1', 100: 'C_IC_NA_1', 101: 'C_CI_NA_1', 102:
+    'C_RD_NA_1', 103: 'C_CS_NA_1', 105: 'C_RP_NA_1', 107: 'C_TS_TA_1', 110: 'P_ME_NA_1', 111: 'P_ME_NB_1',
+    112: 'P_ME_NC_1', 113: 'P_AC_NA_1', 120: 'F_FR_NA_1', 121: 'F_SR_NA_1', 122: 'F_SC_NA_1', 123:
+    'F_LS_NA_1', 124: 'F_AF_NA_1', 125: 'F_SG_NA_1', 126: 'F_DR_TA_1', 127: 'F_SC_NB_1'}
+# ASDU cause of transmission (iec60870_asdu.causetx).
+_IEC_CAUSE = {1: 'Per/Cyc', 2: 'Back', 3: 'Spont', 4: 'Init', 5: 'Req', 6: 'Act', 7: 'ActCon', 8: 'Deact', 9:
+    'DeactCon', 10: 'ActTerm', 11: 'Retrem', 12: 'Retloc', 13: 'File', 14: 'Auth', 15: 'Seskey', 16: 'Usrkey',
+    20: 'Inrogen', 21: 'Inro1', 22: 'Inro2', 23: 'Inro3', 24: 'Inro4', 25: 'Inro5', 26: 'Inro6', 27: 'Inro7',
+    28: 'Inro8', 29: 'Inro9', 30: 'Inro10', 31: 'Inro11', 32: 'Inro12', 33: 'Inro13', 34: 'Inro14', 35:
+    'Inro15', 36: 'Inro16', 37: 'Reqcogen', 38: 'Reqco1', 39: 'Reqco2', 40: 'Reqco3', 41: 'Reqco4', 44:
+    'UkTypeId', 45: 'UkCauseTx', 46: 'UkComAdrASDU', 47: 'UkIOA'}
+_IEC_APCI = {0: "I", 1: "S", 3: "U"}
+
+
+def _iec104_log(ctx: _Ctx) -> LogTable:
+    """One row per IEC 60870-5-104 APDU (first one when a segment carries several): frame type, U function,
+    ASDU type, cause, common address and information object address (#206). No payload values."""
+    table = LogTable("iec104", [("ts", "time"), *ID_COLS, ("apci", "string"), ("u_function", "string"),
+                                ("asdu_type", "string"), ("cause", "string"), ("common_addr", "count"), ("ioa", "count")])
+    for row in ctx.runner.run("iec104"):
+        key = ctx.row_key(row, "tcp")
+        apci = to_int_auto(first(row, "iec60870_104.type"))
+        if not key or apci is None:
+            continue
+        utype = to_int_auto(first(row, "iec60870_104.utype"))
+        typeid = to_int(first(row, "iec60870_asdu.typeid"))
+        cause_code = to_int(first(row, "iec60870_asdu.causetx"))
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "apci": _IEC_APCI.get(apci, str(apci)),
+            "u_function": None if utype is None else _IEC_UTYPE.get(utype, str(utype)),
+            "asdu_type": None if typeid is None else _IEC_TYPEID.get(typeid, str(typeid)),
+            "cause": None if cause_code is None else _IEC_CAUSE.get(cause_code, str(cause_code)),
+            "common_addr": to_int(first(row, "iec60870_asdu.addr")),
+            "ioa": to_int(first(row, "iec60870_asdu.ioa")),
+        })
+    return table
+
 _TUNNEL_TYPE = {
     "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
     "mpls": "Tunnel::MPLS", "erspan": "Tunnel::ERSPAN", "pppoes": "Tunnel::PPPOE", "vlan": "VLAN",
@@ -1976,7 +2029,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }

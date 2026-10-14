@@ -1882,3 +1882,22 @@ def fixture_enip() -> bytes:
     t.send(False, enip_header(0x006F, struct.pack("<IH", 0, 10) + cpf_reply, session=0x1A2B3C4D))
     t.close()
     return w.write()
+
+
+@fixture("iec104.pcap")
+def fixture_iec104() -> bytes:
+    """IEC 60870-5-104 on TCP 2404: STARTDT, a general interrogation, a spontaneous single point, a single command,
+    S-frame acknowledgement and TESTFR (#206)."""
+    w = Wire(start=1_702_300_000.0)
+    m, o = "10.14.0.5", "10.14.0.20"
+    t = Tcp(w, m, o, 52100, 2404).open()
+    t.send(True, bytes([0x68, 4, 0x07, 0, 0, 0]))  # U: STARTDT act
+    t.send(False, bytes([0x68, 4, 0x0B, 0, 0, 0]))  # U: STARTDT con
+    t.send(True, bytes([0x68, 14, 0, 0, 0, 0]) + bytes([100, 1, 6, 0, 1, 0, 0, 0, 0, 20]))  # I: C_IC_NA_1 interrogation
+    t.send(False, bytes([0x68, 14, 0, 0, 2, 0]) + bytes([1, 1, 3, 0, 1, 0, 1, 0, 0, 1]))  # I: M_SP_NA_1 spontaneous, on
+    t.send(True, bytes([0x68, 4, 1, 0, 2, 0]))  # S: acknowledges the outstation's frame
+    t.send(True, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 6, 0, 1, 0, 0x65, 0, 0, 1]))  # I: C_SC_NA_1 single command
+    t.send(True, bytes([0x68, 4, 0x43, 0, 0, 0]))  # U: TESTFR act
+    t.send(False, bytes([0x68, 4, 0x83, 0, 0, 0]))  # U: TESTFR con
+    t.close()
+    return w.write()

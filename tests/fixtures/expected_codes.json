@@ -120,6 +120,7 @@
   ],
   "mqtt.pcap": [],
   "enip.pcap": [],
+  "iec104.pcap": [],
   "netbios_names.pcap": [],
   "no_pfs_tls12.pcap": [
     "TLS_CIPHER_WEAK",

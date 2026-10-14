@@ -990,6 +990,25 @@ ENIP_PASS = PassSpec(
     ),
 )
 
+#: IEC 60870-5-104 APCI and ASDU header for iec104.log (#206). No information element values.
+IEC104_PASS = PassSpec(
+    name="iec104",
+    display_filter="iec60870_104",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "iec60870_104.type",
+            "iec60870_104.utype",
+            "iec60870_asdu.typeid",
+            "iec60870_asdu.causetx",
+            "iec60870_asdu.addr",
+            "iec60870_asdu.ioa",
+        )
+    ),
+)
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -1033,7 +1052,7 @@ _TRANSPORT_PREFIXES: frozenset[str] = frozenset({
 _APP_PROTOCOLS: frozenset[str] = frozenset({
     "tls", "dtls", "http", "dns", "sip", "sdp", "rtp", "rtcp", "ssh", "quic",
     "ftp", "smtp", "smb", "smb2", "imf", "kerberos", "ntlmssp", "ntlm",
-    "modbus", "mbtcp", "dnp3", "mqtt", "enip", "cip", "telnet", "dhcp", "dhcpv6",
+    "modbus", "mbtcp", "dnp3", "mqtt", "enip", "cip", "iec60870_104", "telnet", "dhcp", "dhcpv6",
     "tftp", "ntp", "snmp", "mysql", "ldap", "imap", "pop", "radius", "ike",
     "nfs",
 })
@@ -1115,6 +1134,7 @@ PASSES: dict[str, PassSpec] = {
         BT_DHT_PASS,
         MQTT_PASS,
         ENIP_PASS,
+        IEC104_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,
