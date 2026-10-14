@@ -1,4 +1,4 @@
-"""``extract``: write the files a capture carries (HTTP, FTP, SMB, TFTP, SMTP, IMAP, POP3) to disk. Issue #202."""
+"""``extract``: write the files a capture carries (HTTP, FTP, SMB, TFTP, SMTP, IMAP, POP3, IRC) to disk. Issues #202, #213."""
 
 from __future__ import annotations
 

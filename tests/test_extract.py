@@ -1,4 +1,4 @@
-"""File extraction from HTTP, FTP, SMB, TFTP, SMTP, IMAP and POP3 (issue #202)."""
+"""File extraction from HTTP, FTP, SMB, TFTP, SMTP, IMAP, POP3 and IRC (issues #202, #213)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from conftest import ROOT, fixture, requires_tshark
 from pcap_doctor.cli import app
 from pcap_doctor.extract import (
     _imap_messages,
+    _irc_lines,
     _pop3_messages,
     _smtp_messages,
     _store,
@@ -38,6 +39,11 @@ def test_store_never_leaves_its_folder_and_never_overwrites(tmp_path) -> None:
     assert not (a.stat().st_mode & (stat.S_IXUSR | stat.S_IRWXG | stat.S_IRWXO))
 
 
+def test_irc_lines_are_joined_across_segments_and_only_chat_kept() -> None:
+    frames = [(1, "c", b"JOIN #x\r\nPRIVMSG #x :split "), (2, "c", b"message\r\n"), (3, "s", b":n!u@h NOTICE me :hi\r\n")]
+    assert _irc_lines(frames) == [(2, "c", "PRIVMSG #x :split message"), (3, "s", ":n!u@h NOTICE me :hi")]
+
+
 def test_mail_dialogue_parsers() -> None:
     assert _smtp_messages(b"EHLO x\r\nDATA\r\nSubject: a\r\n\r\n..dot\r\n.\r\nQUIT\r\n") == [b"Subject: a\r\n\r\n.dot\r\n"]
     server = b"+OK ready\r\n+OK\r\n+OK follows\r\nSubject: m\r\n\r\nbody\r\n.\r\n+OK bye\r\n"
@@ -59,6 +65,18 @@ def test_every_protocol_yields_the_bytes_that_were_sent(cli_runner, tmp_path, ca
         assert (out / by[key]["path"]).read_bytes() == FILE_PAYLOADS[payload], key
         assert by[key]["size"] == len(FILE_PAYLOADS[payload])
     assert {m["kind"] for m in manifest if m["protocol"] == "smtp"} == {"message", "attachment"}
+
+
+@requires_tshark
+def test_irc_chat_is_written_as_a_transcript(cli_runner, tmp_path, cache_dir) -> None:
+    out = tmp_path / "irc"
+    result = cli_runner.invoke(app, ["extract", str(fixture("irc_chat.pcap")), "-o", str(out), "--protocols", "irc"])
+    assert result.exit_code == 0, result.output
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert [m["protocol"] for m in manifest] == ["irc"] and manifest[0]["kind"] == "chat"
+    text = (out / manifest[0]["path"]).read_text()
+    assert "PRIVMSG #ops :deploy is done" in text and "PRIVMSG #ops :split message" in text
+    assert "NOTICE alice :server notice" in text and "JOIN" not in text and "NICK" not in text
 
 
 @requires_tshark

@@ -1681,3 +1681,16 @@ def fixture_search_bytes() -> bytes:
     w.add(udp_frame("10.20.0.10", "10.20.0.1", 53000, 53, b"\xde\xad\xbe\xefkeep"))
     return w.write()
 
+
+@fixture("irc_chat.pcap")
+def fixture_irc_chat() -> bytes:
+    """Plain IRC on 6667: channel PRIVMSG, a NOTICE, and a PRIVMSG split over two TCP segments (#213)."""
+    w = Wire(start=1_702_000_000.0)
+    t = Tcp(w, "10.90.0.1", "10.90.0.2", 42001, 6667).open()
+    t.send(True, b"NICK alice\r\nUSER alice 0 * :Alice\r\n")
+    t.send(False, b":irc.example 001 alice :Welcome\r\n")
+    t.send(True, b"JOIN #ops\r\nPRIVMSG #ops :deploy is done, rollback plan in wiki\r\n")
+    t.send(False, b":bob!b@host PRIVMSG #ops :ack, checking the logs\r\n:irc.example NOTICE alice :server notice\r\n")
+    t.send(True, b"PRIVMSG #ops :split ")
+    t.send(True, b"message\r\n")
+    t.close()

@@ -95,6 +95,7 @@
     "HTTP_MISSING_SECURITY_HEADERS"
   ],
   "ics_mix.pcap": [],
+  "irc_chat.pcap": [],
   "kerberos.pcap": [],
   "mail_logins.pcap": [
     "CLEARTEXT_CREDENTIAL",
