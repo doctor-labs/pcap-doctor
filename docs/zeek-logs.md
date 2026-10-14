@@ -35,6 +35,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `enip` | EtherNet/IP encapsulation packet: command, session handle, status, CIP service (request or reply), CIP class; command and service names are tshark's value strings, unlisted codes are numbers | `enip` pass |
 | `iec104` | IEC 60870-5-104 APDU (first per segment): frame type I/S/U, U function, ASDU type, cause of transmission, common address and IOA; names are tshark's value strings | `iec104` pass |
 | `bacnet` | BACnet/IP APDU: BVLC function, APDU type, service choice and invoke id; names are tshark's value strings | `bacnet` pass |
+| `s7comm` | S7comm PDU: ROSCTR, function, item count, memory area and DB of the first item (no data values); names are tshark's value strings | `s7comm` pass |
 | `tunnel` | encapsulation seen: GRE, VXLAN, GENEVE, GTP, MPLS, ERSPAN, PPPoE by outer endpoints (802.1Q as `VLAN`, an extension) | `tunnel` pass |
 | `bittorrent` | BitTorrent DHT messages (query type — ping, find_node, get_peers, announce_peer — transaction id and, for get_peers/announce_peer, the info_hash as hex) and peer-wire handshakes (info_hash and peer-id version prefix), parsed from the bt-dht heuristic dissector and the handshake | `bt-dht` pass |
 | `device` | one row per sender MAC: OUI vendor, IPs seen, packet count (an extension; Zeek's known_devices is similar) | `device` pass |

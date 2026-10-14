@@ -1189,6 +1189,44 @@ def _bacnet_log(ctx: _Ctx) -> LogTable:
         })
     return table
 
+# Names are tshark's own value strings (tshark -G values); a code tshark does not list prints as a number.
+# ROSCTR (s7comm.header.rosctr).
+_S7_ROSCTR = {1: 'Job', 2: 'Ack', 3: 'Ack_Data', 7: 'Userdata'}
+# Parameter function (s7comm.param.func).
+_S7_FUNCTIONS = {0: 'CPU services', 1: 'Mode transition', 4: 'Read Var', 5: 'Write Var',
+    26: 'Request download', 27: 'Download block', 28: 'Download ended', 29: 'Start upload',
+    30: 'Upload', 31: 'End upload', 40: 'PI-Service', 41: 'PLC Stop',
+    240: 'Setup communication'}
+# Item memory area (s7comm.param.item.area).
+_S7_AREAS = {1: 'Data record', 3: 'System info of 200 family', 5: 'System flags of 200 family', 6: 'Analog inputs of 200 family',
+    7: 'Analog outputs of 200 family', 28: 'S7 counters (C)', 29: 'S7 timers (T)', 30: 'IEC counters (200 family)',
+    31: 'IEC timers (200 family)', 128: 'Direct peripheral access (P)', 129: 'Inputs (I)', 130: 'Outputs (Q)',
+    131: 'Flags (M)', 132: 'Data blocks (DB)', 133: 'Instance data blocks (DI)', 134: 'Local data (L)',
+    135: 'Unknown yet (V)'}
+
+
+def _s7comm_log(ctx: _Ctx) -> LogTable:
+    """One row per S7comm PDU: ROSCTR, function, item count, and the memory area and DB of the first item (#206).
+    Read and write values are not logged."""
+    table = LogTable("s7comm", [("ts", "time"), *ID_COLS, ("rosctr", "string"), ("function", "string"),
+                                ("item_count", "count"), ("area", "string"), ("db", "count")])
+    for row in ctx.runner.run("s7comm"):
+        key = ctx.row_key(row, "tcp")
+        rosctr = to_int(first(row, "s7comm.header.rosctr"))
+        if not key or rosctr is None:
+            continue
+        func = to_int_auto(first(row, "s7comm.param.func"))
+        area = to_int_auto(first(row, "s7comm.param.item.area"))
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "rosctr": _S7_ROSCTR.get(rosctr, str(rosctr)),
+            "function": None if func is None else _S7_FUNCTIONS.get(func, str(func)),
+            "item_count": to_int(first(row, "s7comm.param.itemcount")),
+            "area": None if area is None else _S7_AREAS.get(area, str(area)),
+            "db": to_int(first(row, "s7comm.param.item.db")),
+        })
+    return table
+
 _TUNNEL_TYPE = {
     "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
     "mpls": "Tunnel::MPLS", "erspan": "Tunnel::ERSPAN", "pppoes": "Tunnel::PPPOE", "vlan": "VLAN",
@@ -2077,7 +2115,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "bacnet": _bacnet_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "bacnet": _bacnet_log, "s7comm": _s7comm_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }

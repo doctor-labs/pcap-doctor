@@ -123,6 +123,7 @@
   "iec104.pcap": [],
   "bacnet.pcap": [],
   "netbios_names.pcap": [],
+  "s7comm.pcap": [],
   "no_pfs_tls12.pcap": [
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",

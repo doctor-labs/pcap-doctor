@@ -1923,3 +1923,29 @@ def fixture_bacnet() -> bytes:
     w.add(udp_frame(ctl, dev, 47808, 47808, bacnet_frame(bytes([0x00, 0x05, 0x02, 0x0F]) + write_body)))  # WriteProperty invoke 2
     w.add(udp_frame(dev, ctl, 47808, 47808, bacnet_frame(bytes([0x20, 0x02, 0x0F]))))  # Simple-ACK invoke 2
     return w.write()
+
+
+@fixture("s7comm.pcap")
+def fixture_s7comm() -> bytes:
+    """S7comm over TPKT/COTP on TCP 102: setup, a Read Var of DB 1 with its data, a Write Var, and the acknowledgements (#206)."""
+    w = Wire(start=1_702_500_000.0)
+    hmi, plc = "10.16.0.5", "10.16.0.20"
+    t = Tcp(w, hmi, plc, 51300, 102).open()
+
+    def s7(rosctr: int, params: bytes, data: bytes = b"") -> bytes:
+        errors = bytes([0, 0]) if rosctr in (2, 3) else b""  # error class and code exist in acknowledgements only
+        pdu = bytes([0x32, rosctr, 0, 0, 0, 1]) + struct.pack("!HH", len(params), len(data)) + errors + params + data
+        cotp = bytes([0x02, 0xF0, 0x80]) + pdu  # COTP data transfer
+        return bytes([3, 0]) + struct.pack("!H", 4 + len(cotp)) + cotp  # TPKT
+
+    def item(area: int, db: int, count: int) -> bytes:
+        return bytes([0x12, 0x0A, 0x10, 0x02]) + struct.pack("!HHB", count, db, area) + bytes(3)
+
+    t.send(True, s7(1, bytes([0xF0, 0x00]) + struct.pack("!HHH", 1, 1, 480)))  # Job: setup communication
+    t.send(False, s7(2, bytes([0xF0, 0x00]) + struct.pack("!HHH", 1, 1, 480)))  # Ack
+    t.send(True, s7(1, bytes([0x04, 1]) + item(0x84, 1, 2)))  # Job: read var, DB 1, two bytes
+    t.send(False, s7(3, bytes([0x04, 1]), bytes([0xFF, 0x04, 0x00, 0x10, 0x12, 0x34])))  # Ack_Data with the value
+    t.send(True, s7(1, bytes([0x05, 1]) + item(0x84, 2, 2), bytes([0x00, 0x04, 0x00, 0x10, 0x00, 0x64])))  # write DB 2
+    t.send(False, s7(2, bytes([0x05, 1]), bytes([0xFF])))  # Ack: write accepted
+    t.close()
+    return w.write()
