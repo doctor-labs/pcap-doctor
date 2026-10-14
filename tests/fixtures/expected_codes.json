@@ -18,6 +18,9 @@
     "DNS_CLEARTEXT",
     "DNS_EXTERNAL_RESOLVER"
   ],
+  "dns_odd_port.pcap": [
+    "DNS_CLEARTEXT"
+  ],
   "dns_plus_tls.pcap": [
     "DNS_CLEARTEXT"
   ],

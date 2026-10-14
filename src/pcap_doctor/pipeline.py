@@ -68,6 +68,7 @@ def analyze(
     signatures: tuple[Path, ...] = (),
     signature_vars: dict[str, str] | None = None,
     decode_as: tuple[str, ...] = (),
+    fast: bool = False,
 ) -> RunResult:
     policy.validate(only=only, categories=categories, min_severity=min_severity)
     pcap = Path(pcap)
@@ -79,6 +80,7 @@ def analyze(
         pcap,
         use_cache=use_cache,
         extra_args=tuple(arg for spec in decode_as for arg in ("-d", spec)),
+        fast=fast,
     )
     decrypt_args = tuple(keys.tshark_args()) if keys is not None and not keys.is_empty() else ()
     builder = IndexBuilder(runner, decrypt_args=decrypt_args)
@@ -87,6 +89,16 @@ def analyze(
     index = builder.build()
     if firmware_keys:
         index.firmware_keys = firmware_keys
+
+    if fast:
+        note = runner.fast_fallback_note()
+        if note:
+            index.add_note(note)
+        else:
+            index.add_note(
+                "--fast: port-based passes (DNS/SSH/SIP/Telnet/SMB/NTP) ran on a tcpdump "
+                "BPF-filtered sub-capture; protocols on non-standard ports are not covered."
+            )
 
     # Export every TLS certificate seen as PEM, named by its SHA-256 (#212).
     if index.cert_der:

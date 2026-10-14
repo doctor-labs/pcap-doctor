@@ -689,6 +689,18 @@ PASSES: dict[str, PassSpec] = {
 
 _HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
 
+#: In --fast mode, passes whose protocol normally lives on a well-known port are
+#: pre-split with one of these BPF filters so tshark only touches the small
+#: sub-capture. Protocols on non-standard ports are not covered (issue #334).
+FAST_PASS_BPF: dict[str, str] = {
+    "dns": "port 53",
+    "sip": "udp port 5060",
+    "ssh": "tcp port 22",
+    "telnet": "tcp port 23",
+    "smb": "tcp port 445",
+    "services": "port 123 or port 23 or port 445 or port 21 or port 69 or port 161 or port 143 or port 110 or port 25 or port 389 or port 3306",
+}
+
 
 def _fill_skip_protocols() -> dict[str, PassSpec]:
     """Derive ``skip_protocols`` for every pass that has a display filter but no explicit set (#328).
@@ -960,11 +972,13 @@ class TsharkRunner:
         use_cache: bool = True,
         timeout: int = 600,
         extra_args: tuple[str, ...] = (),
+        fast: bool = False,
     ) -> None:
         self.pcap = pcap
         self.timeout = timeout
         self.use_cache = use_cache
         self.extra_args = extra_args
+        self.fast = fast
         self.version = tshark_version()
         self.sha = file_sha256(pcap) if pcap.is_file() else "unknown"
         self.stats: dict[str, dict[str, int | float | str]] = {}
@@ -975,6 +989,8 @@ class TsharkRunner:
         self._seen_protocols: set[str] | None = None  # populated from the base pass; None until then
         # ponytail: every prefetched pass stays in memory until the build ends; pop on read if huge captures OOM.
         self._prefetched: dict[tuple[str, tuple[str, ...]], list[Row]] = {}
+        self._fast_subs: dict[str, Path] | None = None
+        self._fast_fallback_note: str | None = None
 
     # -- internals ---------------------------------------------------------
     def _collect_protocols(self, rows: list[Row]) -> None:
@@ -1018,10 +1034,13 @@ class TsharkRunner:
                 self.dropped_fields.append(dropped)
         return tuple(keep)
 
-    def _cache_file(self, pass_name: str, extra_args: tuple[str, ...] = ()) -> Path:
+    def _cache_file(
+        self, pass_name: str, extra_args: tuple[str, ...] = (), pcap_sha: str | None = None
+    ) -> Path:
         args = self.extra_args + extra_args
         suffix = "-" + hashlib.sha256("\x1f".join(args).encode()).hexdigest()[:8] if args else ""
-        return cache_dir() / self.sha[:16] / f"{self.version.split()[0]}-{pass_name}{suffix}.json"
+        sha = pcap_sha or self.sha
+        return cache_dir() / sha[:16] / f"{self.version.split()[0]}-{pass_name}{suffix}.json"
 
     def _filter_for(self, spec: PassSpec) -> str | None:
         """Drop protocol tokens this tshark build does not know, recording the drift."""
@@ -1048,8 +1067,10 @@ class TsharkRunner:
                 self.dropped_fields.append(dropped)
         return " || ".join(kept) if kept else None
 
-    def _command(self, spec: PassSpec, extra_args: tuple[str, ...] = ()) -> list[str]:
-        cmd = [tshark_path(), "-r", str(self.pcap), "-n", "-l"]
+    def _command(
+        self, spec: PassSpec, extra_args: tuple[str, ...] = (), pcap: Path | None = None
+    ) -> list[str]:
+        cmd = [tshark_path(), "-r", str(pcap or self.pcap), "-n", "-l"]
         display_filter = self._filter_for(spec)
         if display_filter:
             cmd += ["-Y", display_filter]
@@ -1076,14 +1097,63 @@ class TsharkRunner:
         cmd += list(self.extra_args) + list(extra_args)
         return cmd
 
+    def _fast_sub(self, pass_name: str, bpf: str) -> Path | None:
+        """Return a tcpdump-filtered sub-capture for a pass, or None if tcpdump is unavailable.
+
+        The sub-captures live under the cache dir (deterministic, keyed by the main
+        capture's sha and the BPF filter) so they survive across runs.
+        """
+        if self._fast_subs is not None and pass_name in self._fast_subs:
+            return self._fast_subs[pass_name]
+        if self._fast_subs is None:
+            self._fast_subs = {}
+        sub = cache_dir() / f"{self.sha[:16]}-fast-{hashlib.sha256(bpf.encode()).hexdigest()[:8]}" / f"{pass_name}.pcap"
+        if sub.exists():
+            self._fast_subs[pass_name] = sub
+            return sub
+        path = shutil.which("tcpdump")
+        if path is None:
+            self._fast_fallback_note = "tcpdump not found; --fast fell back to scanning the full capture"
+            return None
+        sub.parent.mkdir(parents=True, exist_ok=True)
+        proc = subprocess.run(
+            [path, "-r", str(self.pcap), "-w", str(sub), bpf],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=self.timeout,
+        )
+        if proc.returncode != 0:
+            self._fast_fallback_note = f"tcpdump failed ({proc.stderr.strip()[:200]}); --fast fell back to scanning the full capture"
+            sub.unlink(missing_ok=True)
+            return None
+        self._fast_subs[pass_name] = sub
+        return sub
+
+    def _pcap_for(self, spec: PassSpec) -> tuple[Path, str]:
+        """The pcap file and its sha for this pass.
+
+        In fast mode, passes whose protocol lives on a well-known port run against
+        a tcpdump BPF-filtered sub-capture; everything else (and everything in
+        normal mode) runs against the full capture.
+        """
+        if self.fast:
+            bpf = FAST_PASS_BPF.get(spec.name)
+            if bpf:
+                sub = self._fast_sub(spec.name, bpf)
+                if sub is not None:
+                    return sub, file_sha256(sub)
+        return self.pcap, self.sha
+
     def _run(self, spec: PassSpec, extra_args: tuple[str, ...] = ()) -> list[Row]:
         fields = self.usable_fields(spec)
-        cache = self._cache_file(spec.name, extra_args)
+        pcap, pcap_sha = self._pcap_for(spec)
+        cache = self._cache_file(spec.name, extra_args, pcap_sha=pcap_sha)
         if self.use_cache and cache.exists():
             try:
                 payload = json.loads(cache.read_text())
                 if (
-                    payload.get("sha") == self.sha
+                    payload.get("sha") == pcap_sha
                     and payload.get("fields") == list(fields)
                     and payload.get("extra") == list(extra_args)
                 ):
@@ -1105,7 +1175,7 @@ class TsharkRunner:
             self.stats[spec.name] = {"rows": 0, "cached": 0, "skipped": 1}
             return []
 
-        cmd = self._command(spec, extra_args)
+        cmd = self._command(spec, extra_args, pcap=pcap)
         for _attempt in range(6):
             proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=self.timeout)
             if proc.returncode == 0:
@@ -1115,13 +1185,13 @@ class TsharkRunner:
                 offending = bad_pref.group(1).split(":", 1)[0]
                 if offending not in _UNSUPPORTED_PREFS:
                     _UNSUPPORTED_PREFS.add(offending)
-                    cmd = self._command(spec, extra_args)
+                    cmd = self._command(spec, extra_args, pcap=pcap)
                     continue
             bad_proto = re.search(r'"([A-Za-z0-9_.-]+)" is not a valid protocol or protocol field', proc.stderr)
             if bad_proto:
                 offender = bad_proto.group(1)
                 self._banned_protocols.add(offender)
-                cmd = self._command(spec, extra_args)
+                cmd = self._command(spec, extra_args, pcap=pcap)
                 continue
             bad_field = re.search(r"^\t(\S+) is not a valid field", proc.stderr, re.MULTILINE)
             if bad_field:
@@ -1130,7 +1200,7 @@ class TsharkRunner:
                 if dropped not in self.dropped_fields:
                     self.dropped_fields.append(dropped)
                 self._field_blacklist.add(field)
-                cmd = self._command(spec, extra_args)
+                cmd = self._command(spec, extra_args, pcap=pcap)
                 continue
             raise TsharkRunError(
                 f"tshark pass {spec.name!r} failed (exit {proc.returncode}):\n"
@@ -1146,7 +1216,7 @@ class TsharkRunner:
             tmp = cache.with_suffix(".tmp")
             tmp.write_text(
                 json.dumps(
-                    {"sha": self.sha, "fields": list(fields), "extra": list(extra_args), "rows": rows}
+                    {"sha": pcap_sha, "fields": list(fields), "extra": list(extra_args), "rows": rows}
                 )
             )
             tmp.replace(cache)
@@ -1218,6 +1288,10 @@ class TsharkRunner:
         for name, spec in PASSES.items():
             out[name] = self._run(spec)
         return out
+
+    def fast_fallback_note(self) -> str | None:
+        """Return the fallback note if tcpdump was missing/failed, else None."""
+        return self._fast_fallback_note
 
     @staticmethod
     def rtp_decode_args(ports: list[int]) -> tuple[str, ...]:
