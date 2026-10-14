@@ -1735,3 +1735,42 @@ def fixture_irc_chat() -> bytes:
     t.send(True, b"message\r\n")
     t.close()
     return w.write()
+
+
+# -- vnc_session.pcap: one RFB 3.8 session on :0 with typed keys, clipboard, a Raw and a CopyRect update (#217) --------
+def _rfb_pixfmt() -> bytes:
+    return struct.pack(">BBBBHHHBBBxxx", 32, 24, 0, 1, 255, 255, 255, 16, 8, 0)
+
+
+def _rfb_key(down: bool, keysym: int) -> bytes:
+    return b"\x04" + bytes([1 if down else 0, 0, 0]) + struct.pack(">I", keysym)
+
+
+@fixture("vnc_session.pcap")
+def fixture_vnc_session() -> bytes:
+    w = Wire(start=1_700_600_000.0)
+    c, s = "10.9.0.10", "10.9.0.20"
+    t = Tcp(w, c, s, 51000, 5900).open()
+    t.send(False, b"RFB 003.008\n")
+    t.send(True, b"RFB 003.008\n")
+    t.send(False, bytes([1, 1]))  # one security type offered: None
+    t.send(True, bytes([1]))
+    t.send(False, struct.pack(">I", 0))  # SecurityResult OK
+    t.send(True, b"\x01")  # ClientInit, shared
+    t.send(False, struct.pack(">HH", 4, 3) + _rfb_pixfmt() + struct.pack(">I", 14) + b"PF-VNC-DESKTOP")
+    t.send(True, b"\x00\x00\x00\x00" + _rfb_pixfmt())  # SetPixelFormat
+    t.send(True, b"\x02\x00" + struct.pack(">Hi", 1, 0))  # SetEncodings: Raw
+    t.send(True, b"\x03\x00" + struct.pack(">HHHH", 0, 0, 4, 3))  # FramebufferUpdateRequest
+    pixels = b"".join(bytes([200, y * 80, x * 60, 0]) for y in range(3) for x in range(4))  # little-endian XRGB
+    raw_rect = struct.pack(">HHHHi", 0, 0, 4, 3, 0) + pixels
+    copy_rect = struct.pack(">HHHHi", 0, 2, 2, 1, 1) + struct.pack(">HH", 2, 0)  # row 0, x 2..3 onto row 2
+    t.send(False, b"\x00\x00" + struct.pack(">H", 2) + raw_rect + copy_rect)
+    for down, sym in ((True, 0x68), (False, 0x68), (True, 0x69), (False, 0x69),
+                      (True, 0xFFE1), (True, 0x41), (False, 0x41), (False, 0xFFE1),
+                      (True, 0xFF0D), (False, 0xFF0D)):
+        t.send(True, _rfb_key(down, sym))
+    t.send(True, b"\x05\x01" + struct.pack(">HH", 1, 1))  # PointerEvent
+    t.send(True, b"\x06\x00\x00\x00" + struct.pack(">I", 7) + b"PF-CLIP")  # ClientCutText
+    t.send(False, b"\x02")  # Bell
+    t.close()
+    return w.write()
