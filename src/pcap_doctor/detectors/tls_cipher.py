@@ -61,6 +61,7 @@ class TlsCipherDetector(Detector):
 
             findings += self._version(session, subjects)
             findings += self._chosen_cipher(session, subjects)
+            findings += self._cipher_order(session, subjects)
             findings += self._offered_ciphers(session, subjects)
             findings += self._forward_secrecy(session, subjects)
             findings += self._key_in_firmware(index, session, subjects)
@@ -309,6 +310,58 @@ class TlsCipherDetector(Detector):
                 )
             ]
         return []
+
+    def _cipher_order(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
+        """Passive check for server cipher-order preference (#272).
+
+        In TLS the server always selects from the ClientHello's cipher list. Two
+        orderings are possible: client order (server walks the client's list) or
+        server order (server walks its own list). When the chosen cipher is *not*
+        the first one in the client's offered list, the server imposed its own
+        preference. We cannot see the server's list, so a false positive is
+        possible when the server simply does not support the client's first
+        cipher -- hence the low confidence.
+        """
+        chosen = session.chosen_cipher
+        offered = session.offered_ciphers
+        if chosen is None or not offered or chosen not in offered:
+            return []
+        first = offered[0]
+        if chosen == first:
+            return []
+        server_frame = self._server_hello_frame(session) or self._client_hello_frame(session)
+        return [
+            self.finding(
+                code="TLS_SERVER_CIPHER_PREFERENCE",
+                title=f"Server chose a non-first cipher on {session.key}",
+                severity="low",
+                confidence="low",
+                summary=(
+                    f"{session.server} selected {name_of(chosen)} (0x{chosen:04x}), which is not the first suite "
+                    f"in the client's offered list ({name_of(first)} (0x{first:04x}) first of "
+                    f"{len(offered)}). The server is imposing its own cipher preference order rather than "
+                    "honouring the client's. Without the server's full supported list this is a heuristic: "
+                    "the server may simply not support the client's top choice."
+                ),
+                scope=f"{session.key}|cipher-order",
+                flow_key=session.key,
+                subjects=subjects,
+                evidence=[
+                    ev(
+                        server_frame,
+                        "tls.handshake.ciphersuite",
+                        f"{name_of(chosen)} chosen (0x{chosen:04x}), {name_of(first)} was first offered (0x{first:04x})",
+                    ),
+                ],
+                remediation=(
+                    "If you want the client's preference to win, disable cipher-server-preference "
+                    "(OpenSSL: clear SSL_OP_CIPHER_SERVER_PREFERENCE; nginx: ssl_prefer_server_ciphers off). "
+                    "If server preference is intended, ensure the server list only permits suites you accept."
+                ),
+                references=["RFC 5246", "RFC 8446", CIPHER_POLICY_DOC],
+                tags=["tls", "cipher", "preference"],
+            )
+        ]
 
     def _offered_ciphers(self, session: TlsSession, subjects: list[str]) -> list[Finding]:
         """Offered-but-never-chosen weak suites are downgrade surface."""

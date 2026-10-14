@@ -56,6 +56,7 @@ RULES: dict[str, Rule] = {
         Rule("TLS_JA3_FLEET", _TLS, "Crypto", "Client JA3 fingerprint fleet"),
         Rule("TLS_HEARTBLEED_PROBE", _TLS, "Crypto", "Heartbleed probe (CVE-2014-0160)"),
         Rule("TLS_COMPRESSION_ENABLED", _TLS, "Crypto", "TLS compression enabled (CRIME)"),
+        Rule("TLS_SERVER_CIPHER_PREFERENCE", _TLS, "Crypto", "Server imposes its own cipher preference order"),
         Rule("TLS_INSECURE_RENEGOTIATION", _TLS, "Crypto", "Insecure TLS renegotiation"),
         Rule("CLEARTEXT_CREDENTIAL", _TRANSPORT, "Credentials", "Credential sent in cleartext"),
         Rule("HTTP_BASIC_AUTH", _TRANSPORT, "Credentials", "HTTP Basic authentication"),
