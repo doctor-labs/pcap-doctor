@@ -26,11 +26,13 @@ from pathlib import Path
 from typing import Any
 
 from .models import SEVERITY_ORDER, Finding
+from .notice import NoticeConfigError, NoticeRule, parse_rules
+from .notice import apply as apply_notice
 from .policy import SEVERITIES, PolicyError
 from .rules import CATEGORIES, RULES
 
 CONFIG_NAME = "pcap-doctor.toml"
-_KEYS = ("profile", "categories", "fail_on", "disable", "severity", "allow")
+_KEYS = ("profile", "categories", "fail_on", "disable", "severity", "allow", "notice")
 
 #: Presets are config fragments. "ota": firmware/OTA-update traffic, where what matters is whether the image and
 #: its credentials travel protected and are resolved safely; VoIP and network-shape findings are noise there.
@@ -68,6 +70,7 @@ class Config:
     disable: frozenset[str] = frozenset()
     severity: dict[str, str] = field(default_factory=dict)
     allow: tuple[Allow, ...] = ()
+    notice: dict[str, NoticeRule] = field(default_factory=dict)
 
 
 def _codes(where: str, codes: list[Any]) -> None:
@@ -122,6 +125,10 @@ def parse(data: dict[str, Any], source: str, profile: str | None = None) -> Conf
         if not any(k in entry for k in _ALLOW_MATCH):
             raise ConfigError(f"{where}: needs at least one of {', '.join(_ALLOW_MATCH)}")
         allow.append(Allow(**{k: str(v) for k, v in entry.items()}))
+    try:
+        notice = parse_rules(data.get("notice", {}), source)
+    except NoticeConfigError as exc:
+        raise ConfigError(str(exc)) from exc
     return Config(
         source=source,
         profile=name,
@@ -130,6 +137,7 @@ def parse(data: dict[str, Any], source: str, profile: str | None = None) -> Conf
         disable=frozenset(disable),
         severity=dict(severity),
         allow=tuple(allow),
+        notice=notice,
     )
 
 
@@ -198,4 +206,7 @@ def apply(findings: list[Finding], config: Config) -> tuple[list[Finding], list[
         notes.append(f"[config] disabled {sum(disabled.values())} finding(s) in {config.source}: {codes}")
     for reason, n in allowed.items():
         notes.append(f"[config] allowed {n} finding(s) in {config.source}: {reason}")
+    if config.notice:
+        kept, notice_notes = apply_notice(kept, config.notice)
+        notes.extend(notice_notes)
     return kept, notes
