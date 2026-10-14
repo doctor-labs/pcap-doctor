@@ -1851,3 +1851,34 @@ def fixture_mqtt() -> bytes:
     r.send(False, bytes([0x20, 2, 0, 5]))  # CONNACK, return code 5: not authorized
     r.close()
     return w.write()
+
+
+def enip_header(command: int, data: bytes, *, session: int = 0, status: int = 0) -> bytes:
+    return struct.pack("<HHII", command, len(data), session, status) + bytes(8) + struct.pack("<I", 0) + data
+
+
+def enip_cip_request(service: int, cls: int, instance: int) -> bytes:
+    """A CIP request on an unconnected SendRRData item: service, path words, then the class and instance segments."""
+    path = bytes([0x20, cls, 0x24, instance])
+    return bytes([service, len(path) // 2]) + path
+
+
+@fixture("enip.pcap")
+def fixture_enip() -> bytes:
+    """EtherNet/IP over TCP 44818: ListIdentity, RegisterSession, then SendRRData carrying CIP Get_Attribute_Single (#206)."""
+    w = Wire(start=1_702_200_000.0)
+    c, s = "10.13.0.5", "10.13.0.20"
+    t = Tcp(w, c, s, 51100, 44818).open()
+    t.send(True, enip_header(0x0063, b""))  # ListIdentity
+    t.send(False, enip_header(0x0063, struct.pack("<H", 0)))
+    t.send(True, enip_header(0x0065, struct.pack("<HH", 1, 0)))  # RegisterSession, version 1
+    t.send(False, enip_header(0x0065, struct.pack("<HH", 1, 0), session=0x1A2B3C4D))
+    cip = enip_cip_request(0x0E, 0x01, 0x01)  # Get_Attribute_Single, class 1 instance 1
+    cpf = struct.pack("<HHHHH", 2, 0, 0, 0x00B2, len(cip)) + cip  # item count 2: null address, unconnected data
+    rr = struct.pack("<IH", 0, 10) + cpf
+    t.send(True, enip_header(0x006F, rr, session=0x1A2B3C4D))  # SendRRData request
+    reply = bytes([0x8E, 0x00, 0x00, 0x00])  # reply to service 0x0E, general status 0
+    cpf_reply = struct.pack("<HHHHH", 2, 0, 0, 0x00B2, len(reply)) + reply
+    t.send(False, enip_header(0x006F, struct.pack("<IH", 0, 10) + cpf_reply, session=0x1A2B3C4D))
+    t.close()
+    return w.write()

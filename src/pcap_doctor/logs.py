@@ -1054,6 +1054,35 @@ def _mqtt_log(ctx: _Ctx) -> LogTable:
         })
     return table
 
+#: EtherNet/IP encapsulation commands (ODVA EIP spec, section 2-4).
+_ENIP_COMMANDS = {0x0004: "ListServices", 0x0063: "ListIdentity", 0x0064: "ListInterfaces", 0x0065: "RegisterSession",
+    0x0066: "UnregisterSession", 0x006F: "SendRRData", 0x0070: "SendUnitData"}
+#: CIP common services (ODVA CIP spec, volume 1, appendix A), reply bit removed.
+_CIP_SERVICES = {0x01: "GET_ATTRIBUTES_ALL", 0x02: "SET_ATTRIBUTES_ALL", 0x03: "GET_ATTRIBUTE_LIST",
+    0x04: "SET_ATTRIBUTE_LIST", 0x05: "RESET", 0x08: "CREATE", 0x09: "DELETE", 0x0E: "GET_ATTRIBUTE_SINGLE",
+    0x10: "SET_ATTRIBUTE_SINGLE", 0x4E: "FORWARD_CLOSE", 0x52: "UNCONNECTED_SEND", 0x54: "FORWARD_OPEN"}
+
+
+def _enip_log(ctx: _Ctx) -> LogTable:
+    """One row per EtherNet/IP encapsulation packet: command, session, status and the CIP service and class (#206)."""
+    table = LogTable("enip", [("ts", "time"), *ID_COLS, ("command", "string"), ("session", "count"), ("status", "count"),
+                              ("cip_service", "string"), ("cip_reply", "bool"), ("cip_class", "count")])
+    for row in ctx.runner.run("enip"):
+        key = ctx.row_key(row, "tcp" if first(row, "tcp.srcport") else "udp")
+        command = to_int_auto(first(row, "enip.command"))
+        if not key or command is None:
+            continue
+        service = to_int_auto(first(row, "cip.service"))
+        rr = to_int_auto(first(row, "cip.rr"))
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "command": _ENIP_COMMANDS.get(command, f"UNKNOWN_{command:#06x}"),
+            "session": to_int_auto(first(row, "enip.session")), "status": to_int_auto(first(row, "enip.status")),
+            "cip_service": None if service is None else _CIP_SERVICES.get(service & 0x7F, f"UNKNOWN_{service & 0x7F:#04x}"),
+            "cip_reply": None if rr is None else rr == 1,
+            "cip_class": to_int_auto(first(row, "cip.class")),
+        })
+    return table
 
 _TUNNEL_TYPE = {
     "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
@@ -1943,7 +1972,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }

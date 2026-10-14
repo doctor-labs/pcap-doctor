@@ -32,6 +32,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `stun` | one row per STUN message: message type (method) and the XOR-MAPPED-ADDRESS (family, IP, port) when present | `stun` pass |
 | `rtsp` | one row per RTSP request with its response: method, URL and status | `rtsp` pass |
 | `mqtt` | MQTT control packet (first one per TCP segment): version, message type, client id, user name, topic, CONNACK return code (no password) | `mqtt` pass |
+| `enip` | EtherNet/IP encapsulation packet: command, session handle, status, CIP service (request or reply), CIP class | `enip` pass |
 | `tunnel` | encapsulation seen: GRE, VXLAN, GENEVE, GTP, MPLS, ERSPAN, PPPoE by outer endpoints (802.1Q as `VLAN`, an extension) | `tunnel` pass |
 | `bittorrent` | BitTorrent DHT messages (query type — ping, find_node, get_peers, announce_peer — transaction id and, for get_peers/announce_peer, the info_hash as hex) and peer-wire handshakes (info_hash and peer-id version prefix), parsed from the bt-dht heuristic dissector and the handshake | `bt-dht` pass |
 | `device` | one row per sender MAC: OUI vendor, IPs seen, packet count (an extension; Zeek's known_devices is similar) | `device` pass |

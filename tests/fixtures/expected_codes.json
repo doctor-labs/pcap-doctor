@@ -119,6 +119,7 @@
     "TLS_SERVER_CIPHER_PREFERENCE"
   ],
   "mqtt.pcap": [],
+  "enip.pcap": [],
   "netbios_names.pcap": [],
   "no_pfs_tls12.pcap": [
     "TLS_CIPHER_WEAK",
