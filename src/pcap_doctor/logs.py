@@ -1227,6 +1227,80 @@ def _s7comm_log(ctx: _Ctx) -> LogTable:
         })
     return table
 
+# Service names are tshark's own value strings for opcua.servicenodeid.numeric (tshark -G values); a code tshark
+# does not list prints as a number.
+_OPCUA_SERVICES = {396: 'ServiceFault (XML Encoding)', 397: 'ServiceFault', 409: 'TestStackRequest (XML Encoding)',
+    410: 'TestStackRequest', 412: 'TestStackResponse (XML Encoding)', 413: 'TestStackResponse',
+    415: 'TestStackExRequest (XML Encoding)', 416: 'TestStackExRequest', 418: 'TestStackExResponse (XML Encoding)',
+    419: 'TestStackExResponse', 421: 'FindServersRequest (XML Encoding)', 422: 'FindServersRequest',
+    424: 'FindServersResponse (XML Encoding)', 425: 'FindServersResponse', 427: 'GetEndpointsRequest (XML Encoding)',
+    428: 'GetEndpointsRequest', 430: 'GetEndpointsResponse (XML Encoding)', 431: 'GetEndpointsResponse',
+    436: 'RegisterServerRequest (XML Encoding)', 437: 'RegisterServerRequest', 439: 'RegisterServerResponse (XML Encoding)',
+    440: 'RegisterServerResponse', 445: 'OpenSecureChannelRequest (XML Encoding)', 446: 'OpenSecureChannelRequest',
+    448: 'OpenSecureChannelResponse (XML Encoding)', 449: 'OpenSecureChannelResponse', 451: 'CloseSecureChannelRequest (XML Encoding)',
+    452: 'CloseSecureChannelRequest', 454: 'CloseSecureChannelResponse (XML Encoding)', 455: 'CloseSecureChannelResponse',
+    460: 'CreateSessionRequest (XML Encoding)', 461: 'CreateSessionRequest', 463: 'CreateSessionResponse (XML Encoding)',
+    464: 'CreateSessionResponse', 466: 'ActivateSessionRequest (XML Encoding)', 467: 'ActivateSessionRequest',
+    469: 'ActivateSessionResponse (XML Encoding)', 470: 'ActivateSessionResponse', 472: 'CloseSessionRequest (XML Encoding)',
+    473: 'CloseSessionRequest', 475: 'CloseSessionResponse (XML Encoding)', 476: 'CloseSessionResponse',
+    478: 'CancelRequest (XML Encoding)', 479: 'CancelRequest', 481: 'CancelResponse (XML Encoding)',
+    482: 'CancelResponse', 487: 'AddNodesRequest (XML Encoding)', 488: 'AddNodesRequest',
+    490: 'AddNodesResponse (XML Encoding)', 491: 'AddNodesResponse', 493: 'AddReferencesRequest (XML Encoding)',
+    494: 'AddReferencesRequest', 496: 'AddReferencesResponse (XML Encoding)', 497: 'AddReferencesResponse',
+    499: 'DeleteNodesRequest (XML Encoding)', 500: 'DeleteNodesRequest', 502: 'DeleteNodesResponse (XML Encoding)',
+    503: 'DeleteNodesResponse', 505: 'DeleteReferencesRequest (XML Encoding)', 506: 'DeleteReferencesRequest',
+    508: 'DeleteReferencesResponse (XML Encoding)', 509: 'DeleteReferencesResponse', 526: 'BrowseRequest (XML Encoding)',
+    527: 'BrowseRequest', 529: 'BrowseResponse (XML Encoding)', 530: 'BrowseResponse',
+    532: 'BrowseNextRequest (XML Encoding)', 533: 'BrowseNextRequest', 535: 'BrowseNextResponse (XML Encoding)',
+    536: 'BrowseNextResponse', 553: 'TranslateBrowsePathsToNodeIdsRequest (XML Encoding)', 554: 'TranslateBrowsePathsToNodeIdsRequest',
+    556: 'TranslateBrowsePathsToNodeIdsResponse (XML Encoding)', 557: 'TranslateBrowsePathsToNodeIdsResponse', 559: 'RegisterNodesRequest (XML Encoding)',
+    560: 'RegisterNodesRequest', 562: 'RegisterNodesResponse (XML Encoding)', 563: 'RegisterNodesResponse',
+    565: 'UnregisterNodesRequest (XML Encoding)', 566: 'UnregisterNodesRequest', 568: 'UnregisterNodesResponse (XML Encoding)',
+    569: 'UnregisterNodesResponse', 614: 'QueryFirstRequest (XML Encoding)', 615: 'QueryFirstRequest',
+    617: 'QueryFirstResponse (XML Encoding)', 618: 'QueryFirstResponse', 620: 'QueryNextRequest (XML Encoding)',
+    621: 'QueryNextRequest', 623: 'QueryNextResponse (XML Encoding)', 624: 'QueryNextResponse',
+    630: 'ReadRequest (XML Encoding)', 631: 'ReadRequest', 633: 'ReadResponse (XML Encoding)',
+    634: 'ReadResponse', 663: 'HistoryReadRequest (XML Encoding)', 664: 'HistoryReadRequest',
+    666: 'HistoryReadResponse (XML Encoding)', 667: 'HistoryReadResponse', 672: 'WriteRequest (XML Encoding)',
+    673: 'WriteRequest', 675: 'WriteResponse (XML Encoding)', 676: 'WriteResponse',
+    699: 'HistoryUpdateRequest (XML Encoding)', 700: 'HistoryUpdateRequest', 702: 'HistoryUpdateResponse (XML Encoding)',
+    703: 'HistoryUpdateResponse', 711: 'CallRequest (XML Encoding)', 712: 'CallRequest',
+    714: 'CallResponse (XML Encoding)', 715: 'CallResponse', 750: 'CreateMonitoredItemsRequest (XML Encoding)',
+    751: 'CreateMonitoredItemsRequest', 753: 'CreateMonitoredItemsResponse (XML Encoding)', 754: 'CreateMonitoredItemsResponse',
+    762: 'ModifyMonitoredItemsRequest (XML Encoding)', 763: 'ModifyMonitoredItemsRequest', 765: 'ModifyMonitoredItemsResponse (XML Encoding)',
+    766: 'ModifyMonitoredItemsResponse', 768: 'SetMonitoringModeRequest (XML Encoding)', 769: 'SetMonitoringModeRequest',
+    771: 'SetMonitoringModeResponse (XML Encoding)', 772: 'SetMonitoringModeResponse', 774: 'SetTriggeringRequest (XML Encoding)',
+    775: 'SetTriggeringRequest', 777: 'SetTriggeringResponse (XML Encoding)', 778: 'SetTriggeringResponse',
+    780: 'DeleteMonitoredItemsRequest (XML Encoding)', 781: 'DeleteMonitoredItemsRequest', 783: 'DeleteMonitoredItemsResponse (XML Encoding)',
+    784: 'DeleteMonitoredItemsResponse', 786: 'CreateSubscriptionRequest (XML Encoding)', 787: 'CreateSubscriptionRequest',
+    789: 'CreateSubscriptionResponse (XML Encoding)', 790: 'CreateSubscriptionResponse', 792: 'ModifySubscriptionRequest (XML Encoding)',
+    793: 'ModifySubscriptionRequest', 795: 'ModifySubscriptionResponse (XML Encoding)', 796: 'ModifySubscriptionResponse',
+    798: 'SetPublishingModeRequest (XML Encoding)', 799: 'SetPublishingModeRequest', 801: 'SetPublishingModeResponse (XML Encoding)',
+    802: 'SetPublishingModeResponse', 825: 'PublishRequest (XML Encoding)', 826: 'PublishRequest',
+    828: 'PublishResponse (XML Encoding)', 829: 'PublishResponse', 831: 'RepublishRequest (XML Encoding)',
+    832: 'RepublishRequest', 834: 'RepublishResponse (XML Encoding)', 835: 'RepublishResponse',
+    840: 'TransferSubscriptionsRequest (XML Encoding)', 841: 'TransferSubscriptionsRequest', 843: 'TransferSubscriptionsResponse (XML Encoding)',
+    844: 'TransferSubscriptionsResponse', 846: 'DeleteSubscriptionsRequest (XML Encoding)', 847: 'DeleteSubscriptionsRequest',
+    849: 'DeleteSubscriptionsResponse (XML Encoding)', 850: 'DeleteSubscriptionsResponse', 12196: 'FindServersOnNetworkRequest (XML Encoding)',
+    12197: 'FindServersOnNetworkResponse (XML Encoding)', 12199: 'RegisterServer2Request (XML Encoding)', 12200: 'RegisterServer2Response (XML Encoding)',
+    12208: 'FindServersOnNetworkRequest', 12209: 'FindServersOnNetworkResponse', 12211: 'RegisterServer2Request',
+    12212: 'RegisterServer2Response'}
+
+def _opcua_log(ctx: _Ctx) -> LogTable:
+    """One row per OPC UA binary transport message: HEL/ACK/OPN/MSG/CLO and the service it carries (#206)."""
+    table = LogTable("opcua", [("ts", "time"), *ID_COLS, ("transport", "string"), ("service", "string")])
+    for row in ctx.runner.run("opcua"):
+        key = ctx.row_key(row, "tcp")
+        kind = first(row, "opcua.transport.type")
+        if not key or not kind:
+            continue
+        code = to_int(first(row, "opcua.servicenodeid.numeric"))
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key), "transport": kind,
+            "service": None if code is None else _OPCUA_SERVICES.get(code, str(code)),
+        })
+    return table
+
 _TUNNEL_TYPE = {
     "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
     "mpls": "Tunnel::MPLS", "erspan": "Tunnel::ERSPAN", "pppoes": "Tunnel::PPPOE", "vlan": "VLAN",
@@ -2115,7 +2189,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "bacnet": _bacnet_log, "s7comm": _s7comm_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "bacnet": _bacnet_log, "s7comm": _s7comm_log, "opcua": _opcua_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }

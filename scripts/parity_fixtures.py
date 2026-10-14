@@ -1949,3 +1949,31 @@ def fixture_s7comm() -> bytes:
     t.send(False, s7(2, bytes([0x05, 1]), bytes([0xFF])))  # Ack: write accepted
     t.close()
     return w.write()
+
+
+def opcua_chunk(kind: bytes, body: bytes, *, channel: int = 0) -> bytes:
+    """A binary OPC UA transport message: three-letter type, chunk flag 'F', total size, then the body."""
+    return kind + b"F" + struct.pack("<I", 8 + len(body)) + body
+
+
+def opcua_string(text: str) -> bytes:
+    return struct.pack("<i", len(text)) + text.encode()
+
+
+@fixture("opcua.pcap")
+def fixture_opcua() -> bytes:
+    """OPC UA binary on TCP 4840: Hello/Acknowledge, OpenSecureChannel, and a CreateSession and a Browse request (#206)."""
+    w = Wire(start=1_702_600_000.0)
+    cli, srv = "10.17.0.5", "10.17.0.20"
+    t = Tcp(w, cli, srv, 51400, 4840).open()
+    hello = struct.pack("<IIIII", 0, 65536, 65536, 0, 0) + opcua_string("opc.tcp://10.17.0.20:4840")
+    t.send(True, opcua_chunk(b"HEL", hello))
+    t.send(False, opcua_chunk(b"ACK", struct.pack("<IIIII", 0, 65536, 65536, 0, 0)))
+    osc = struct.pack("<I", 0) + opcua_string("http://opcfoundation.org/UA/SecurityPolicy#None") + struct.pack("<ii", -1, -1)
+    osc += struct.pack("<II", 1, 1) + bytes([0x01, 0x00]) + struct.pack("<H", 446) + bytes(16)  # OpenSecureChannelRequest
+    t.send(True, opcua_chunk(b"OPN", osc))
+    msg = struct.pack("<IIII", 1, 1, 2, 2)  # channel, token, sequence, request id
+    t.send(True, opcua_chunk(b"MSG", msg + bytes([0x01, 0x00]) + struct.pack("<H", 461) + bytes(16)))  # CreateSessionRequest
+    t.send(True, opcua_chunk(b"MSG", struct.pack("<IIII", 1, 1, 3, 3) + bytes([0x01, 0x00]) + struct.pack("<H", 527) + bytes(16)))  # BrowseRequest
+    t.close()
+    return w.write()

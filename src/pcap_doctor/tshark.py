@@ -1045,6 +1045,21 @@ S7COMM_PASS = PassSpec(
     ),
 )
 
+#: OPC UA binary transport type and service node id for opcua.log (#206). No payload values.
+OPCUA_PASS = PassSpec(
+    name="opcua",
+    display_filter="opcua",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "opcua.transport.type",
+            "opcua.servicenodeid.numeric",
+        )
+    ),
+)
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -1088,7 +1103,7 @@ _TRANSPORT_PREFIXES: frozenset[str] = frozenset({
 _APP_PROTOCOLS: frozenset[str] = frozenset({
     "tls", "dtls", "http", "dns", "sip", "sdp", "rtp", "rtcp", "ssh", "quic",
     "ftp", "smtp", "smb", "smb2", "imf", "kerberos", "ntlmssp", "ntlm",
-    "modbus", "mbtcp", "dnp3", "mqtt", "enip", "cip", "iec60870_104", "bvlc", "bacapp", "s7comm", "telnet", "dhcp", "dhcpv6",
+    "modbus", "mbtcp", "dnp3", "mqtt", "enip", "cip", "iec60870_104", "bvlc", "bacapp", "s7comm", "opcua", "telnet", "dhcp", "dhcpv6",
     "tftp", "ntp", "snmp", "mysql", "ldap", "imap", "pop", "radius", "ike",
     "nfs",
 })
@@ -1173,6 +1188,7 @@ PASSES: dict[str, PassSpec] = {
         IEC104_PASS,
         BACNET_PASS,
         S7COMM_PASS,
+        OPCUA_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,
