@@ -571,6 +571,20 @@ def fixture_dns_external() -> bytes:
     return _pcap_header() + b"".join(_packet(p, 1_700_000_700.0 + i * 0.01) for i, p in enumerate(packets))
 
 
+def fixture_dns_odd_port() -> bytes:
+    """DNS on port 5354: tshark's heuristic dissects it as DNS, so normal mode finds DNS_CLEARTEXT;
+    a ``udp/tcp port 53`` BPF filter in fast mode does not, so the finding is missed (issue #334)."""
+    packets = [
+        eth_ip_udp(CLIENT, "10.0.0.53", 41030, 5354, dns_query("oddport.example", 0x4000)),
+        eth_ip_udp("10.0.0.53", CLIENT, 5354, 41030, dns_response("oddport.example", 0x4000, "93.184.216.34")),
+        eth_ip_udp(CLIENT, "10.0.0.53", 41031, 5354, dns_query("another.example", 0x4001)),
+        eth_ip_udp("10.0.0.53", CLIENT, 5354, 41031, dns_response("another.example", 0x4001, "93.184.216.34")),
+    ]
+    return _pcap_header() + b"".join(
+        _packet(p, 1_700_000_750.0 + i * 0.01) for i, p in enumerate(packets)
+    )
+
+
 def ssh_kexinit(kex: str, hostkey: str, cipher: str, mac: str) -> bytes:
     """One SSH binary packet carrying SSH_MSG_KEXINIT (RFC 4253 section 7.1), no encryption yet."""
 
@@ -648,6 +662,7 @@ STATIC_FIXTURES = {
     "syn_scan.pcap": fixture_syn_scan,
     "snmp_creds.pcap": fixture_snmp_creds,
     "dns_external.pcap": fixture_dns_external,
+    "dns_odd_port.pcap": fixture_dns_odd_port,
     "ssh_weak.pcap": fixture_ssh_weak,
     "beaconing.pcap": fixture_beaconing,
 }

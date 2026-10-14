@@ -92,6 +92,12 @@ def analyze_cmd(
         None, "--sig-var", help="rule variable NAME=VALUE, e.g. HOME_NET=10.0.0.0/8 (repeatable)",
     ),
     no_handoff: bool = typer.Option(False, "--no-handoff", help="never offer to hand a finding to an AI agent"),
+    fast: bool = typer.Option(
+        False, "--fast",
+        help="pre-split the capture with tcpdump BPF filters for port-based passes (DNS/SSH/SIP/Telnet/SMB/NTP on "
+        "well-known ports); protocols on non-standard ports are not covered. Falls back to the normal path if "
+        "tcpdump is missing.",
+    ),
     safe: bool = typer.Option(
         False, "--safe", help="launch AI agents with their approval prompts (also PCAP_DOCTOR_HANDOFF_SAFE=1)"
     ),
@@ -150,6 +156,7 @@ def analyze_cmd(
                 signatures=tuple(signatures or ()),
                 signature_vars=sig_vars,
                 decode_as=tuple(decode_as or ()),
+                fast=fast,
                 progress=(lambda stage: status.update(f"{stage}…")) if status is not None else None,
             )
     except KeyboardInterrupt:

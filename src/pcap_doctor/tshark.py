@@ -74,10 +74,22 @@ def with_addr(fields: tuple[str, ...]) -> tuple[str, ...]:
 #: Protocol tokens that should never gate a skip decision: transport layers
 #: (always present with IP traffic) and pseudo-protocols/keywords that are not
 #: application dissectors.
-_SKIP_EXCLUDED: frozenset[str] = frozenset({
-    "tcp", "udp", "ip", "ipv6", "eth", "ethertype", "data", "arp", "icmp", "ip-udp",
-    "frame", "_ws",
-})
+_SKIP_EXCLUDED: frozenset[str] = frozenset(
+    {
+        "tcp",
+        "udp",
+        "ip",
+        "ipv6",
+        "eth",
+        "ethertype",
+        "data",
+        "arp",
+        "icmp",
+        "ip-udp",
+        "frame",
+        "_ws",
+    }
+)
 
 
 def protocols_in_filter(display_filter: str) -> tuple[str, ...]:
@@ -142,195 +154,210 @@ TLS_PASS = PassSpec(
         "tls.handshake || tls.alert_message || tls.heartbeat_message "
         "|| (tls.record.content_type == 23 && tls.record.version < 0x0303)"
     ),
-    fields=with_addr((
-        "tcp.srcport",
-        "tcp.dstport",
-        "udp.srcport",
-        "udp.dstport",
-        "tcp.stream",
-        "udp.stream",
-        "tls.record.version",
-        "tls.record.content_type",
-        "tls.record.length",
-        "tls.heartbeat_message.type",
-        "tls.heartbeat_message.payload_length",
-        "tls.handshake.type",
-        "tls.handshake.version",
-        "tls.handshake.ciphersuite",
-        "tls.handshake.ciphersuites",
-        "tls.handshake.comp_methods",
-        "tls.handshake.comp_method",
-        "tls.handshake.extensions_server_name",
-        "tls.handshake.extensions_alpn_str",
-        "tls.handshake.extensions.supported_version",
-        "tls.handshake.extensions_supported_group",
-        "tls.handshake.extensions_signature_algorithm",
-        "tls.handshake.extensions_session_ticket",
-        "tls.handshake.session_id_length",
-        "tls.handshake.downgrade_sentinel",
-        "tls.handshake.ja3",
-        "tls.handshake.ja3s",
-        "tls.handshake.ja4",
-        "tls.handshake.p_len",
-        "tls.handshake.extension.type",
-        "tls.handshake.certificate",
-        "tls.alert_message.level",
-        "tls.alert_message.desc",
-        "x509af.utcTime",
-        "x509af.generalizedTime",
-        "x509af.algorithmId",
-        "x509ce.dNSName",
-        "x509ce.modulus",
-        "x509af.subjectPublicKey",
-        "x509sat.uTF8String",
-        "x509sat.printableString",
-        "x509sat.IA5String",
-        "x509sat.CountryName",
-    )),
+    fields=with_addr(
+        (
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "tcp.stream",
+            "udp.stream",
+            "tls.record.version",
+            "tls.record.content_type",
+            "tls.record.length",
+            "tls.heartbeat_message.type",
+            "tls.heartbeat_message.payload_length",
+            "tls.handshake.type",
+            "tls.handshake.version",
+            "tls.handshake.ciphersuite",
+            "tls.handshake.ciphersuites",
+            "tls.handshake.comp_methods",
+            "tls.handshake.comp_method",
+            "tls.handshake.extensions_server_name",
+            "tls.handshake.extensions_alpn_str",
+            "tls.handshake.extensions.supported_version",
+            "tls.handshake.extensions_supported_group",
+            "tls.handshake.extensions_signature_algorithm",
+            "tls.handshake.extensions_session_ticket",
+            "tls.handshake.session_id_length",
+            "tls.handshake.downgrade_sentinel",
+            "tls.handshake.ja3",
+            "tls.handshake.ja3s",
+            "tls.handshake.ja4",
+            "tls.handshake.p_len",
+            "tls.handshake.extension.type",
+            "tls.handshake.certificate",
+            "tls.alert_message.level",
+            "tls.alert_message.desc",
+            "x509af.utcTime",
+            "x509af.generalizedTime",
+            "x509af.algorithmId",
+            "x509ce.dNSName",
+            "x509ce.modulus",
+            "x509af.subjectPublicKey",
+            "x509sat.uTF8String",
+            "x509sat.printableString",
+            "x509sat.IA5String",
+            "x509sat.CountryName",
+        )
+    ),
 )
 
 TLS_ALERT_PASS = PassSpec(
     name="tls_alert",
     display_filter="tls.alert_message",
-    fields=with_addr((
-        "tcp.stream",
-        "tls.alert_message.level",
-        "tls.alert_message.desc",
-    )),
+    fields=with_addr(
+        (
+            "tcp.stream",
+            "tls.alert_message.level",
+            "tls.alert_message.desc",
+        )
+    ),
 )
 
 HTTP_PASS = PassSpec(
     name="http",
     display_filter="http.request || http.response",
-    fields=with_addr((
-        "tcp.stream",
-        "tcp.srcport",
-        "tcp.dstport",
-        "http.request.method",
-        "http.host",
-        "http.request.uri",
-        "http.request.version",
-        "http.response.code",
-        "http.user_agent",
-        "http.authorization",
-        "http.cookie",
-        "http.set_cookie",
-        "http.content_type",
-        "http.response.line",
-    )),
+    fields=with_addr(
+        (
+            "tcp.stream",
+            "tcp.srcport",
+            "tcp.dstport",
+            "http.request.method",
+            "http.host",
+            "http.request.uri",
+            "http.request.version",
+            "http.response.code",
+            "http.user_agent",
+            "http.authorization",
+            "http.cookie",
+            "http.set_cookie",
+            "http.content_type",
+            "http.response.line",
+        )
+    ),
 )
 
 DNS_PASS = PassSpec(
     name="dns",
     display_filter="dns",
-    fields=with_addr((
-        "udp.srcport",
-        "udp.dstport",
-        "tcp.srcport",
-        "tcp.dstport",
-        "udp.stream",
-        "dns.flags.response",
-        "dns.id",
-        "dns.qry.name",
-        "dns.qry.type",
-        "dns.flags.rcode",
-        "dns.a",
-        "dns.aaaa",
-        "dns.cname",
-        "dns.resp.name",
-        "dns.txt",
-        "dns.count.answers",
-        "dns.mx.mail_exchange",
-        "dns.ns",
-        "dns.ptr.domain_name",
-        "dns.srv.target",
-        "dns.soa.mname",
-        "dns.caa.tag",
-        "dns.caa.value",
-        "dns.rr.udp_payload_size",
-    )),
+    fields=with_addr(
+        (
+            "udp.srcport",
+            "udp.dstport",
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.stream",
+            "dns.flags.response",
+            "dns.id",
+            "dns.qry.name",
+            "dns.qry.type",
+            "dns.flags.rcode",
+            "dns.a",
+            "dns.aaaa",
+            "dns.cname",
+            "dns.resp.name",
+            "dns.txt",
+            "dns.count.answers",
+            "dns.mx.mail_exchange",
+            "dns.ns",
+            "dns.ptr.domain_name",
+            "dns.srv.target",
+            "dns.soa.mname",
+            "dns.caa.tag",
+            "dns.caa.value",
+            "dns.rr.udp_payload_size",
+        )
+    ),
 )
 
 SIP_PASS = PassSpec(
     name="sip",
     display_filter="sip || sdp",
-    fields=with_addr((
-        "udp.srcport",
-        "udp.dstport",
-        "tcp.stream",
-        "sip.Method",
-        "sip.Status-Code",
-        "sip.Status-Line",
-        "sip.Call-ID",
-        "sip.CSeq",
-        "sip.from.user",
-        "sip.to.user",
-        "sip.User-Agent",
-        "sip.Via",
-        "sip.auth",
-        "sip.auth.algorithm",
-        "sdp.media",
-        "sdp.media.proto",
-        "sdp.media.port",
-        "sdp.connection.address",
-        "sdp.crypto",
-        "sdp.crypto.crypto_suite",
-        "sdp.crypto.key_method",
-    )),
+    fields=with_addr(
+        (
+            "udp.srcport",
+            "udp.dstport",
+            "tcp.stream",
+            "sip.Method",
+            "sip.Status-Code",
+            "sip.Status-Line",
+            "sip.Call-ID",
+            "sip.CSeq",
+            "sip.from.user",
+            "sip.to.user",
+            "sip.User-Agent",
+            "sip.Via",
+            "sip.auth",
+            "sip.auth.algorithm",
+            "sdp.media",
+            "sdp.media.proto",
+            "sdp.media.port",
+            "sdp.connection.address",
+            "sdp.crypto",
+            "sdp.crypto.crypto_suite",
+            "sdp.crypto.key_method",
+        )
+    ),
 )
 
 RTP_PASS = PassSpec(
     name="rtp",
     display_filter="rtp",
-    fields=with_addr((
-        "frame.time_epoch",
-        "frame.len",
-        "udp.srcport",
-        "udp.dstport",
-        "rtp.ssrc",
-        "rtp.p_type",
-        "rtp.seq",
-        "rtp.timestamp",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "frame.len",
+            "udp.srcport",
+            "udp.dstport",
+            "rtp.ssrc",
+            "rtp.p_type",
+            "rtp.seq",
+            "rtp.timestamp",
+        )
+    ),
 )
 
 SSH_PASS = PassSpec(
     name="ssh",
     display_filter="ssh",
-    fields=with_addr((
-        "tcp.stream",
-        "tcp.srcport",
-        "tcp.dstport",
-        "ssh.protocol",
-        "ssh.message_code",
-        
-        "ssh.kex_algorithms",
-        "ssh.server_host_key_algorithms",
-        "ssh.encryption_algorithms_client_to_server",
-        "ssh.mac_algorithms_client_to_server",
-        "ssh.compression_algorithms_client_to_server",
-        "ssh.kex.hassh",
-        "ssh.kex.hassh_algorithms",
-        "ssh.kex.hasshserver",
-        "ssh.kex.hasshserver_algorithms",
-    )),
+    fields=with_addr(
+        (
+            "tcp.stream",
+            "tcp.srcport",
+            "tcp.dstport",
+            "ssh.protocol",
+            "ssh.message_code",
+            "ssh.kex_algorithms",
+            "ssh.server_host_key_algorithms",
+            "ssh.encryption_algorithms_client_to_server",
+            "ssh.mac_algorithms_client_to_server",
+            "ssh.compression_algorithms_client_to_server",
+            "ssh.kex.hassh",
+            "ssh.kex.hassh_algorithms",
+            "ssh.kex.hasshserver",
+            "ssh.kex.hasshserver_algorithms",
+        )
+    ),
 )
 
 QUIC_PASS = PassSpec(
     name="quic",
     display_filter="quic",
-    fields=with_addr((
-        "udp.srcport",
-        "udp.dstport",
-        "quic.version",
-        "quic.supported_version",
-        "quic.long.packet_type",
-        "tls.handshake.extensions_server_name",
-        "tls.handshake.ciphersuite",
-        "tls.handshake.ciphersuites",
-        "tls.handshake.extensions.supported_version",
-        "tls.handshake.extensions_alpn_str",
-    )),
+    fields=with_addr(
+        (
+            "udp.srcport",
+            "udp.dstport",
+            "quic.version",
+            "quic.supported_version",
+            "quic.long.packet_type",
+            "tls.handshake.extensions_server_name",
+            "tls.handshake.ciphersuite",
+            "tls.handshake.ciphersuites",
+            "tls.handshake.extensions.supported_version",
+            "tls.handshake.extensions_alpn_str",
+        )
+    ),
 )
 
 #: Application fields of the services pass. The index reads exactly these (issue #14).
@@ -378,9 +405,7 @@ DTLS_PASS = PassSpec(
         "dtls.handshake || dtls.alert_message "
         "|| (dtls.record.content_type == 23 && dtls.record.version < 0x0303)"
     ),
-    fields=with_addr(
-        tuple("dtls." + f[4:] if f.startswith("tls.") else f for f in TLS_PASS.fields)
-    ),
+    fields=with_addr(tuple("dtls." + f[4:] if f.startswith("tls.") else f for f in TLS_PASS.fields)),
 )
 
 IPV6_ADDR_PASS = PassSpec(
@@ -393,182 +418,205 @@ IPV6_ADDR_PASS = PassSpec(
 CONN_PASS = PassSpec(
     name="conn",
     display_filter="tcp || udp",
-    fields=with_addr((
-        "frame.time_epoch",
-        "frame.len",
-        "tcp.srcport",
-        "tcp.dstport",
-        "udp.srcport",
-        "udp.dstport",
-        "tcp.flags.syn",
-        "tcp.flags.ack",
-        "tcp.flags.fin",
-        "tcp.flags.reset",
-        "tcp.len",
-        "udp.length",
-        "ip.len",
-        "ipv6.plen",
-        "tcp.seq",
-        "tcp.nxtseq",
-        "tcp.analysis.retransmission",
-        "tcp.analysis.lost_segment",
-        "tcp.analysis.zero_window",
-        "tcp.analysis.duplicate_ack",
-        "tcp.analysis.out_of_order",
-        "tcp.checksum.status",
-        "udp.checksum.status",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "frame.len",
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "tcp.flags.syn",
+            "tcp.flags.ack",
+            "tcp.flags.fin",
+            "tcp.flags.reset",
+            "tcp.len",
+            "udp.length",
+            "ip.len",
+            "ipv6.plen",
+            "tcp.seq",
+            "tcp.nxtseq",
+            "tcp.analysis.retransmission",
+            "tcp.analysis.lost_segment",
+            "tcp.analysis.zero_window",
+            "tcp.analysis.duplicate_ack",
+            "tcp.analysis.out_of_order",
+            "tcp.checksum.status",
+            "udp.checksum.status",
+        )
+    ),
 )
 
 DHCP_PASS = PassSpec(
     name="dhcp",
     display_filter="dhcp",
-    fields=with_addr((
-        "frame.time_epoch",
-        "udp.srcport",
-        "udp.dstport",
-        "dhcp.id",
-        "dhcp.option.dhcp",
-        "dhcp.hw.mac_addr",
-        "dhcp.ip.client",
-        "dhcp.ip.your",
-        "dhcp.option.requested_ip_address",
-        "dhcp.option.hostname",
-        "dhcp.option.domain_name",
-        "dhcp.option.vendor_class_id",
-        "dhcp.option.dhcp_server_id",
-        "dhcp.option.ip_address_lease_time",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "udp.srcport",
+            "udp.dstport",
+            "dhcp.id",
+            "dhcp.option.dhcp",
+            "dhcp.hw.mac_addr",
+            "dhcp.ip.client",
+            "dhcp.ip.your",
+            "dhcp.option.requested_ip_address",
+            "dhcp.option.hostname",
+            "dhcp.option.domain_name",
+            "dhcp.option.vendor_class_id",
+            "dhcp.option.dhcp_server_id",
+            "dhcp.option.ip_address_lease_time",
+        )
+    ),
 )
 
 FTP_PASS = PassSpec(
     name="ftp",
     display_filter="ftp",
-    fields=with_addr((
-        "frame.time_epoch",
-        "tcp.srcport",
-        "tcp.dstport",
-        "tcp.stream",
-        "ftp.request.command",
-        "ftp.request.arg",
-        "ftp.response.code",
-        "ftp.response.arg",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "tcp.stream",
+            "ftp.request.command",
+            "ftp.request.arg",
+            "ftp.response.code",
+            "ftp.response.arg",
+        )
+    ),
 )
 
 SMTP_PASS = PassSpec(
     name="smtp",
     display_filter="smtp || imf",
-    fields=with_addr((
-        "frame.time_epoch",
-        "tcp.srcport",
-        "tcp.dstport",
-        "tcp.stream",
-        "smtp.req.command",
-        "smtp.req.parameter",
-        "smtp.response.code",
-        "smtp.rsp.parameter",
-        "imf.from",
-        "imf.to",
-        "imf.subject",
-        "imf.date",
-        "imf.message_id",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "tcp.stream",
+            "smtp.req.command",
+            "smtp.req.parameter",
+            "smtp.response.code",
+            "smtp.rsp.parameter",
+            "imf.from",
+            "imf.to",
+            "imf.subject",
+            "imf.date",
+            "imf.message_id",
+        )
+    ),
 )
 
 SMB_PASS = PassSpec(
     name="smb",
     display_filter="smb || smb2",
-    fields=with_addr((
-        "frame.time_epoch",
-        "tcp.srcport",
-        "tcp.dstport",
-        "tcp.stream",
-        "smb2.cmd",
-        "smb2.flags.response",
-        "smb2.nt_status",
-        "smb2.filename",
-        "smb2.tree",
-        "smb2.sesid",
-        "smb2.tid",
-        "smb2.dialect",
-        "smb2.sec_mode.sign_required",
-        "smb2.sec_mode.sign_enabled",
-        "smb.cmd",
-        "smb.dialect.name",
-        "smb.sm.sig_required",
-        "smb.nt_status",
-        "smb.file",
-        "smb.path",
-        "ntlmssp.auth.username",
-        "ntlmssp.auth.domain",
-        "ntlmssp.auth.hostname",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "tcp.stream",
+            "smb2.cmd",
+            "smb2.flags.response",
+            "smb2.nt_status",
+            "smb2.filename",
+            "smb2.tree",
+            "smb2.sesid",
+            "smb2.tid",
+            "smb2.dialect",
+            "smb2.sec_mode.sign_required",
+            "smb2.sec_mode.sign_enabled",
+            "smb.cmd",
+            "smb.dialect.name",
+            "smb.sm.sig_required",
+            "smb.nt_status",
+            "smb.file",
+            "smb.path",
+            "ntlmssp.auth.username",
+            "ntlmssp.auth.domain",
+            "ntlmssp.auth.hostname",
+        )
+    ),
 )
 
 #: Kerberos AS/TGS exchanges for kerberos.log (#205): principals, realms, message types, errors. No key material.
 KERBEROS_PASS = PassSpec(
     name="kerberos",
     display_filter="kerberos",
-    fields=with_addr((
-        "frame.time_epoch",
-        "tcp.srcport",
-        "tcp.dstport",
-        "udp.srcport",
-        "udp.dstport",
-        "kerberos.msg_type",
-        "kerberos.CNameString",
-        "kerberos.SNameString",
-        "kerberos.realm",
-        "kerberos.crealm",
-        "kerberos.error_code",
-        "kerberos.etype",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "kerberos.msg_type",
+            "kerberos.CNameString",
+            "kerberos.SNameString",
+            "kerberos.realm",
+            "kerberos.crealm",
+            "kerberos.error_code",
+            "kerberos.etype",
+        )
+    ),
 )
 
 #: NTLMSSP identities for ntlm.log (#205): user, domain, workstation, server names. Never the responses.
 NTLM_PASS = PassSpec(
     name="ntlm",
     display_filter="ntlmssp",
-    fields=with_addr((
-        "frame.time_epoch",
-        "tcp.srcport",
-        "tcp.dstport",
-        "udp.srcport",
-        "udp.dstport",
-        "ntlmssp.messagetype",
-        "ntlmssp.auth.username",
-        "ntlmssp.auth.domain",
-        "ntlmssp.auth.hostname",
-        "ntlmssp.challenge.target_name",
-        "ntlmssp.challenge.target_info.nb_computer_name",
-        "ntlmssp.challenge.target_info.dns_computer_name",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "ntlmssp.messagetype",
+            "ntlmssp.auth.username",
+            "ntlmssp.auth.domain",
+            "ntlmssp.auth.hostname",
+            "ntlmssp.challenge.target_name",
+            "ntlmssp.challenge.target_info.nb_computer_name",
+            "ntlmssp.challenge.target_info.dns_computer_name",
+        )
+    ),
 )
 
 TUNNEL_PASS = PassSpec(
     name="tunnel",
     display_filter="gre || vxlan || geneve || gtp || mpls || erspan || pppoes || vlan",
-    fields=with_addr((
-        "frame.time_epoch",
-        "udp.srcport",
-        "udp.dstport",
-        "gre.proto",
-        "vxlan.vni",
-        "geneve.vni",
-        "gtp.teid",
-        "mpls.label",
-        "erspan.spanid",
-        "pppoe.session_id",
-        "vlan.id",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "udp.srcport",
+            "udp.dstport",
+            "gre.proto",
+            "vxlan.vni",
+            "geneve.vni",
+            "gtp.teid",
+            "mpls.label",
+            "erspan.spanid",
+            "pppoe.session_id",
+            "vlan.id",
+        )
+    ),
 )
 
 DEVICE_PASS = PassSpec(
     name="device",
     display_filter="eth",
-    fields=("frame.number", "frame.time_epoch", "eth.src", "eth.src.oui_resolved",
-        "eth.src_resolved", "ip.src", "ipv6.src"),
+    fields=(
+        "frame.number",
+        "frame.time_epoch",
+        "eth.src",
+        "eth.src.oui_resolved",
+        "eth.src_resolved",
+        "ip.src",
+        "ipv6.src",
+    ),
 )
 
 PROTOCOLS_PASS = PassSpec(
@@ -580,74 +628,139 @@ PROTOCOLS_PASS = PassSpec(
 FRAMES_PASS = PassSpec(
     name="frames",
     display_filter="frame",
-    fields=("frame.time_relative", "frame.time_epoch",
-    "frame.len", "ip.src", "ip.dst", "ipv6.src", "ipv6.dst"),
+    fields=(
+        "frame.time_relative",
+        "frame.time_epoch",
+        "frame.len",
+        "ip.src",
+        "ip.dst",
+        "ipv6.src",
+        "ipv6.dst",
+    ),
 )
 
 SOFTWARE_PASS = PassSpec(
     name="software",
     display_filter="http.server || http.user_agent || ssh.protocol",
-    fields=("frame.time_epoch", "ip.src", "ipv6.src", "tcp.srcport", "tcp.dstport",
-            "http.server", "http.user_agent", "ssh.protocol"),
+    fields=(
+        "frame.time_epoch",
+        "ip.src",
+        "ipv6.src",
+        "tcp.srcport",
+        "tcp.dstport",
+        "http.server",
+        "http.user_agent",
+        "ssh.protocol",
+    ),
 )
 
-OS_PASS = PassSpec(name="os", display_filter="tcp.flags.syn == 1 && tcp.flags.ack == 0",
-    fields=("frame.time_epoch", "ip.src", "ip.ttl", "tcp.window_size_value"))
+OS_PASS = PassSpec(
+    name="os",
+    display_filter="tcp.flags.syn == 1 && tcp.flags.ack == 0",
+    fields=("frame.time_epoch", "ip.src", "ip.ttl", "tcp.window_size_value"),
+)
 
 ARP_ICMP_PASS = PassSpec(
     name="arp_icmp",
     display_filter="arp.opcode == 2 || icmp.type == 5",
-    fields=("frame.number", "frame.time_epoch", "ip.src", "ip.dst", "arp.opcode", "arp.src.hw_mac",
-    "arp.src.proto_ipv4", "icmp.type", "icmp.code", "icmp.redir_gw"))
+    fields=(
+        "frame.number",
+        "frame.time_epoch",
+        "ip.src",
+        "ip.dst",
+        "arp.opcode",
+        "arp.src.hw_mac",
+        "arp.src.proto_ipv4",
+        "icmp.type",
+        "icmp.code",
+        "icmp.redir_gw",
+    ),
+)
 
-CAPTURE_LOSS_PASS = PassSpec(name="capture_loss",
+CAPTURE_LOSS_PASS = PassSpec(
+    name="capture_loss",
     display_filter="tcp.flags.ack == 1",
-    fields=("frame.number", "frame.time_epoch", "tcp.analysis.lost_segment"))
+    fields=("frame.number", "frame.time_epoch", "tcp.analysis.lost_segment"),
+)
 
-MODBUS_PASS = PassSpec(name="modbus", display_filter="modbus", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
-       "mbtcp.trans_id", "modbus.func_code", "modbus.exception_code")))
-DNP3_PASS = PassSpec(name="dnp3", display_filter="dnp3", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
-       "udp.srcport", "udp.dstport", "dnp3.al.func", "dnp3.al.iin")))
+MODBUS_PASS = PassSpec(
+    name="modbus",
+    display_filter="modbus",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "mbtcp.trans_id",
+            "modbus.func_code",
+            "modbus.exception_code",
+        )
+    ),
+)
+DNP3_PASS = PassSpec(
+    name="dnp3",
+    display_filter="dnp3",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "dnp3.al.func",
+            "dnp3.al.iin",
+        )
+    ),
+)
 
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
     display_filter="_ws.expert && frame",
-    fields=with_addr((
-        "frame.time_epoch",
-        "tcp.srcport",
-        "tcp.dstport",
-        "udp.srcport",
-        "udp.dstport",
-        "_ws.expert.message",
-        "_ws.expert.severity",
-        "_ws.expert.group",
-        "ip.checksum.status",
-        "tcp.checksum.status",
-        "udp.checksum.status",
-        "icmp.checksum.status",
-    )),
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "_ws.expert.message",
+            "_ws.expert.severity",
+            "_ws.expert.group",
+            "ip.checksum.status",
+            "tcp.checksum.status",
+            "udp.checksum.status",
+            "icmp.checksum.status",
+        )
+    ),
 )
 
 #: tshark leaves checksums unverified by default; the conn and weird passes turn checking on (#209).
 CHECKSUM_ARGS: tuple[str, ...] = (
-    "-o", "ip.check_checksum:TRUE", "-o", "tcp.check_checksum:TRUE", "-o", "udp.check_checksum:TRUE",
+    "-o",
+    "ip.check_checksum:TRUE",
+    "-o",
+    "tcp.check_checksum:TRUE",
+    "-o",
+    "udp.check_checksum:TRUE",
 )
 
 #: Every TCP/UDP payload, for the user-supplied signature engine (#201). Only run when signatures are given.
 PAYLOAD_PASS = PassSpec(
     name="payload",
     display_filter="tcp.len > 0 || udp.length > 8",
-    fields=with_addr((
-        "tcp.srcport",
-        "tcp.dstport",
-        "udp.srcport",
-        "udp.dstport",
-        "tcp.stream",
-        "tcp.flags",
-        "tcp.payload",
-        "udp.payload",
-    )),
+    fields=with_addr(
+        (
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "tcp.stream",
+            "tcp.flags",
+            "tcp.payload",
+            "udp.payload",
+        )
+    ),
 )
 
 PASSES: dict[str, PassSpec] = {
@@ -688,6 +801,18 @@ PASSES: dict[str, PassSpec] = {
 }
 
 _HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
+
+#: In --fast mode, passes whose protocol normally lives on a well-known port are
+#: pre-split with one of these BPF filters so tshark only touches the small
+#: sub-capture. Protocols on non-standard ports are not covered (issue #334).
+FAST_PASS_BPF: dict[str, str] = {
+    "dns": "port 53",
+    "sip": "udp port 5060",
+    "ssh": "tcp port 22",
+    "telnet": "tcp port 23",
+    "smb": "tcp port 445",
+    "services": "port 123 or port 23 or port 445 or port 21 or port 69 or port 161 or port 143 or port 110 or port 25 or port 389 or port 3306",
+}
 
 
 def _fill_skip_protocols() -> dict[str, PassSpec]:
@@ -749,7 +874,9 @@ def valid_fields() -> frozenset[str]:
 @lru_cache(maxsize=1)
 def protocol_names() -> frozenset[str]:
     """Short protocol names usable in a display filter (``-G protocols``)."""
-    out = subprocess.run([tshark_path(), "-G", "protocols"], capture_output=True, text=True, check=False).stdout
+    out = subprocess.run(
+        [tshark_path(), "-G", "protocols"], capture_output=True, text=True, check=False
+    ).stdout
     names: set[str] = set()
     for line in out.splitlines():
         parts = line.split("\t")
@@ -960,11 +1087,13 @@ class TsharkRunner:
         use_cache: bool = True,
         timeout: int = 600,
         extra_args: tuple[str, ...] = (),
+        fast: bool = False,
     ) -> None:
         self.pcap = pcap
         self.timeout = timeout
         self.use_cache = use_cache
         self.extra_args = extra_args
+        self.fast = fast
         self.version = tshark_version()
         self.sha = file_sha256(pcap) if pcap.is_file() else "unknown"
         self.stats: dict[str, dict[str, int | float | str]] = {}
@@ -975,6 +1104,8 @@ class TsharkRunner:
         self._seen_protocols: set[str] | None = None  # populated from the base pass; None until then
         # ponytail: every prefetched pass stays in memory until the build ends; pop on read if huge captures OOM.
         self._prefetched: dict[tuple[str, tuple[str, ...]], list[Row]] = {}
+        self._fast_subs: dict[str, Path] | None = None
+        self._fast_fallback_note: str | None = None
 
     # -- internals ---------------------------------------------------------
     def _collect_protocols(self, rows: list[Row]) -> None:
@@ -1018,10 +1149,13 @@ class TsharkRunner:
                 self.dropped_fields.append(dropped)
         return tuple(keep)
 
-    def _cache_file(self, pass_name: str, extra_args: tuple[str, ...] = ()) -> Path:
+    def _cache_file(
+        self, pass_name: str, extra_args: tuple[str, ...] = (), pcap_sha: str | None = None
+    ) -> Path:
         args = self.extra_args + extra_args
         suffix = "-" + hashlib.sha256("\x1f".join(args).encode()).hexdigest()[:8] if args else ""
-        return cache_dir() / self.sha[:16] / f"{self.version.split()[0]}-{pass_name}{suffix}.json"
+        sha = pcap_sha or self.sha
+        return cache_dir() / sha[:16] / f"{self.version.split()[0]}-{pass_name}{suffix}.json"
 
     def _filter_for(self, spec: PassSpec) -> str | None:
         """Drop protocol tokens this tshark build does not know, recording the drift."""
@@ -1048,8 +1182,10 @@ class TsharkRunner:
                 self.dropped_fields.append(dropped)
         return " || ".join(kept) if kept else None
 
-    def _command(self, spec: PassSpec, extra_args: tuple[str, ...] = ()) -> list[str]:
-        cmd = [tshark_path(), "-r", str(self.pcap), "-n", "-l"]
+    def _command(
+        self, spec: PassSpec, extra_args: tuple[str, ...] = (), pcap: Path | None = None
+    ) -> list[str]:
+        cmd = [tshark_path(), "-r", str(pcap or self.pcap), "-n", "-l"]
         display_filter = self._filter_for(spec)
         if display_filter:
             cmd += ["-Y", display_filter]
@@ -1076,14 +1212,69 @@ class TsharkRunner:
         cmd += list(self.extra_args) + list(extra_args)
         return cmd
 
+    def _fast_sub(self, pass_name: str, bpf: str) -> Path | None:
+        """Return a tcpdump-filtered sub-capture for a pass, or None if tcpdump is unavailable.
+
+        The sub-captures live under the cache dir (deterministic, keyed by the main
+        capture's sha and the BPF filter) so they survive across runs.
+        """
+        if self._fast_subs is not None and pass_name in self._fast_subs:
+            return self._fast_subs[pass_name]
+        if self._fast_subs is None:
+            self._fast_subs = {}
+        sub = (
+            cache_dir()
+            / f"{self.sha[:16]}-fast-{hashlib.sha256(bpf.encode()).hexdigest()[:8]}"
+            / f"{pass_name}.pcap"
+        )
+        if sub.exists():
+            self._fast_subs[pass_name] = sub
+            return sub
+        path = shutil.which("tcpdump")
+        if path is None:
+            self._fast_fallback_note = "tcpdump not found; --fast fell back to scanning the full capture"
+            return None
+        sub.parent.mkdir(parents=True, exist_ok=True)
+        proc = subprocess.run(
+            [path, "-r", str(self.pcap), "-w", str(sub), bpf],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=self.timeout,
+        )
+        if proc.returncode != 0:
+            self._fast_fallback_note = (
+                f"tcpdump failed ({proc.stderr.strip()[:200]}); --fast fell back to scanning the full capture"
+            )
+            sub.unlink(missing_ok=True)
+            return None
+        self._fast_subs[pass_name] = sub
+        return sub
+
+    def _pcap_for(self, spec: PassSpec) -> tuple[Path, str]:
+        """The pcap file and its sha for this pass.
+
+        In fast mode, passes whose protocol lives on a well-known port run against
+        a tcpdump BPF-filtered sub-capture; everything else (and everything in
+        normal mode) runs against the full capture.
+        """
+        if self.fast:
+            bpf = FAST_PASS_BPF.get(spec.name)
+            if bpf:
+                sub = self._fast_sub(spec.name, bpf)
+                if sub is not None:
+                    return sub, file_sha256(sub)
+        return self.pcap, self.sha
+
     def _run(self, spec: PassSpec, extra_args: tuple[str, ...] = ()) -> list[Row]:
         fields = self.usable_fields(spec)
-        cache = self._cache_file(spec.name, extra_args)
+        pcap, pcap_sha = self._pcap_for(spec)
+        cache = self._cache_file(spec.name, extra_args, pcap_sha=pcap_sha)
         if self.use_cache and cache.exists():
             try:
                 payload = json.loads(cache.read_text())
                 if (
-                    payload.get("sha") == self.sha
+                    payload.get("sha") == pcap_sha
                     and payload.get("fields") == list(fields)
                     and payload.get("extra") == list(extra_args)
                 ):
@@ -1105,7 +1296,7 @@ class TsharkRunner:
             self.stats[spec.name] = {"rows": 0, "cached": 0, "skipped": 1}
             return []
 
-        cmd = self._command(spec, extra_args)
+        cmd = self._command(spec, extra_args, pcap=pcap)
         for _attempt in range(6):
             proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=self.timeout)
             if proc.returncode == 0:
@@ -1115,13 +1306,15 @@ class TsharkRunner:
                 offending = bad_pref.group(1).split(":", 1)[0]
                 if offending not in _UNSUPPORTED_PREFS:
                     _UNSUPPORTED_PREFS.add(offending)
-                    cmd = self._command(spec, extra_args)
+                    cmd = self._command(spec, extra_args, pcap=pcap)
                     continue
-            bad_proto = re.search(r'"([A-Za-z0-9_.-]+)" is not a valid protocol or protocol field', proc.stderr)
+            bad_proto = re.search(
+                r'"([A-Za-z0-9_.-]+)" is not a valid protocol or protocol field', proc.stderr
+            )
             if bad_proto:
                 offender = bad_proto.group(1)
                 self._banned_protocols.add(offender)
-                cmd = self._command(spec, extra_args)
+                cmd = self._command(spec, extra_args, pcap=pcap)
                 continue
             bad_field = re.search(r"^\t(\S+) is not a valid field", proc.stderr, re.MULTILINE)
             if bad_field:
@@ -1130,7 +1323,7 @@ class TsharkRunner:
                 if dropped not in self.dropped_fields:
                     self.dropped_fields.append(dropped)
                 self._field_blacklist.add(field)
-                cmd = self._command(spec, extra_args)
+                cmd = self._command(spec, extra_args, pcap=pcap)
                 continue
             raise TsharkRunError(
                 f"tshark pass {spec.name!r} failed (exit {proc.returncode}):\n"
@@ -1145,9 +1338,7 @@ class TsharkRunner:
             cache.parent.mkdir(parents=True, exist_ok=True)
             tmp = cache.with_suffix(".tmp")
             tmp.write_text(
-                json.dumps(
-                    {"sha": self.sha, "fields": list(fields), "extra": list(extra_args), "rows": rows}
-                )
+                json.dumps({"sha": pcap_sha, "fields": list(fields), "extra": list(extra_args), "rows": rows})
             )
             tmp.replace(cache)
         self.stats[spec.name] = {"rows": len(rows), "cached": 0}
@@ -1209,7 +1400,9 @@ class TsharkRunner:
         if not remaining:
             return
         with ThreadPoolExecutor(max_workers=max(1, min(len(remaining), os.cpu_count() or 4))) as pool:
-            futures = {(name, args): pool.submit(self._run, PASSES[name], args) for name, args in remaining.items()}
+            futures = {
+                (name, args): pool.submit(self._run, PASSES[name], args) for name, args in remaining.items()
+            }
             for key, future in futures.items():
                 self._prefetched[key] = future.result()
 
@@ -1218,6 +1411,10 @@ class TsharkRunner:
         for name, spec in PASSES.items():
             out[name] = self._run(spec)
         return out
+
+    def fast_fallback_note(self) -> str | None:
+        """Return the fallback note if tcpdump was missing/failed, else None."""
+        return self._fast_fallback_note
 
     @staticmethod
     def rtp_decode_args(ports: list[int]) -> tuple[str, ...]:
