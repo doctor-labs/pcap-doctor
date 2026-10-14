@@ -26,7 +26,7 @@ VULNERABLE: tuple[tuple[str, Version | None, Version | None, str], ...] = (
     ("Apache", (2, 4, 50), (2, 4, 51), "CVE-2021-42013"),
     ("OpenSSH", None, (7, 4), "CVE-2016-10012"),
     ("vsftpd", (2, 3, 4), (2, 3, 5), "CVE-2011-2523"),
-    ("Exim", (4, 80), (4, 92), "CVE-2019-10149"),
+    ("Exim", (4, 87), (4, 92), "CVE-2019-10149"),
     ("ProFTPD", (1, 3, 5), (1, 3, 6), "CVE-2015-3306"),
     ("Microsoft-IIS", (6, 0), (6, 1), "CVE-2017-7269"),
 )
