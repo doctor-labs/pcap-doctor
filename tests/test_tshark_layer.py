@@ -237,6 +237,56 @@ def test_every_service_field_is_a_real_tshark_field() -> None:
 
 
 @requires_tshark
+def test_skip_pass_when_protocols_absent(monkeypatch) -> None:
+    """#328: a pass whose protocols do not appear in the capture is not launched."""
+    import pcap_doctor.tshark as mod
+
+    runner = TsharkRunner(fixture("dns_plus_tls.pcap"), use_cache=False)
+    real_run = mod.subprocess.run
+    launched: list[str] = []
+
+    def counting_run(cmd, *args, **kwargs):
+        # cmd[0] is tshark; the pass name follows the display filter, but the simplest
+        # stable marker is the fields list. Use the real _command to map the name.
+        launched.append("tshark")
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(mod.subprocess, "run", counting_run)
+    runner.prefetch({
+        "base": (), "tls": (), "dtls": (), "http": (), "dns": (), "sip": (),
+        "ssh": (), "quic": (), "services": (), "telnet": (), "smb": (),
+    })
+    # The runner records which passes were skipped (empty rows, no subprocess).
+    assert set(runner.skipped_passes) == {"dtls", "http", "sip", "ssh", "quic", "services", "telnet", "smb"}
+    assert set(runner.stats) <= {"base", "tls", "dns", *runner.skipped_passes}
+    # A skipped pass returns the same empty rows it would have produced if launched.
+    assert runner.run("smb") == []
+    assert runner.stats["smb"] == {"rows": 0, "cached": 0, "skipped": 1}
+
+
+@requires_tshark
+def test_skip_pass_not_applied_when_extra_args_present(monkeypatch) -> None:
+    """A pass invoked with decode-as / decrypt args is never skipped: the extra args
+    can reveal protocols the base pass cannot see (#328)."""
+    runner = TsharkRunner(fixture("dns_plus_tls.pcap"), use_cache=False)
+    # rtp has skip_protocols ("rtp",) which is absent from dns_plus_tls, but the
+    # SIP pass supplies decode-as args -- the pass must still launch.
+    launched: list[str] = []
+    real_run = __import__("pcap_doctor.tshark", fromlist=["subprocess"]).subprocess.run
+
+    def counting_run(cmd, *args, **kwargs):
+        launched.append("tshark")
+        return real_run(cmd, *args, **kwargs)
+
+    import pcap_doctor.tshark as mod
+
+    monkeypatch.setattr(mod.subprocess, "run", counting_run)
+    runner.run("rtp", runner.rtp_decode_args([20000]))
+    assert launched  # at least one tshark launch happened
+    assert "rtp" not in runner.skipped_passes
+
+
+@requires_tshark
 def test_prefetch_runs_passes_concurrently_and_run_reuses_them(monkeypatch) -> None:
     # #127: the independent passes overlap, and `run` serves the prefetched rows (same per-call args only)
     import threading
