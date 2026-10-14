@@ -1028,9 +1028,11 @@ def _rtsp_log(ctx: _Ctx) -> LogTable:
     return table
 
 
-_MQTT_TYPES = {1: "CONNECT", 2: "CONNACK", 3: "PUBLISH", 4: "PUBACK", 5: "PUBREC", 6: "PUBREL", 7: "PUBCOMP",
-    8: "SUBSCRIBE", 9: "SUBACK", 10: "UNSUBSCRIBE", 11: "UNSUBACK", 12: "PINGREQ", 13: "PINGRESP", 14: "DISCONNECT",
-    15: "AUTH"}
+# Names are tshark's own value strings (tshark -G values, mqtt.msgtype); a code tshark does not list prints as a number.
+_MQTT_TYPES = {0: "Reserved", 1: "Connect Command", 2: "Connect Ack", 3: "Publish Message", 4: "Publish Ack",
+    5: "Publish Received", 6: "Publish Release", 7: "Publish Complete", 8: "Subscribe Request", 9: "Subscribe Ack",
+    10: "Unsubscribe Request", 11: "Unsubscribe Ack", 12: "Ping Request", 13: "Ping Response", 14: "Disconnect Req",
+    15: "Authentication Exchange", 16: "Reserved"}
 
 
 def _mqtt_log(ctx: _Ctx) -> LogTable:
@@ -1046,7 +1048,7 @@ def _mqtt_log(ctx: _Ctx) -> LogTable:
         table.rows.append({
             "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
             "version": to_int(first(row, "mqtt.ver")),
-            "msg_type": _MQTT_TYPES.get(mtype, f"UNKNOWN_{mtype}"),
+            "msg_type": _MQTT_TYPES.get(mtype, str(mtype)),
             "client_id": first(row, "mqtt.clientid") or None,
             "username": first(row, "mqtt.username") or None,
             "topic": first(row, "mqtt.topic") or None,
@@ -1054,13 +1056,15 @@ def _mqtt_log(ctx: _Ctx) -> LogTable:
         })
     return table
 
-#: EtherNet/IP encapsulation commands (ODVA EIP spec, section 2-4).
-_ENIP_COMMANDS = {0x0004: "ListServices", 0x0063: "ListIdentity", 0x0064: "ListInterfaces", 0x0065: "RegisterSession",
-    0x0066: "UnregisterSession", 0x006F: "SendRRData", 0x0070: "SendUnitData"}
-#: CIP common services (ODVA CIP spec, volume 1, appendix A), reply bit removed.
-_CIP_SERVICES = {0x01: "GET_ATTRIBUTES_ALL", 0x02: "SET_ATTRIBUTES_ALL", 0x03: "GET_ATTRIBUTE_LIST",
-    0x04: "SET_ATTRIBUTE_LIST", 0x05: "RESET", 0x08: "CREATE", 0x09: "DELETE", 0x0E: "GET_ATTRIBUTE_SINGLE",
-    0x10: "SET_ATTRIBUTE_SINGLE", 0x4E: "FORWARD_CLOSE", 0x52: "UNCONNECTED_SEND", 0x54: "FORWARD_OPEN"}
+# Names are tshark's own value strings (tshark -G values: enip.command, cip.sc); unlisted codes print as numbers.
+_ENIP_COMMANDS = {0x0: "NOP", 0x4: "List Services", 0x63: "List Identity", 0x64: "List Interfaces",
+    0x65: "Register Session", 0x66: "Unregister Session", 0x6F: "Send RR Data", 0x70: "Send Unit Data", 0xC8: "StartDTLS"}
+#: CIP service names (cip.sc), reply bit removed.
+_CIP_SERVICES = {0x1: "Get Attributes All", 0x2: "Set Attributes All", 0x3: "Get Attribute List",
+    0x4: "Set Attribute List", 0x5: "Reset", 0x6: "Start", 0x7: "Stop", 0x8: "Create", 0x9: "Delete",
+    0xA: "Multiple Service Packet", 0xD: "Apply Attributes", 0xE: "Get Attribute Single", 0x10: "Set Attribute Single",
+    0x11: "Find Next Object Instance", 0x15: "Restore", 0x16: "Save", 0x17: "Nop", 0x18: "Get Member", 0x19: "Set Member",
+    0x1A: "Insert Member", 0x1B: "Remove Member", 0x1C: "Group Sync"}
 
 
 def _enip_log(ctx: _Ctx) -> LogTable:
@@ -1076,9 +1080,9 @@ def _enip_log(ctx: _Ctx) -> LogTable:
         rr = to_int_auto(first(row, "cip.rr"))
         table.rows.append({
             "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
-            "command": _ENIP_COMMANDS.get(command, f"UNKNOWN_{command:#06x}"),
+            "command": _ENIP_COMMANDS.get(command, str(command)),
             "session": to_int_auto(first(row, "enip.session")), "status": to_int_auto(first(row, "enip.status")),
-            "cip_service": None if service is None else _CIP_SERVICES.get(service & 0x7F, f"UNKNOWN_{service & 0x7F:#04x}"),
+            "cip_service": None if service is None else _CIP_SERVICES.get(service & 0x7F, str(service & 0x7F)),
             "cip_reply": None if rr is None else rr == 1,
             "cip_class": to_int_auto(first(row, "cip.class")),
         })
