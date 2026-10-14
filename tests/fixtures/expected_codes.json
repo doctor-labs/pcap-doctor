@@ -137,6 +137,11 @@
     "SSH_WEAK_MAC"
   ],
   "strong_tls13.pcap": [],
+  "rtp_quality.pcap": [
+    "RTP_MEDIA_UNPROTECTED",
+    "SDP_NO_CRYPTO_ATTR",
+    "SIP_CLEARTEXT_SIGNALLING"
+  ],
   "syn_scan.pcap": [
     "SYN_SCAN_SHAPE"
   ],

@@ -807,6 +807,55 @@ def fixture_mail_logins() -> bytes:
     return w.write()
 
 
+@fixture("rtp_quality.pcap")
+def fixture_rtp_quality() -> bytes:
+    """RTP media with measurable packet loss and interarrival jitter (#253).
+
+    A minimal SIP/SDP exchange (INVITE + 200 OK advertising ``m=audio 20000
+    RTP/AVP 8``) lets the index apply its UDP port 20000 -> RTP decode-as, so
+    tshark actually dissects the media. Six PCMA packets (clock 8000 Hz,
+    payload type 8) then flow on 10.0.0.20:20000 -> 10.0.0.10:20002 with SSRC
+    0xAABBCCDD. Sequence numbers 0,1,2,5,6,7 -- packets 3 and 4 are dropped, so
+    two holes out of eight expected -> 25.0% loss (matches
+    ``tshark -z rtp,streams``). Timestamps advance 160 per packet (20 ms audio
+    frames) but arrivals are irregular (12, 7, 9, 11, 11 ms apart), giving an
+    RFC 3550 A.8 jitter of ~4.947 ms (tshark reports the same value as its
+    *max* jitter; its *mean* jitter is the per-packet average instead).
+    """
+    w = Wire(start=1_700_100_000.0, step=0.0)
+    # A tiny SIP call that advertises the RTP media port so the index can
+    # decode the media as RTP.
+    sdp = (
+        b"v=0\r\no=alice 1 1 IN IP4 10.0.0.10\r\ns=rtp-quality\r\nt=0 0\r\n"
+        b"m=audio 20000 RTP/AVP 8\r\na=rtpmap:8 PCMA/8000\r\n"
+    )
+    invite = (
+        b"INVITE sip:bob@10.0.0.20 SIP/2.0\r\n"
+        b"Via: SIP/2.0/UDP 10.0.0.10:5060;branch=z9hG4bK1\r\n"
+        b"From: <sip:alice@10.0.0.10>;tag=1\r\nTo: <sip:bob@10.0.0.20>\r\n"
+        b"Call-ID: rtp-quality-call@10.0.0.10\r\nCSeq: 1 INVITE\r\n"
+        b"Content-Type: application/sdp\r\nContent-Length: %d\r\n\r\n" % len(sdp) + sdp
+    )
+    ok = (
+        b"SIP/2.0 200 OK\r\n"
+        b"Via: SIP/2.0/UDP 10.0.0.10:5060;branch=z9hG4bK1\r\n"
+        b"From: <sip:alice@10.0.0.10>;tag=1\r\nTo: <sip:bob@10.0.0.20>;tag=2\r\n"
+        b"Call-ID: rtp-quality-call@10.0.0.10\r\nCSeq: 1 INVITE\r\n"
+        b"Content-Type: application/sdp\r\nContent-Length: %d\r\n\r\n" % len(sdp) + sdp
+    )
+    w.add(udp_frame("10.0.0.10", "10.0.0.20", 5060, 5060, invite, smac=MAC_A, dmac=MAC_B), dt=0.0)
+    w.add(udp_frame("10.0.0.20", "10.0.0.10", 5060, 5060, ok, smac=MAC_B, dmac=MAC_A), dt=0.05)
+    seqs = [0, 1, 2, 5, 6, 7]
+    tsvals = [0, 160, 320, 800, 960, 1120]
+    arrivals = [0.100, 0.112, 0.119, 0.128, 0.139, 0.150]
+    ssrc = 0xAABBCCDD
+    for i in range(len(seqs)):
+        rtp = struct.pack("!BBHII", 0x80, 8, seqs[i], tsvals[i], ssrc) + b"\x00" * 160
+        frame = udp_frame("10.0.0.20", "10.0.0.10", 20000, 20002, rtp, smac=MAC_B, dmac=MAC_A)
+        w.add(frame, dt=arrivals[i] if i == 0 else arrivals[i] - arrivals[i - 1])
+    return w.write()
+
+
 @fixture("connect_scans.pcap")
 def fixture_connect_scans() -> bytes:
     """Connect scans that complete every handshake: 20 ports on one host, and port 445 on 20 hosts (#242)."""
