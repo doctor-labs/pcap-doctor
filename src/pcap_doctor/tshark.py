@@ -946,6 +946,26 @@ BT_DHT_PASS = PassSpec(
     )),
 )
 
+#: MQTT control packets for mqtt.log (#206): type, version, client id, user name, topic, CONNACK return code.
+#: Never the password field.
+MQTT_PASS = PassSpec(
+    name="mqtt",
+    display_filter="mqtt",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "mqtt.msgtype",
+            "mqtt.ver",
+            "mqtt.clientid",
+            "mqtt.username",
+            "mqtt.topic",
+            "mqtt.conack.val",
+        )
+    ),
+)
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -989,7 +1009,7 @@ _TRANSPORT_PREFIXES: frozenset[str] = frozenset({
 _APP_PROTOCOLS: frozenset[str] = frozenset({
     "tls", "dtls", "http", "dns", "sip", "sdp", "rtp", "rtcp", "ssh", "quic",
     "ftp", "smtp", "smb", "smb2", "imf", "kerberos", "ntlmssp", "ntlm",
-    "modbus", "mbtcp", "dnp3", "telnet", "dhcp", "dhcpv6",
+    "modbus", "mbtcp", "dnp3", "mqtt", "telnet", "dhcp", "dhcpv6",
     "tftp", "ntp", "snmp", "mysql", "ldap", "imap", "pop", "radius", "ike",
     "nfs",
 })
@@ -1069,6 +1089,7 @@ PASSES: dict[str, PassSpec] = {
         STUN_PASS,
         RTSP_PASS,
         BT_DHT_PASS,
+        MQTT_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,

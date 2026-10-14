@@ -1820,3 +1820,34 @@ def fixture_rdp_session() -> bytes:
     t.send(True, _rdp_pdu(len(events) << 2, body))  # fast-path input, 10 events
     t.close()
     return w.write()
+
+
+def mqtt_str(text: str) -> bytes:
+    return struct.pack("!H", len(text)) + text.encode()
+
+
+@fixture("mqtt.pcap")
+def fixture_mqtt() -> bytes:
+    """MQTT 3.1.1 over TCP 1883: a sensor session (CONNECT, two PUBLISH, ping, DISCONNECT) and a refused login (#206).
+
+    The CONNECT of the refused client carries a password that must never reach mqtt.log.
+    """
+    w = Wire(start=1_702_100_000.0)
+    broker = "10.12.0.1"
+    s = Tcp(w, "10.12.0.5", broker, 50100, 1883).open()
+    body = mqtt_str("MQTT") + bytes([4, 0xC2]) + struct.pack("!H", 60) + mqtt_str("pf-sensor-7") + mqtt_str("plant") + mqtt_str("hunter2")
+    s.send(True, bytes([0x10, len(body)]) + body)  # CONNECT, clean session, user name and password flags
+    s.send(False, bytes([0x20, 2, 0, 0]))  # CONNACK, return code 0
+    for value in (b"21.5", b"21.7"):
+        topic = mqtt_str("plant/line1/temp") + value
+        s.send(True, bytes([0x30, len(topic)]) + topic)  # PUBLISH, QoS 0
+    s.send(True, b"\xc0\x00")  # PINGREQ
+    s.send(False, b"\xd0\x00")  # PINGRESP
+    s.send(True, b"\xe0\x00")  # DISCONNECT
+    s.close()
+    r = Tcp(w, "10.12.0.66", broker, 50200, 1883).open()
+    body = mqtt_str("MQTT") + bytes([4, 0xC2]) + struct.pack("!H", 60) + mqtt_str("scanner") + mqtt_str("admin") + mqtt_str("x")
+    r.send(True, bytes([0x10, len(body)]) + body)
+    r.send(False, bytes([0x20, 2, 0, 5]))  # CONNACK, return code 5: not authorized
+    r.close()
+    return w.write()

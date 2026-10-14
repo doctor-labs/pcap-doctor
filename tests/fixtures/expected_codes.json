@@ -118,6 +118,7 @@
     "TLS_SELF_SIGNED_CHAIN",
     "TLS_SERVER_CIPHER_PREFERENCE"
   ],
+  "mqtt.pcap": [],
   "netbios_names.pcap": [],
   "no_pfs_tls12.pcap": [
     "TLS_CIPHER_WEAK",

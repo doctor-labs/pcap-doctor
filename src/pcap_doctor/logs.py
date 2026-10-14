@@ -1,5 +1,5 @@
 """Zeek-style per-protocol logs (TSV or JSON): conn, dns, http, ssl, x509, files, notice, weird, dhcp, dhcpv6, ftp, smtp,
-ssh, smb (issue #199).
+ssh, smb (issue #199), mqtt (#206).
 
 The tables are built on demand from the :class:`CaptureIndex` plus a few extra tshark passes (``conn``, ``dhcp``,
 ``dhcpv6``, ``ftp``, ``smtp``, ``smb``, ``weird``) that ``analyze`` never runs. The column names and types follow Zeek's, so
@@ -1024,6 +1024,33 @@ def _rtsp_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+_MQTT_TYPES = {1: "CONNECT", 2: "CONNACK", 3: "PUBLISH", 4: "PUBACK", 5: "PUBREC", 6: "PUBREL", 7: "PUBCOMP",
+    8: "SUBSCRIBE", 9: "SUBACK", 10: "UNSUBSCRIBE", 11: "UNSUBACK", 12: "PINGREQ", 13: "PINGRESP", 14: "DISCONNECT",
+    15: "AUTH"}
+
+
+def _mqtt_log(ctx: _Ctx) -> LogTable:
+    """One row per MQTT control packet (first one when a segment carries several). Never the password (#206)."""
+    table = LogTable("mqtt", [("ts", "time"), *ID_COLS, ("version", "count"), ("msg_type", "string"),
+                              ("client_id", "string"), ("username", "string"), ("topic", "string"),
+                              ("return_code", "count")])
+    for row in ctx.runner.run("mqtt"):
+        key = ctx.row_key(row, "tcp")
+        mtype = to_int(first(row, "mqtt.msgtype"))
+        if not key or mtype is None:
+            continue
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "version": to_int(first(row, "mqtt.ver")),
+            "msg_type": _MQTT_TYPES.get(mtype, f"UNKNOWN_{mtype}"),
+            "client_id": first(row, "mqtt.clientid") or None,
+            "username": first(row, "mqtt.username") or None,
+            "topic": first(row, "mqtt.topic") or None,
+            "return_code": to_int(first(row, "mqtt.conack.val")),
+        })
+    return table
+
+
 _TUNNEL_TYPE = {
     "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
     "mpls": "Tunnel::MPLS", "erspan": "Tunnel::ERSPAN", "pppoes": "Tunnel::PPPOE", "vlan": "VLAN",
@@ -1912,7 +1939,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }
