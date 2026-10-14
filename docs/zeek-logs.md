@@ -27,7 +27,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `kerberos` | AS/TGS request with its reply or KRB-ERROR: client, service, error, ticket cipher (no key material) | `kerberos` pass |
 | `ntlm` | NTLM AUTHENTICATE: user, workstation, domain, server names from the CHALLENGE (no responses) | `ntlm` pass |
 | `modbus` | Modbus/TCP reply: unit id, function and exception name | `modbus` pass |
-| `dnp3` | DNP3 request with its reply: function codes and IIN bits | `dnp3` pass |
+| `dnp3` | DNP3 request with its reply: DNP3 source and destination addresses, function codes and IIN bits | `dnp3` pass |
 | `rfb` | RFB/VNC handshake: protocol version, security types offered and selected, auth result, desktop name | `vnc` pass |
 | `stun` | one row per STUN message: message type (method) and the XOR-MAPPED-ADDRESS (family, IP, port) when present | `stun` pass |
 | `rtsp` | one row per RTSP request with its response: method, URL and status | `rtsp` pass |

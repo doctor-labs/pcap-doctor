@@ -859,6 +859,8 @@ DNP3_PASS = PassSpec(
             "tcp.dstport",
             "udp.srcport",
             "udp.dstport",
+            "dnp3.src",
+            "dnp3.dst",
             "dnp3.al.func",
             "dnp3.al.iin",
         )

@@ -887,7 +887,8 @@ def _modbus_log(ctx: _Ctx) -> LogTable:
 
 
 def _dnp3_log(ctx: _Ctx) -> LogTable:
-    table = LogTable("dnp3", [("ts", "time"), *ID_COLS, ("fc_request", "string"), ("fc_reply", "string"), ("iin", "count")])
+    table = LogTable("dnp3", [("ts", "time"), *ID_COLS, ("src", "count"), ("dst", "count"), ("fc_request", "string"),
+                              ("fc_reply", "string"), ("iin", "count")])
     pending: dict[str, dict[str, Any]] = {}
     for row in ctx.runner.run("dnp3"):
         proto = "tcp" if first(row, "tcp.srcport") else "udp"
@@ -899,12 +900,14 @@ def _dnp3_log(ctx: _Ctx) -> LogTable:
             continue
         if func < 128:
             entry: dict[str, Any] = {"ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+                                     "src": to_int(first(row, "dnp3.src")), "dst": to_int(first(row, "dnp3.dst")),
                                      "fc_request": _DNP3_FUNCS.get(func, f"UNKNOWN_{func}"), "fc_reply": None, "iin": None}
             table.rows.append(entry)
             pending[key] = entry
         else:
             entry = pending.pop(key) if key in pending else {
                 "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+                "src": to_int(first(row, "dnp3.src")), "dst": to_int(first(row, "dnp3.dst")),
                 "fc_request": None, "fc_reply": None, "iin": None}
             entry["fc_reply"] = _DNP3_FUNCS.get(func, f"UNKNOWN_{func}")
             iin_raw = first(row, "dnp3.al.iin")
