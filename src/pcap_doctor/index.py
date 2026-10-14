@@ -24,6 +24,7 @@ from .certificates import (
     split_certificate_occurrences,
     verify_chain,
 )
+from .geoip import GeoIpDb
 from .models import (
     CaptureInfo,
     Cert,
@@ -426,10 +427,12 @@ class IndexBuilder:
         self,
         runner: TsharkRunner,
         decrypt_args: tuple[str, ...] = (),
+        geoip: GeoIpDb | None = None,
         on_event: Callable[[Any], None] | None = None,
     ) -> None:
         self.runner = runner
         self.decrypt_args = decrypt_args
+        self.geoip = geoip  # user-supplied local database (#237); None keeps asn_note unset
         self.index: CaptureIndex | None = None
         self._cert_cache: dict[tuple[str, ...], list[CertFacts]] = {}
         self._chains: dict[str, list[str]] = {}  # session key -> the first Certificate message's hex blobs
@@ -1306,6 +1309,12 @@ class IndexBuilder:
             # OS guess
             if host.ip in os_guess_by_ip:
                 host.os_guess = os_guess_by_ip[host.ip]
+
+            # ASN / country from the user's local GeoIP database (#237); hosts it does not cover stay unset
+            if self.geoip is not None:
+                geo = self.geoip.lookup(host.ip)
+                if geo is not None:
+                    host.asn_note = f"AS{geo.asn} {geo.as_name}, {geo.country}"
 
     # -- stats -------------------------------------------------------------
     def compute_stats(self, findings: list[Finding]) -> Stats:

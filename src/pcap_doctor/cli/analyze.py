@@ -16,6 +16,7 @@ from ..baseline import load_baseline, new_since, version_drift
 from ..clipboard import copy as copy_text
 from ..config import load as load_config
 from ..export import to_case, to_csv
+from ..geoip import GeoIpError, load_geoip
 from ..handoff import _subprocess_run, detect_agents, in_agent, offer, safe_mode
 from ..keymaterial import collect, firmware_key_spkis
 from ..models import SEVERITY_ORDER
@@ -111,6 +112,10 @@ def analyze_cmd(
         None, "--jobs", envvar=JOBS_ENV_VAR,
         help="max concurrent tshark passes (default: max(1, min(3, cpu_count // 2)); see issue #331)",
     ),
+    geoip_db: Path = typer.Option(
+        None, "--geoip-db", exists=True, dir_okay=False, envvar="PCAP_DOCTOR_GEOIP_DB",
+        help="local GeoIP CSV (network,asn,as_name,country) that fills each host's ASN/country; never fetched",
+    ),
     safe: bool = typer.Option(
         False, "--safe", help="launch AI agents with their approval prompts (also PCAP_DOCTOR_HANDOFF_SAFE=1)"
     ),
@@ -123,12 +128,13 @@ def analyze_cmd(
         if ca_bundle:  # ponytail: handed over in the environment, so every index build sees it without a new kwarg
             os.environ["PCAP_DOCTOR_CA_BUNDLE"] = str(ca_bundle)
         keys = collect(tls_key, tls_key_password=tls_key_password, keys_from=keys_from, keylog=keylog, psk=psk)
+        geoip = load_geoip(geoip_db) if geoip_db is not None else None
         firmware_keys = (
             firmware_key_spkis(firmware or [], extra_keys=keys.tls_keys)
             if (firmware or keys.tls_keys)
             else {}
         )
-    except PolicyError as exc:
+    except (PolicyError, GeoIpError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=2) from exc
     except DecodeAsError as exc:
@@ -189,6 +195,7 @@ def analyze_cmd(
                 decode_as=tuple(decode_as or ()),
                 fast=fast,
                 jobs=jobs,
+                geoip=geoip,
                 progress=None,
                 on_event=on_event,
             )
