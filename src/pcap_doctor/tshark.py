@@ -843,6 +843,7 @@ MODBUS_PASS = PassSpec(
             "tcp.srcport",
             "tcp.dstport",
             "mbtcp.trans_id",
+            "mbtcp.unit_id",
             "modbus.func_code",
             "modbus.exception_code",
         )

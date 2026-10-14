@@ -867,7 +867,7 @@ _DNP3_FUNCS = {0: "CONFIRM", 1: "READ", 2: "WRITE", 3: "SELECT", 4: "OPERATE", 5
 
 
 def _modbus_log(ctx: _Ctx) -> LogTable:
-    table = LogTable("modbus", [("ts", "time"), *ID_COLS, ("func", "string"), ("exception", "string")])
+    table = LogTable("modbus", [("ts", "time"), *ID_COLS, ("unit_id", "count"), ("func", "string"), ("exception", "string")])
     for row in ctx.runner.run("modbus"):
         key = ctx.row_key(row, "tcp")
         if not key:
@@ -879,6 +879,7 @@ def _modbus_log(ctx: _Ctx) -> LogTable:
         exc = to_int(first(row, "modbus.exception_code"))
         table.rows.append({
             "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "unit_id": to_int(first(row, "mbtcp.unit_id")),
             "func": _MODBUS_FUNCS.get(code, f"UNKNOWN_{code}") if code is not None else None,
             "exception": _MODBUS_EXCEPTIONS.get(exc, f"UNKNOWN_{exc}") if exc is not None else None,
         })

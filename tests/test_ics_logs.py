@@ -25,3 +25,10 @@ def test_dnp3_log_pairs_requests_with_replies(analyze_capture) -> None:
         ("COLD_RESTART", "RESPONSE", 0x8000),
     ]
     assert all(r["id.resp_p"] == 20000 for r in rows)
+
+
+@requires_tshark
+def test_modbus_log_carries_the_unit_identifier(analyze_capture) -> None:
+    rows = log_rows(analyze_capture(fixture("ics_mix.pcap")).index, "modbus")
+    assert [r["unit_id"] for r in rows] == [1, 1, 1]
+
