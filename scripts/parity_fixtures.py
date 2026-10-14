@@ -910,3 +910,21 @@ def fixture_netbios_names() -> bytes:
     w.add(udp_frame(client, server, 137, 137, _nbns_query(0x3333, "GHOSTBOX"), dmac="ff:ff:ff:ff:ff:ff"))
     return w.write()
 
+
+@fixture("slice_hosts.pcap")
+def fixture_slice_hosts() -> bytes:
+    """Seven frames over three distinct conversations, for the slicer (#256).
+
+    Frame numbering is 1-based, matching every other tool's packet list:
+      1,2,3  TCP 10.96.0.1:40000 -> 10.96.0.2:80   (SYN, SYN-ACK, ACK)
+      4,5,6  TCP 10.96.0.1:40001 -> 10.96.0.3:80   (SYN, SYN-ACK, ACK)
+      7      UDP 10.96.0.4:53000 -> 10.96.0.9:53    (one DNS query)
+    So a host slice on 10.96.0.2 yields frames 1-3, a slice on 10.96.0.9 yields only
+    frame 7, and the two TCP flows are told apart by the client port alone.
+    """
+    w = Wire(start=1_702_000_000.0)
+    c = "10.96.0.1"
+    Tcp(w, c, "10.96.0.2", 40000, 80, isn_c=1000, isn_s=5000).open()
+    Tcp(w, c, "10.96.0.3", 40001, 80, isn_c=2000, isn_s=6000).open()
+    w.add(udp_frame("10.96.0.4", "10.96.0.9", 53000, 53, b"\xab\xcd\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00"))
+    return w.write()

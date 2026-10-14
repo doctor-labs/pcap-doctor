@@ -106,6 +106,7 @@
     "SDP_NO_CRYPTO_ATTR",
     "SIP_CLEARTEXT_SIGNALLING"
   ],
+  "slice_hosts.pcap": [],
   "smb_attack.pcap": [
     "SMB1_IN_USE",
     "SMB_ADMIN_SHARE_ACCESS",
