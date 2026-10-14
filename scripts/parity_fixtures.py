@@ -862,6 +862,9 @@ def fixture_dns_plus_tls() -> bytes:
     record = bytes([0x16, 0x03, 0x03]) + struct.pack("!H", len(hello)) + hello
     t.send(True, record)
     t.close()
+    return w.write()
+
+
 def tls_clienthello(sni: str) -> bytes:
     """A minimal TLS 1.2 ClientHello carrying one cipher and an SNI extension (#239)."""
     # Record: content-type 0x16 (handshake), version 0x0301, length, body.
