@@ -8,7 +8,7 @@ import zlib
 
 from conftest import fixture, requires_tshark
 from pcap_doctor.cli import app
-from pcap_doctor.vnc import keysym_text, parse_rfb
+from pcap_doctor.vnc import VncReplay, keysym_text, parse_rfb
 
 PIXFMT = struct.pack(">BBBBHHHBBBxxx", 32, 24, 0, 1, 255, 255, 255, 16, 8, 0)
 
@@ -93,3 +93,20 @@ def test_vnc_command_writes_screen_and_keys(cli_runner, tmp_path) -> None:
 def test_vnc_command_on_a_capture_without_vnc(cli_runner) -> None:
     out = cli_runner.invoke(app, ["vnc", str(fixture("http_basic.pcap"))]).output
     assert "no VNC (RFB) sessions in this capture" in out
+
+
+@requires_tshark
+def test_parse_rfb_survives_every_truncation_of_the_fixture() -> None:
+    from pcap_doctor.follow import follow
+
+    followed = follow(fixture("vnc_session.pcap"), "tcp", 0)
+    server, client = followed.payload("server"), followed.payload("client")
+    assert server.startswith(b"RFB ")
+    full = parse_rfb(client, server)
+    assert full.keystrokes == "hiA<RET>" and full.png() is not None
+    for i in range(len(server) + 1):
+        partial = parse_rfb(client, server[:i])
+        assert isinstance(partial, VncReplay) and full.keystrokes.startswith(partial.keystrokes)
+    for j in range(len(client) + 1):
+        partial = parse_rfb(client[:j], server)
+        assert isinstance(partial, VncReplay) and full.keystrokes.startswith(partial.keystrokes)
