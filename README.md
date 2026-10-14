@@ -505,6 +505,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 | `d11.brute_force` | `detectors/brute_force.py` | Password guessing: 20+ failed FTP, 10+ failed HTTP Basic/Digest or 10+ failed SMB logins from one client to one server |
 | `d12.arp_icmp` | `detectors/arp_icmp.py` | ARP spoofing (one IPv4 claimed by two MACs) and ICMP redirects |
 | `d13.capture_loss` | `detectors/capture_loss.py` | TCP segments after a mid-stream hole above 10% of ACKs (Zeek capture-loss) |
+| `d14.hostnames` | `detectors/hostnames.py` | hostnames with a login/admin/sign-in-style first label seen in DNS queries, TLS SNI and HTTP Host headers (Zeek Interesting_Hostname_Login / External_Name parity) |
 | `d4.dns_quic_ssh` | `detectors/dns_quic_ssh.py` | plaintext DNS leakage, DNS tunnelling heuristics (label depth + entropy + TXT/NULL volume), external resolvers (IPv4 and IPv6), QUIC version inventory and payload opacity, weak SSH kex/cipher/MAC/host-key offers, Terrapin exposure (CVE-2023-48795) |
 
 Every code a detector can emit is listed in the rule catalog (`rules.py`, `pcap-doctor rules list`)

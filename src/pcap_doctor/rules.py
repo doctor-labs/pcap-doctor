@@ -28,6 +28,7 @@ _SMB = "d10.smb"
 _BRUTE = "d11.brute_force"
 _ARP = "d12.arp_icmp"
 _CAPTURE_LOSS = "d13.capture_loss"
+_HOSTNAMES = "d14.hostnames"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -93,6 +94,7 @@ RULES: dict[str, Rule] = {
         Rule("ARP_SPOOFING_SUSPECTED", _ARP, "Network", "ARP spoofing suspected"),
         Rule("ICMP_REDIRECT", _ARP, "Network", "ICMP redirect seen"),
         Rule("CAPTURE_LOSS", _CAPTURE_LOSS, "Network", "Capture loss"),
+        Rule("INTERESTING_HOSTNAME", _HOSTNAMES, "DNS", "Sensitive hostname (login/admin panel) exposed in cleartext"),
     )
 }
 
