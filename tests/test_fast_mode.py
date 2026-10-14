@@ -61,7 +61,9 @@ def test_fast_misses_dns_on_nonstandard_port(tmp_path: Path) -> None:
 def test_fast_falls_back_without_tcpdump(tmp_path: Path, monkeypatch) -> None:
     """Without tcpdump, --fast prints a note and falls back to the normal path."""
     if _has_tcpdump():
-        monkeypatch.setattr("pcap_doctor.tshark.shutil.which", lambda name: None if name == "tcpdump" else shutil.which(name))
+        monkeypatch.setattr(
+            "pcap_doctor.tshark.shutil.which", lambda name: None if name == "tcpdump" else shutil.which(name)
+        )
     fast = analyze(fixture("dns_tunnel.pcap"), tmp_path / "fast", fast=True)
     notes = " ".join(fast.index.notes)
     assert "tcpdump" in notes.lower()
