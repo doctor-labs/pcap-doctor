@@ -14,6 +14,8 @@ from pcap_doctor.geoip import GeoIpError, load_geoip
 from pcap_doctor.index import IndexBuilder
 from pcap_doctor.tshark import TsharkRunner
 
+FIXTURES = Path(__file__).parent / "fixtures"
+
 DB = "network,asn,as_name,country\n10.40.0.0/24,64500,EXAMPLE-NET,US\n2001:db8::/32,64501,V6-NET,DE\n"
 
 
@@ -51,3 +53,20 @@ def test_index_sets_asn_note_on_covered_hosts(tmp_path: Path) -> None:
 def test_no_database_leaves_asn_note_unset() -> None:
     index = IndexBuilder(TsharkRunner(fixture("devices.pcap"), use_cache=False)).build()
     assert all(h.asn_note is None for h in index.hosts.values())
+
+
+@requires_tshark
+def test_host_table_shows_asn_only_when_geoip_given(tmp_path: Path) -> None:
+    """Without --geoip-db the flows report is byte-identical to the committed golden; with it, an ASN column appears."""
+    from pcap_doctor.pipeline import analyze
+
+    golden = FIXTURES / "brute_force.pf-report" / "01-flows.md"
+    plain = analyze(fixture("brute_force.pcap"), tmp_path / "plain", use_cache=False).artifacts
+    plain_flows = next(a for a in plain if Path(a).name == "01-flows.md")
+    assert Path(plain_flows).read_bytes() == golden.read_bytes()
+
+    db = load_geoip(_db(tmp_path, "network,asn,as_name,country\n10.0.0.0/8,64496,SCRATCH-NET,ZZ\n"))
+    geo = analyze(fixture("brute_force.pcap"), tmp_path / "geo", use_cache=False, geoip=db).artifacts
+    text = Path(next(a for a in geo if Path(a).name == "01-flows.md")).read_text()
+    assert "| ASN / country |" in text
+    assert "AS64496 SCRATCH-NET, ZZ" in text
