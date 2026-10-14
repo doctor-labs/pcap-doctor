@@ -63,7 +63,7 @@ capture to hand? `make captures` fetches the Wireshark project's public samples.
 
 | Command | Does |
 |---|---|
-| `analyze CAPTURE` | score, findings and the six report files (`--json`, `--sarif FILE`, `--baseline OLD.json`, `--fail-on LEVEL`) |
+| `analyze CAPTURE` | score, findings and the six report files (`--json`, `--sarif FILE`, `--csv FILE`, `--case FILE`, `--baseline OLD.json`, `--fail-on LEVEL`) |
 | `why QUERY` | explain one finding; `--prompt` prints a fix prompt for an AI agent |
 | `rules list` / `rules explain CODE` | browse and read detector rules |
 | `flows` / `ciphers` | conversation and negotiated-crypto views of one capture |
@@ -256,6 +256,8 @@ Machine-readable output, on top of the six files:
 | `--json` | only the [doctor/1](https://github.com/doctor-labs/pcap-doctor/blob/main/docs/doctor-contract.md) envelope on stdout: `{schema, tool, version, exit_code, score, findings, data}`; `data` holds the old report (stats, flows, TLS sessions, notes, ...) without its findings, plus per-category counts. With `--baseline`: a top-level `baseline: {new, unchanged, fixed}` and `baseline_state` on every finding |
 | `--json-out FILE` | the same envelope written to a file, with the normal console summary |
 | `--sarif FILE` | SARIF 2.1.0 for code scanning: `ruleId` is the finding code, `partialFingerprints["doctorFinding/v1"]` is the finding's `fingerprint`, the run carries `properties.score` |
+| `--csv FILE` | the shown findings as CSV (columns: id, severity, confidence, category, code, detector, title, location, flow_key, frame, evidence, summary, remediation, references), sorted by severity then code then id |
+| `--case FILE` | the shown findings as a CASE (JSON-LD) document, one `case-object` per finding with evidence frames |
 | `--baseline OLD.json` | show and gate only findings whose `fingerprint` is not in an earlier `--json` envelope (or `report.json`); the files on disk stay complete. A fingerprint hashes detector, code, title (digits masked, so counts do not matter) and flow with the client's ephemeral port masked |
 
 In the envelope a finding's `id` is the rule code (`TLS_CIPHER_WEAK`), `message` its title and `remedy` its
@@ -695,7 +697,7 @@ These are the project's rules for itself, and tests enforce the mechanical ones:
 ```text
 pcap-doctor analyze CAPTURE [--out DIR] [--only ID]... [--category NAME]... [--min-severity LEVEL]
                             [--fail-on LEVEL] [--profile NAME] [--config FILE] [--baseline OLD.json]
-                            [--json] [--json-out FILE] [--sarif FILE] [--score] [-v] [-q]
+                            [--json] [--json-out FILE] [--sarif FILE] [--csv FILE] [--case FILE] [--score] [-v] [-q]
                             [--no-handoff] [--safe] [--no-cache] [--decode-as SPEC]...
 pcap-doctor why QUERY [--report report.json] [--prompt]    # QUERY: a frame number or an id prefix
 pcap-doctor rules list [--category NAME]

@@ -15,6 +15,7 @@ from rich.markup import escape
 from ..baseline import load_baseline, new_since, version_drift
 from ..clipboard import copy as copy_text
 from ..config import load as load_config
+from ..export import to_case, to_csv
 from ..handoff import _subprocess_run, detect_agents, in_agent, offer, safe_mode
 from ..keymaterial import collect, firmware_key_spkis
 from ..models import SEVERITY_ORDER
@@ -53,6 +54,8 @@ def analyze_cmd(
         None, "--baseline", exists=True, dir_okay=False, help="earlier --json envelope (or report.json): report and gate only new findings; a new one exits 3"
     ),
     sarif_out: Path = typer.Option(None, "--sarif", help="also write the shown findings as SARIF 2.1.0 to this file"),
+    csv_out: Path = typer.Option(None, "--csv", help="also write the shown findings as CSV to this file"),
+    case_out: Path = typer.Option(None, "--case", help="also write the shown findings as CASE JSON-LD to this file"),
     config_path: Path = typer.Option(
         None, "--config", exists=True, dir_okay=False, help="config file (default: ./pcap-doctor.toml or [tool.pcap-doctor] in ./pyproject.toml)"
     ),
@@ -185,6 +188,12 @@ def analyze_cmd(
             json.dumps(sarif(shown, artifact_uri=pcap.as_posix(), score_of=result.report.findings), indent=2) + "\n",
             encoding="utf-8",
         )
+    if csv_out is not None:
+        csv_out.parent.mkdir(parents=True, exist_ok=True)
+        csv_out.write_text(to_csv(shown), encoding="utf-8")
+    if case_out is not None:
+        case_out.parent.mkdir(parents=True, exist_ok=True)
+        case_out.write_text(json.dumps(to_case(shown), indent=2) + "\n", encoding="utf-8")
     if as_json:
         typer.echo(json.dumps(envelope, indent=2))
     elif show_score:
