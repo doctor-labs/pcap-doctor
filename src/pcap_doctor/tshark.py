@@ -492,6 +492,32 @@ NBNS_PASS = PassSpec(
     )),
 )
 
+DHCPV6_PASS = PassSpec(
+    name="dhcpv6",
+    display_filter="dhcpv6",
+    fields=with_addr((
+        "frame.time_epoch",
+        "udp.srcport",
+        "udp.dstport",
+        "dhcpv6.msgtype",
+        "dhcpv6.xid",
+        "dhcpv6.duid.type",
+        "dhcpv6.duid.bytes",
+        "dhcpv6.duidll.link_layer_addr_ether",
+        "dhcpv6.duidllt.link_layer_addr_ether",
+        "dhcpv6.iaid",
+        "dhcpv6.iaaddr.ip",
+        "dhcpv6.iaaddr.valid_lifetime",
+        "dhcpv6.dns_server",
+        "dhcpv6.vendorclass.data",
+        "dhcpv6.vendorclass.enterprise",
+        "dhcpv6.client_domain",
+        "dhcpv6.client_fqdn_flags",
+        "dhcpv6.status_code",
+        "dhcpv6.status_msg",
+    )),
+)
+
 FTP_PASS = PassSpec(
     name="ftp",
     display_filter="ftp",
@@ -854,6 +880,7 @@ PASSES: dict[str, PassSpec] = {
         CONN_PASS,
         DHCP_PASS,
         NBNS_PASS,
+        DHCPV6_PASS,
         FTP_PASS,
         SMTP_PASS,
         SMB_PASS,

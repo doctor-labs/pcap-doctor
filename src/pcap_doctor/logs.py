@@ -1,8 +1,8 @@
-"""Zeek-style per-protocol logs (TSV or JSON): conn, dns, http, ssl, x509, files, notice, weird, dhcp, ftp, smtp,
+"""Zeek-style per-protocol logs (TSV or JSON): conn, dns, http, ssl, x509, files, notice, weird, dhcp, dhcpv6, ftp, smtp,
 ssh, smb (issue #199).
 
 The tables are built on demand from the :class:`CaptureIndex` plus a few extra tshark passes (``conn``, ``dhcp``,
-``ftp``, ``smtp``, ``smb``, ``weird``) that ``analyze`` never runs. The column names and types follow Zeek's, so
+``dhcpv6``, ``ftp``, ``smtp``, ``smb``, ``weird``) that ``analyze`` never runs. The column names and types follow Zeek's, so
 ``zeek-cut``, Brim and the usual SIEM parsers read them. Where tshark cannot supply what Zeek knows (a TCP
 ``history`` string is approximated from the flags, payload bytes come from the TCP/UDP length fields) the column
 says so in ``docs/zeek-logs.md`` rather than guessing.
@@ -474,6 +474,14 @@ def _expert_log(ctx: _Ctx) -> LogTable:
 _DHCP_TYPES = {"1": "DISCOVER", "2": "OFFER", "3": "REQUEST", "4": "DECLINE", "5": "ACK", "6": "NAK",
                "7": "RELEASE", "8": "INFORM"}
 
+_DHCPV6_TYPES = {"1": "SOLICIT", "2": "ADVERTISE", "3": "REQUEST", "4": "CONFIRM", "5": "RENEW", "6": "REBIND",
+                 "7": "REPLY", "8": "RELEASE", "9": "DECLINE", "10": "RECONFIGURE", "11": "INFORMATION_REQUEST"}
+#: DHCPv6 message types where the source IP is the server (server→client).
+_DHCPV6_SERVER_MESSAGES = frozenset({"ADVERTISE", "REPLY", "RECONFIGURE"})
+#: DHCPv6 message types where the source IP is the client (client→server).
+_DHCPV6_CLIENT_MESSAGES = frozenset({"SOLICIT", "REQUEST", "RENEW", "REBIND", "RELEASE", "CONFIRM",
+                                     "INFORMATION_REQUEST", "DECLINE"})
+
 
 def _dhcp_log(ctx: _Ctx) -> LogTable:
     table = LogTable("dhcp", [
@@ -552,6 +560,71 @@ def _netbios_log(ctx: _Ctx) -> LogTable:
         else:
             entry["addresses"] = None
     table.rows = sorted(by_name.values(), key=lambda r: r["name"])
+    return table
+
+
+def _dhcpv6_log(ctx: _Ctx) -> LogTable:
+    """DHCPv6 exchanges, grouped by transaction ID, mirroring Zeek's ``dhcp.log`` columns.
+
+    DHCPv6 has no broadcast/MAC in its header: the client DUID (option 1) carries
+    the link-layer address for DUID-LL and DUID-LLT forms, and the assigned
+    address comes from IAADDR options (option 5) inside an IA_NA (option 3).
+    Server address is the source IP of the server-to-client message (ADVERTISE/REPLY).
+    """
+    table = LogTable("dhcpv6", [
+        ("ts", "time"), ("uids", "set[string]"), ("client_addr", "addr"), ("server_addr", "addr"),
+        ("mac", "string"), ("host_name", "string"), ("domain", "string"), ("requested_addr", "addr"),
+        ("assigned_addr", "addr"), ("lease_time", "interval"), ("msg_types", "vector[string]"),
+        ("vendor_class", "string"), ("dns_servers", "set[addr]")])
+    by_xid: dict[str, dict[str, Any]] = {}
+    for row in ctx.runner.run("dhcpv6"):
+        xid = first(row, "dhcpv6.xid") or str(len(by_xid))
+        t = _DHCPV6_TYPES.get(first(row, "dhcpv6.msgtype"))
+        proto = "udp"
+        key = ctx.row_key(row, proto)
+        r = by_xid.setdefault(xid, {"ts": to_float(first(row, "frame.time_epoch")), "uids": [], "msg_types": [],
+                                    "dns_servers": []})
+        if key:
+            uid = ctx.ids(key)["uid"]
+            if uid not in r["uids"]:
+                r["uids"].append(uid)
+        if t:
+            r["msg_types"].append(t)
+        ip_src = first(row, "ipv6.src")
+        if ip_src and ip_src != "::":
+            if t in _DHCPV6_SERVER_MESSAGES:
+                r["server_addr"] = ip_src
+            elif t in _DHCPV6_CLIENT_MESSAGES:
+                r["client_addr"] = ip_src
+        # MAC from DUID: only from client-originated messages to avoid the server DUID overwriting the client MAC.
+        if t in _DHCPV6_CLIENT_MESSAGES:
+            mac = first(row, "dhcpv6.duidll.link_layer_addr_ether") or first(row, "dhcpv6.duidllt.link_layer_addr_ether")
+            if mac and "mac" not in r:
+                r["mac"] = mac
+        # Client FQDN (option 39) and vendor class (option 16) come from the client
+        if t in _DHCPV6_CLIENT_MESSAGES:
+            domain = first(row, "dhcpv6.client_domain")
+            if domain and "host_name" not in r:
+                # dhcpv6.client_domain is a fully-qualified name ending in "."
+                clean = domain.rstrip(".")
+                r["host_name"] = clean
+                r["domain"] = clean
+            vc = first(row, "dhcpv6.vendorclass.data")
+            if vc and "vendor_class" not in r:
+                r["vendor_class"] = vc
+        # Assigned address from IAADDR
+        assigned = first(row, "dhcpv6.iaaddr.ip")
+        if assigned and t in ("REPLY", "ADVERTISE"):
+            r["assigned_addr"] = assigned
+        # Lease time (valid lifetime, in seconds)
+        lease = to_float(first(row, "dhcpv6.iaaddr.valid_lifetime"))
+        if lease is not None:
+            r["lease_time"] = lease
+        # DNS server addresses (from ADVERTISE/REPLY, may be multiple)
+        for dns in many(row, "dhcpv6.dns_server"):
+            if dns not in r["dns_servers"]:
+                r["dns_servers"].append(dns)
+    table.rows = [r for r in by_xid.values() if r["msg_types"]]
     return table
 
 
@@ -1265,7 +1338,7 @@ def _known_services_log(ctx: _Ctx) -> LogTable:
 
 BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
-    "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
+    "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log, "radius": _radius_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,

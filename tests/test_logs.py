@@ -58,6 +58,27 @@ def test_conn_log_has_originator_state_and_service(logs_dir) -> None:
 
 
 @requires_tshark
+def test_dhcpv6_log_records_exchange_fields(cli_runner, tmp_path, cache_dir) -> None:
+    """DHCPv6 Solicit/Advertise/Request/Reply exchange is logged with MAC, addresses, lease and vendor class (#220)."""
+    out = tmp_path / "dhcpv6"
+    assert cli_runner.invoke(
+        app, ["logs", str(fixture("dhcpv6.pcap")), "-o", str(out), "--only", "dhcpv6"]
+    ).exit_code == 0
+    _, dhcpv6 = _tsv(out / "dhcpv6.log")
+    assert len(dhcpv6) == 1  # grouped by xid
+    row = dhcpv6[0]
+    assert row["mac"] == "02:aa:bb:cc:dd:03"
+    assert row["host_name"] == "pf-v6-laptop.example"
+    assert row["assigned_addr"] == "2001:db8::100"
+    assert row["client_addr"] == "fe80::2aa:bbff:fecc:dd03"
+    assert row["server_addr"] == "fe80::1"
+    assert int(float(row["lease_time"])) == 3600
+    assert row["msg_types"] == "SOLICIT,ADVERTISE,REQUEST,REPLY"
+    assert row["vendor_class"] == "DHCPv6 client"
+    assert row["dns_servers"] == "2001:4860:4860::8888,2001:4860:4860::8844"
+
+
+@requires_tshark
 def test_smtp_dhcp_smb_and_weird_logs(logs_dir) -> None:
     _, smtp = _tsv(logs_dir / "smtp.log")
     assert smtp[0]["mailfrom"] == "alice@example.com" and smtp[0]["rcptto"] == "bob@example.org"

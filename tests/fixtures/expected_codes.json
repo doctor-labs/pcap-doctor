@@ -216,5 +216,6 @@
     "VPN_IKE_HANDSHAKE",
     "VPN_OPENVPN_HANDSHAKE",
     "VPN_WIREGUARD_HANDSHAKE"
-  ]
+  ],
+  "dhcpv6.pcap": []
 }
