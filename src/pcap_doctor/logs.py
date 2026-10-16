@@ -911,6 +911,61 @@ def _dnp3_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+def _rfb_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style ``rfb.log``: one row per RFB/VNC session handshake (#219).
+
+    Records the protocol version string, the security types the server offered and the one the
+    client selected, the authentication result, and the server's desktop name from ServerInit.
+    """
+    table = LogTable("rfb", [
+        ("ts", "time"), *ID_COLS, ("version", "string"), ("client_version", "string"),
+        ("security_types_offered", "vector[string]"), ("security_type_selected", "count"),
+        ("auth_result", "string"), ("desktop_name", "string"), ("width", "count"), ("height", "count"),
+    ])
+    by_stream: dict[str, dict[str, Any]] = {}
+    for row in ctx.runner.run("vnc"):
+        key = ctx.row_key(row, "tcp")
+        if not key:
+            continue
+        stream = first(row, "tcp.stream") or key
+        rec = by_stream.get(stream)
+        if rec is None:
+            rec = {"ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+                   "version": None, "client_version": None,
+                   "security_types_offered": [], "security_type_selected": None,
+                   "auth_result": None, "desktop_name": None, "width": None, "height": None}
+            by_stream[stream] = rec
+            table.rows.append(rec)
+        # server version string arrives first (server -> client)
+        ver = first(row, "vnc.server_proto_ver")
+        if ver and not rec["version"]:
+            rec["version"] = ver
+        cver = first(row, "vnc.client_proto_ver")
+        if cver and not rec["client_version"]:
+            rec["client_version"] = cver
+        offered = many(row, "vnc.security_type")
+        if offered and not rec["security_types_offered"]:
+            rec["security_types_offered"] = offered
+        selected = to_int(first(row, "vnc.client_security_type"))
+        if selected is not None and rec["security_type_selected"] is None:
+            rec["security_type_selected"] = selected
+        if first(row, "vnc.auth_result") is not None and rec["auth_result"] is None:
+            # FT_BOOLEAN: True (bit set) means failure, False means OK
+            rec["auth_result"] = "failure" if first(row, "vnc.auth_result") == "True" else "success"
+        desktop = first(row, "vnc.desktop_name")
+        if desktop and not rec["desktop_name"]:
+            rec["desktop_name"] = desktop
+        w = to_int(first(row, "vnc.width"))
+        if w is not None and rec["width"] is None:
+            rec["width"] = w
+        h = to_int(first(row, "vnc.height"))
+        if h is not None and rec["height"] is None:
+            rec["height"] = h
+    for rec in table.rows:
+        rec["security_types_offered"] = rec["security_types_offered"] or None
+    return table
+
+
 _TUNNEL_TYPE = {
     "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
     "mpls": "Tunnel::MPLS", "erspan": "Tunnel::ERSPAN", "pppoes": "Tunnel::PPPOE", "vlan": "VLAN",
@@ -1666,7 +1721,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
     "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "tunnel": _tunnel_log, "radius": _radius_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
-    "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log,
+    "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }
 LOG_NAMES = tuple(BUILDERS)
 

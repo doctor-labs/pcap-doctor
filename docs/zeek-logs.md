@@ -28,6 +28,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `ntlm` | NTLM AUTHENTICATE: user, workstation, domain, server names from the CHALLENGE (no responses) | `ntlm` pass |
 | `modbus` | Modbus/TCP reply: function and exception name | `modbus` pass |
 | `dnp3` | DNP3 request with its reply: function codes and IIN bits | `dnp3` pass |
+| `rfb` | RFB/VNC handshake: protocol version, security types offered and selected, auth result, desktop name | `vnc` pass |
 | `tunnel` | encapsulation seen: GRE, VXLAN, GENEVE, GTP, MPLS, ERSPAN, PPPoE by outer endpoints (802.1Q as `VLAN`, an extension) | `tunnel` pass |
 | `device` | one row per sender MAC: OUI vendor, IPs seen, packet count (an extension; Zeek's known_devices is similar) | `device` pass |
 | `software` | versioned software from HTTP Server / User-Agent headers and SSH banners (Zeek software.log: HTTP::SERVER, HTTP::BROWSER, SSH::SERVER, SSH::CLIENT) | `software` pass |
