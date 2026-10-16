@@ -1441,3 +1441,38 @@ def fixture_pgsql_redis() -> bytes:
     t.close()
     return w.write()
 
+
+@fixture("irc_socks_creds.pcap")
+def fixture_irc_socks_creds() -> bytes:
+    """IRC PASS, NickServ IDENTIFY, and SOCKS5 username/password credentials in cleartext (#231)."""
+    w = Wire(start=1_702_000_000.0)
+    irc_client = "10.0.0.10"
+    irc_server = "10.0.0.20"
+    socks_client = "10.0.0.30"
+    socks_server = "10.0.0.40"
+    
+    # IRC PASS command and NickServ IDENTIFY on port 6667
+    # Use a single Twitch-style IRC session
+    irc = Tcp(w, irc_client, irc_server, 45000, 6667)
+    irc.open()
+    irc.send(True, b"PASS my-irc-password-123\r\n")
+    irc.send(True, b"NICK testuser\r\n")
+    irc.send(True, b"USER testuser 0 * :Test User\r\n")
+    irc.send(True, b"PRIVMSG NickServ :IDENTIFY nickserv-secret\r\n")
+    
+    # SOCKS5 username/password auth (port 1080)
+    # SOCKSv5 greeting: version 5, 2 auth methods (0x00 = no auth, 0x02 = user/pass)
+    socks_greeting = bytes([0x05, 0x02, 0x00, 0x02])
+    # SOCKS5 subnegotiation for username/password (RFC 1929):
+    # version 1, username length, username, password length, password
+    socks_auth = bytes([0x01, len(b"socksuser"), *b"socksuser", len(b"sockspass"), *b"sockspass123"])
+    
+    socks = Tcp(w, socks_client, socks_server, 45002, 1080)
+    socks.open()
+    socks.send(True, socks_greeting)
+    socks.send(False, bytes([0x05, 0x02]))  # version 5, user/pass auth selected
+    socks.send(True, socks_auth)
+    socks.send(False, bytes([0x05, 0x00]))  # version 5, status 0 = succeeded
+    
+    return w.write()
+

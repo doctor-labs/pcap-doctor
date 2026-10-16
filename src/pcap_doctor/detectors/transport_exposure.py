@@ -260,6 +260,9 @@ class TransportExposureDetector(Detector):
             "ldap.simple": "LDAP bind password",
             "mysql.query": "MySQL query",
             "ftp.request.arg": "FTP password",
+            "irc.request.command_parameter": "IRC credential",
+            "socks.username": "SOCKS5 username",
+            "socks.password": "SOCKS5 password",
         }
         out: list[Finding] = []
         for hit in index.services:
@@ -269,9 +272,19 @@ class TransportExposureDetector(Detector):
                     name, _, raw_value = part.partition("=")
                     fields[name] = raw_value
             command = (fields.get("ftp.request.command") or "").upper()
-            for field in ("snmp.community", "ldap.simple", "mysql.query", "ftp.request.arg"):
+            irc_cmd = (fields.get("irc.request.command") or "").upper()
+            irc_param = (fields.get("irc.request.command_parameter") or "").lower()
+            for field in ("snmp.community", "ldap.simple", "mysql.query", "ftp.request.arg", "irc.request.command_parameter", "socks.username", "socks.password"):
                 if field == "ftp.request.arg" and command != "PASS":
                     continue
+                # IRC: only PASS and PRIVMSG commands with parameter are credentials
+                if field == "irc.request.command_parameter":
+                    if irc_cmd == "PASS":
+                        pass  # IRC PASS password
+                    elif irc_cmd == "PRIVMSG" and "nickserv" in irc_param and "identify" in irc_param:
+                        pass  # NickServ IDENTIFY
+                    else:
+                        continue
                 value: str | None = fields.get(field)
                 if not value:
                     continue

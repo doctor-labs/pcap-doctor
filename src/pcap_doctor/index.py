@@ -117,6 +117,8 @@ PROTO_ALIASES: dict[str, str] = {
     "tcp": "tcp",
     "udp": "udp",
     "data": "data",
+    "irc": "irc",
+    "socks": "socks",
 }
 
 SENSITIVE_SERVICES: dict[str, bool] = {
@@ -133,6 +135,8 @@ SENSITIVE_SERVICES: dict[str, bool] = {
     "pgsql": True,
     "mysql": True,
     "http": True,
+    "irc": True,
+    "socks": True,
 }
 
 WELL_KNOWN_PORTS: dict[int, str] = {
@@ -157,6 +161,7 @@ WELL_KNOWN_PORTS: dict[int, str] = {
     636: "ldaps",
     993: "imaps",
     995: "pop3s",
+    1080: "socks",
     1194: "openvpn",
     1900: "ssdp",
     3306: "mysql",
@@ -166,6 +171,7 @@ WELL_KNOWN_PORTS: dict[int, str] = {
     5061: "sips",
     5222: "xmpp-client",
     6379: "redis",
+    6667: "irc",
     8080: "http-alt",
     8443: "https-alt",
     9200: "elasticsearch",
@@ -1125,10 +1131,15 @@ class IndexBuilder:
             if not protocols:
                 continue
             protocol = next(iter(protocols))
+            
+            # IRC credential redaction: only PASS command (NickServ is detected separately)
+            irc_cmd = (protocols.get("irc.request.command") or "").upper()
+            
             detail = " | ".join(
                 f"{k}=<redacted {len(v)} chars>"
                 if k in REDACTED_SERVICE_FIELDS
                 or (k == "ftp.request.arg" and (protocols.get("ftp.request.command") or "").upper() == "PASS")
+                or (k == "irc.request.command_parameter" and irc_cmd == "PASS")
                 else f"{k}={v}"
                 for k, v in protocols.items()
             )
