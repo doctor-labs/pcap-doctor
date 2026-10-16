@@ -10,7 +10,8 @@ Blank lines and ``#`` comments are skipped. The type is detected from the token:
 * ``example.com`` -> domain, matches the name and its subdomains; a ``*.`` prefix is accepted and means the same;
 * ``http://host/path?query`` -> URL, matched exactly against the HTTP Host and request URI.
 
-Hash indicators are reported as skipped: the index holds no file hashes, so they would never match.
+Hash indicators (md5, sha1, sha256) are matched against the objects extracted from the capture, not the index
+(see match_file_hashes). load_iocs still reports them, so the note is visible.
 """
 
 from __future__ import annotations
@@ -20,9 +21,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 if TYPE_CHECKING:
+    from .extract import ExtractedFile
     from .index import CaptureIndex
 
 _DOMAIN = re.compile(r"(?:\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+")
@@ -60,7 +62,7 @@ def _parse_token(token: str) -> tuple[str | None, str | None]:
     except ValueError:
         pass
     if _HASH.fullmatch(token):
-        return None, "hash indicators are not matched (no file hashes in the index)"
+        return None, "hash indicators are only matched against extracted files"
     if _DOMAIN.fullmatch(token.lower()):
         return "domain", None
     return None, f"unrecognised indicator {token[:60]!r}"
@@ -158,4 +160,40 @@ def match_iocs(index: CaptureIndex, indicators: list[Indicator]) -> list[IocHit]
         if flows and ips:
             first = min(flows, key=lambda f: f.first_frame or 1 << 62)
             match_ip(observed.ip, "ip", first.first_frame, first.key)
+    return out
+
+
+def load_hash_iocs(paths: list[Path]) -> list[Indicator]:
+    """The md5, sha1 and sha256 indicators from the same files, lowercased."""
+    out: list[Indicator] = []
+    for path in paths:
+        for raw in Path(path).read_text(errors="replace").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            token, *rest = re.split(r"\s+", line, maxsplit=1)
+            if _HASH.fullmatch(token):
+                out.append(Indicator("hash", token.lower(), rest[0] if rest else ""))
+    return out
+
+
+def match_file_hashes(index: CaptureIndex, hashes: list[Indicator], extracted: list[ExtractedFile]) -> list[IocHit]:
+    """Match hash indicators against extracted objects. The frame is the HTTP request whose URI ends in the object name, else 0."""
+    by_digest = {ind.value: ind for ind in hashes}
+    located: dict[str, tuple[int, str | None]] = {}
+    for http in index.http:
+        if http.uri:
+            name = unquote(http.uri.split("?", 1)[0].rsplit("/", 1)[-1])
+            located.setdefault(name, (http.frame, http.key))
+    out: list[IocHit] = []
+    for item in extracted:
+        if item.info is None:
+            continue
+        for digest in (item.info.md5, item.info.sha1, item.info.sha256):
+            ind = by_digest.get(digest)
+            if ind is None:
+                continue
+            frame, key = located.get(item.name, (0, None))
+            out.append(IocHit("hash", ind.value, item.name, item.protocol, frame, key, ind.label))
+            break
     return out

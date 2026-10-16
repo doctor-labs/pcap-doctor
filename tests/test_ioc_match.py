@@ -7,8 +7,9 @@ from pathlib import Path
 
 from conftest import fixture, requires_tshark
 from pcap_doctor.cli import app
+from pcap_doctor.extract import extract
 from pcap_doctor.index import IndexBuilder
-from pcap_doctor.ioc import load_iocs, match_iocs
+from pcap_doctor.ioc import load_hash_iocs, load_iocs, match_iocs
 from pcap_doctor.tshark import TsharkRunner
 
 IOC_TEXT = """\
@@ -74,3 +75,30 @@ def test_ioc_is_opt_in_and_reports_ioc_match(cli_runner, tmp_path: Path, cache_d
     plain = tmp_path / "plain"
     assert cli_runner.invoke(app, ["analyze", str(fixture("hostnames.pcap")), "-o", str(plain), "-q", "--no-handoff"]).exit_code == 0
     assert "IOC_MATCH" not in (plain / "report.json").read_text()
+
+
+
+def test_load_hash_iocs_reads_md5_sha1_and_sha256(tmp_path: Path) -> None:
+    digests = [
+        "D41D8CD98F00B204E9800998ECF8427E",
+        "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    ]
+    hashes = load_hash_iocs([_write(tmp_path, chr(10).join(digests) + chr(10))])
+    assert [(h.kind, h.value) for h in hashes] == [("hash", d.lower()) for d in digests]
+
+
+@requires_tshark
+def test_hash_ioc_matches_an_object_extracted_from_the_capture(cli_runner, tmp_path: Path) -> None:
+    capture = fixture("http_basic.pcap")
+    objects = [f for f in extract(capture, tmp_path / "extracted", ("http",)) if f.info is not None]
+    assert objects, "http_basic.pcap has no HTTP object to hash"
+    ioc = tmp_path / "hashes.txt"
+    ioc.write_text(f"{objects[0].info.sha256}  known bad payload" + chr(10))
+    out = tmp_path / "r"
+    args = ["analyze", str(capture), "-o", str(out), "-q", "--no-handoff", "--ioc", str(ioc)]
+    assert cli_runner.invoke(app, args).exit_code == 0
+    report = json.loads((out / "report.json").read_text())
+    hits = [f for f in report["findings"] if f["code"] == "IOC_MATCH" and "ioc:hash" in f["tags"]]
+    assert hits and hits[0]["subjects"] == [objects[0].name]
+    assert hits[0]["severity"] == "high" and hits[0]["confidence"] == "medium"

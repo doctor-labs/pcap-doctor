@@ -19,7 +19,7 @@ class IocMatchDetector(Detector):
     title: ClassVar[str] = "Local indicator matches"
     version: ClassVar[str] = "1"
     category: ClassVar[str] = "signature"
-    description: ClassVar[str] = "Reports IPs, domains and URLs seen in the capture that match an indicator file given with --ioc."
+    description: ClassVar[str] = "Reports IPs, domains, URLs and file hashes seen in the capture that match an indicator file given with --ioc."
 
     def detect(self, index: CaptureIndex) -> list[Finding]:
         out: list[Finding] = []
