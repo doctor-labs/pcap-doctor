@@ -37,6 +37,7 @@
     "DNS_CLEARTEXT",
     "DNS_TUNNEL_SHAPE"
   ],
+  "bt_dht.pcap": [],
   "capture_loss.pcap": [
     "CAPTURE_LOSS"
   ],
