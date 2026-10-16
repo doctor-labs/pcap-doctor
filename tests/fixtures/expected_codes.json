@@ -15,14 +15,6 @@
     "HTTP_MISSING_SECURITY_HEADERS",
     "SMB_SIGNING_NOT_REQUIRED"
   ],
-  "capture_loss.pcap": [
-    "CAPTURE_LOSS"
-  ],
-  "connect_scans.pcap": [
-    "PORT_SCAN_HORIZONTAL",
-    "PORT_SCAN_VERTICAL"
-  ],
-  "devices.pcap": [],
   "dns_external.pcap": [
     "DNS_CLEARTEXT",
     "DNS_EXTERNAL_RESOLVER"
@@ -40,6 +32,14 @@
     "DNS_CLEARTEXT",
     "DNS_TUNNEL_SHAPE"
   ],
+  "capture_loss.pcap": [
+    "CAPTURE_LOSS"
+  ],
+  "connect_scans.pcap": [
+    "PORT_SCAN_HORIZONTAL",
+    "PORT_SCAN_VERTICAL"
+  ],
+  "devices.pcap": [],
   "files_mix.pcap": [
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE",
@@ -51,7 +51,6 @@
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"
   ],
-  "ftp_odd_port.pcap": [],
   "ftp_retransmit.pcap": [
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"
@@ -89,21 +88,17 @@
     "HTTP_CLEARTEXT",
     "HTTP_MISSING_SECURITY_HEADERS"
   ],
-  "http_versions.pcap": [
-    "HTTP_CLEARTEXT",
-    "HTTP_MISSING_SECURITY_HEADERS"
-  ],
   "ics_mix.pcap": [],
   "kerberos.pcap": [],
+  "mail_logins.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE"
+  ],
   "logs_mix.pcap": [
     "CLEARTEXT_SERVICE",
     "SMB_ADMIN_SHARE_ACCESS",
     "SMB_EXECUTABLE_ON_SHARE",
     "SMB_SIGNING_NOT_REQUIRED"
-  ],
-  "mail_logins.pcap": [
-    "CLEARTEXT_CREDENTIAL",
-    "CLEARTEXT_SERVICE"
   ],
   "mixed_ciphers.pcap": [
     "TLS_NO_SCT",
@@ -118,9 +113,6 @@
     "TLS_NO_SCT",
     "TLS_SELF_SIGNED_CHAIN"
   ],
-  "os_ttls.pcap": [
-    "SYN_SCAN_SHAPE"
-  ],
   "rsa_kx.pcap": [
     "TLS_CERT_EXPIRED_NOW",
     "TLS_CERT_WEAK_KEY",
@@ -131,19 +123,6 @@
     "TLS_OFFERS_WEAK_CIPHERS",
     "TLS_SERVER_CIPHER_PREFERENCE",
     "TLS_VERSION_DEPRECATED"
-  ],
-  "rtp_quality.pcap": [
-    "RTP_MEDIA_UNPROTECTED",
-    "SDP_NO_CRYPTO_ATTR",
-    "SIP_CLEARTEXT_SIGNALLING"
-  ],
-  "sct_tls12.pcap": [
-    "TLS_SELF_SIGNED_CHAIN"
-  ],
-  "server_cipher_order.pcap": [
-    "TLS_OFFERS_WEAK_CIPHERS",
-    "TLS_SELF_SIGNED_CHAIN",
-    "TLS_SERVER_CIPHER_PREFERENCE"
   ],
   "sip_rtp.pcap": [
     "RTP_MEDIA_UNPROTECTED",
@@ -171,10 +150,19 @@
     "SSH_WEAK_MAC"
   ],
   "strong_tls13.pcap": [],
+  "rtp_quality.pcap": [
+    "RTP_MEDIA_UNPROTECTED",
+    "SDP_NO_CRYPTO_ATTR",
+    "SIP_CLEARTEXT_SIGNALLING"
+  ],
   "syn_scan.pcap": [
     "SYN_SCAN_SHAPE"
   ],
   "tcp_health.pcap": [
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
+  ],
+  "weird_mix.pcap": [
     "HTTP_CLEARTEXT",
     "HTTP_MISSING_SECURITY_HEADERS"
   ],
@@ -190,6 +178,23 @@
     "TLS_SELF_SIGNED_CHAIN",
     "TLS_VERSION_DEPRECATED"
   ],
+  "ftp_odd_port.pcap": [],
+  "http_versions.pcap": [
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
+  ],
+  "os_ttls.pcap": [
+    "SYN_SCAN_SHAPE"
+  ],
+  "sct_tls12.pcap": [
+    "TLS_SELF_SIGNED_CHAIN"
+  ],
+  "server_cipher_order.pcap": [
+    "TLS_NO_SCT",
+    "TLS_OFFERS_WEAK_CIPHERS",
+    "TLS_SELF_SIGNED_CHAIN",
+    "TLS_SERVER_CIPHER_PREFERENCE"
+  ],
   "web_attack.pcap": [
     "HTTP_CLEARTEXT",
     "HTTP_MISSING_SECURITY_HEADERS",
@@ -198,9 +203,5 @@
     "HTTP_WEB_ATTACK_SQLI",
     "HTTP_WEB_ATTACK_TRAVERSAL",
     "HTTP_WEB_ATTACK_XSS"
-  ],
-  "weird_mix.pcap": [
-    "HTTP_CLEARTEXT",
-    "HTTP_MISSING_SECURITY_HEADERS"
   ]
 }

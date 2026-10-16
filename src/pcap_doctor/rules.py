@@ -161,6 +161,7 @@ _CLASSTYPES: dict[str, str] = {
     "TLS_CERT_WEAK_SIGALG": "policy-violation",
     "TLS_CERT_NOT_YET_VALID": "policy-violation",
     "TLS_NO_EXTENDED_MASTER_SECRET": "policy-violation",
+    "TLS_NO_SCT": "policy-violation",
     "TLS_WEAK_DH_GROUP": "policy-violation",
     "TLS_COMPRESSION_ENABLED": "policy-violation",
     "TLS_INSECURE_RENEGOTIATION": "policy-violation",
