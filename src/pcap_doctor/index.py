@@ -843,6 +843,11 @@ class IndexBuilder:
                     name = download_name(line)
                     if name and name not in exch.download_names:
                         exch.download_names.append(name)
+                    # collect the response header name for security-header checks (#271)
+                    if ":" in line:
+                        header_name = line.split(":", 1)[0].strip().lower()
+                        if header_name and header_name not in exch.response_header_names:
+                            exch.response_header_names.append(header_name)
             auth = first(row, "http.authorization")
             if auth:
                 scheme = auth.split(None, 1)[0] if " " in auth else "unknown"

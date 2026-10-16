@@ -276,6 +276,8 @@ class HttpExchange(BaseModel):
     #: response headers that name what was delivered (#130): Content-Type values and Content-Disposition file names
     content_types: list[str] = Field(default_factory=list)
     download_names: list[str] = Field(default_factory=list)
+    #: lowercased response header names seen on the response, for security-header checks (#271)
+    response_header_names: list[str] = Field(default_factory=list)
 
 
 class DnsQuery(BaseModel):

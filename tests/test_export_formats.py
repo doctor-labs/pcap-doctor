@@ -131,6 +131,6 @@ def test_csv_of_a_real_capture_lists_exactly_its_finding_codes(tmp_path) -> None
     rows = _rows(to_csv(result.report))
     assert {row["code"] for row in rows} == {f.code for f in result.report.findings}
     assert {row["code"] for row in rows} == {
-        "HTTP_CLEARTEXT", "HTTP_CLEARTEXT_AUTH", "HTTP_COOKIE_NO_SECURE",
+        "HTTP_CLEARTEXT", "HTTP_CLEARTEXT_AUTH", "HTTP_COOKIE_NO_SECURE", "HTTP_MISSING_SECURITY_HEADERS",
     }
     assert all(row["id"] for row in rows)

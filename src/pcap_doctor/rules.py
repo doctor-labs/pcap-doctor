@@ -29,6 +29,7 @@ _BRUTE = "d11.brute_force"
 _ARP = "d12.arp_icmp"
 _CAPTURE_LOSS = "d13.capture_loss"
 _HOSTNAMES = "d14.hostnames"
+_HTTP_HEADERS = "d15.http_headers"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -95,6 +96,7 @@ RULES: dict[str, Rule] = {
         Rule("ICMP_REDIRECT", _ARP, "Network", "ICMP redirect seen"),
         Rule("CAPTURE_LOSS", _CAPTURE_LOSS, "Network", "Capture loss"),
         Rule("INTERESTING_HOSTNAME", _HOSTNAMES, "DNS", "Sensitive hostname (login/admin panel) exposed in cleartext"),
+        Rule("HTTP_MISSING_SECURITY_HEADERS", _HTTP_HEADERS, "Network", "Missing HTTP security headers"),
     )
 }
 
@@ -139,6 +141,7 @@ _CLASSTYPES: dict[str, str] = {
     "DNS_TUNNEL_SHAPE": "trojan-activity",
     "TLS_HEARTBLEED_PROBE": "trojan-activity",
     "DNS_CLEARTEXT": "policy-violation",
+    "HTTP_MISSING_SECURITY_HEADERS": "policy-violation",
     "TLS_VERSION_DEPRECATED": "policy-violation",
     "TLS_LEGACY_RECORD_VERSION": "policy-violation",
     "TLS_CIPHER_WEAK": "policy-violation",
