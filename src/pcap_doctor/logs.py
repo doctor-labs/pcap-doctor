@@ -628,6 +628,41 @@ def _smtp_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+RADIUS_CODE_MEANING = {1: "Access-Request", 2: "Access-Accept", 3: "Access-Reject", 11: "Access-Challenge"}
+
+
+def _radius_log(ctx: _Ctx) -> LogTable:
+    table = LogTable("radius", [("ts", "time"), *ID_COLS, ("username", "string"), ("mac", "string"), ("result", "string")])
+    pending: dict[tuple[str, int], dict[str, Any]] = {}  # (flow_key, radius.id) -> request row
+    for row in ctx.runner.run("radius"):
+        key = ctx.row_key(row, "udp")
+        if not key:
+            continue
+        code = to_int(first(row, "radius.code"))
+        if code is None:
+            continue
+        ident = to_int(first(row, "radius.id")) or 0
+        frame = to_int(first(row, "frame.number"))
+        ts = to_float(first(row, "frame.time_epoch"))
+        ids = ctx.ids(key)
+        if code == 1:  # Access-Request
+            rec: dict[str, Any] = {
+                "ts": ts,
+                **ids,
+                "username": first(row, "radius.User_Name") or None,
+                "mac": first(row, "radius.Calling_Station_Id") or None,
+                "result": None,
+                "frame": frame,
+            }
+            table.rows.append(rec)
+            pending[(key, ident)] = rec
+        elif code in (2, 3, 11, 12):  # replies that match a pending request
+            match = pending.pop((key, ident), None) if ident else None
+            if match is not None:
+                match["result"] = "ok" if code == 2 else "failed"
+    return table
+
+
 _SMB2_CMDS = {0: "NEGOTIATE", 1: "SESSION_SETUP", 2: "LOGOFF", 3: "TREE_CONNECT", 4: "TREE_DISCONNECT", 5: "CREATE",
               6: "CLOSE", 7: "FLUSH", 8: "READ", 9: "WRITE", 10: "LOCK", 11: "IOCTL", 12: "CANCEL", 13: "ECHO",
               14: "QUERY_DIRECTORY", 15: "CHANGE_NOTIFY", 16: "QUERY_INFO", 17: "SET_INFO", 18: "OPLOCK_BREAK"}
@@ -1232,7 +1267,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "tunnel": _tunnel_log, "radius": _radius_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log,
 }

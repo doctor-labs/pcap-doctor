@@ -607,6 +607,20 @@ NTLM_PASS = PassSpec(
     ),
 )
 
+RADIUS_PASS = PassSpec(
+    name="radius",
+    display_filter="radius",
+    fields=with_addr((
+        "frame.time_epoch",
+        "udp.srcport",
+        "udp.dstport",
+        "radius.code",
+        "radius.id",
+        "radius.User_Name",
+        "radius.Calling_Station_Id",
+    )),
+)
+
 TUNNEL_PASS = PassSpec(
     name="tunnel",
     display_filter="gre || vxlan || geneve || gtp || mpls || erspan || pppoes || vlan",
@@ -847,6 +861,7 @@ PASSES: dict[str, PassSpec] = {
         PAYLOAD_PASS,
         KERBEROS_PASS,
         NTLM_PASS,
+        RADIUS_PASS,
         MODBUS_PASS,
         DNP3_PASS,
         TUNNEL_PASS,
