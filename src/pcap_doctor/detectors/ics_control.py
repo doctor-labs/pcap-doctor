@@ -56,9 +56,8 @@ def _commands(index: CaptureIndex) -> list[Hit]:
             name = _DNP3_CONTROLS.get(to_int(first(row, "dnp3.al.func")) or -1)
             if name:
                 found.append(_hit("dnp3", row, port, name))
-        if first(row, "s7comm.header.rosctr"):
-            if to_int(first(row, "s7comm.header.rosctr")) == _S7_JOB and to_int_auto(first(row, "s7comm.param.func")) == _S7_WRITE_VAR:
-                found.append(_hit("s7comm", row, port, "Write Var"))
+        if to_int(first(row, "s7comm.header.rosctr")) == _S7_JOB and to_int_auto(first(row, "s7comm.param.func")) == _S7_WRITE_VAR:
+            found.append(_hit("s7comm", row, port, "Write Var"))
         if first(row, "iec60870_asdu.typeid"):
             name = _IEC104_COMMANDS.get(to_int(first(row, "iec60870_asdu.typeid")) or -1)
             if name and to_int(first(row, "iec60870_asdu.causetx")) == _IEC104_ACTIVATION:
