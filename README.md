@@ -509,6 +509,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 | `d11.brute_force` | `detectors/brute_force.py` | Password guessing: 20+ failed FTP, 10+ failed HTTP Basic/Digest or 10+ failed SMB logins from one client to one server |
 | `d12.arp_icmp` | `detectors/arp_icmp.py` | ARP spoofing (one IPv4 claimed by two MACs) and ICMP redirects |
 | `d13.capture_loss` | `detectors/capture_loss.py` | TCP segments after a mid-stream hole above 10% of ACKs (Zeek capture-loss) |
+| `d20.ics_control` | `detectors/ics_control.py` | Cleartext ICS write and control commands: Modbus write function codes, DNP3 write, select, operate and restart, S7comm Write Var, IEC 60870-5-104 activation of command ASDUs 45 to 51 (BACnet and EtherNet/IP not covered yet) |
 | `d14.hostnames` | `detectors/hostnames.py` | hostnames with a login/admin/sign-in-style first label seen in DNS queries, TLS SNI and HTTP Host headers (Zeek Interesting_Hostname_Login / External_Name parity) |
 | `d18.radius` | `detectors/radius.py` | RADIUS Access-Request with cleartext User-Name (User-Password encrypted with shared secret, not TLS) |
 | `d19.vpn_handshakes` | `detectors/vpn_handshakes.py` | IKE/IPsec (ISAKMP on UDP 500/4500), WireGuard (handshake initiation on UDP 51820), and OpenVPN (control-channel opcodes on UDP/TCP 1194) |

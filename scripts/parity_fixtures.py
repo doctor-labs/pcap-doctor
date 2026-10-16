@@ -1977,3 +1977,36 @@ def fixture_opcua() -> bytes:
     t.send(True, opcua_chunk(b"MSG", struct.pack("<IIII", 1, 1, 3, 3) + bytes([0x01, 0x00]) + struct.pack("<H", 527) + bytes(16)))  # BrowseRequest
     t.close()
     return w.write()
+
+
+@fixture("ics_control.pcap")
+def fixture_ics_control() -> bytes:
+    # Cleartext write and control commands on four ICS protocols (#206). The Modbus read and the IEC 104
+    # activation confirmation (cause 7) sit in the same capture and must not be flagged.
+    w = Wire(start=1_702_600_000.0)
+    hmi = "10.9.0.10"
+    m = Tcp(w, hmi, "10.9.0.20", 49300, 502).open()
+    m.send(True, modbus_adu(1, 1, bytes([3]) + struct.pack("!HH", 0, 2)))  # read holding registers: not a write
+    m.send(False, modbus_adu(1, 1, bytes([3, 4]) + struct.pack("!HH", 7, 9)))
+    m.send(True, modbus_adu(2, 1, bytes([6]) + struct.pack("!HH", 1, 1234)))  # write single register 1
+    m.send(False, modbus_adu(2, 1, bytes([6]) + struct.pack("!HH", 1, 1234)))
+    m.close()
+    d = Tcp(w, hmi, "10.9.0.30", 49400, 20000).open()
+    d.send(True, dnp3_frame(bytes([0xC1, 0x04]), dst=10, src=1, primary=True))  # OPERATE
+    d.send(False, dnp3_frame(bytes([0xC1, 0x81, 0x00, 0x00]), dst=1, src=10, primary=False))  # RESPONSE
+    d.close()
+    s = Tcp(w, hmi, "10.9.0.40", 51400, 102).open()
+
+    def s7_job(params: bytes, data: bytes) -> bytes:
+        pdu = bytes([0x32, 1, 0, 0, 0, 1]) + struct.pack("!HH", len(params), len(data)) + params + data
+        cotp = bytes([0x02, 0xF0, 0x80]) + pdu
+        return bytes([3, 0]) + struct.pack("!H", 4 + len(cotp)) + cotp
+
+    item = bytes([0x12, 0x0A, 0x10, 0x02]) + struct.pack("!HHB", 2, 2, 0x84) + bytes(3)
+    s.send(True, s7_job(bytes([0x05, 1]) + item, bytes([0x00, 0x04, 0x00, 0x10, 0x00, 0x64])))  # Write Var, DB 2
+    s.close()
+    i = Tcp(w, hmi, "10.9.0.50", 49500, 2404).open()
+    i.send(True, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 6, 0, 1, 0, 0x65, 0, 0, 1]))  # C_SC_NA_1, activation
+    i.send(False, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 7, 0, 1, 0, 0x65, 0, 0, 1]))  # activation confirmation
+    i.close()
+    return w.write()

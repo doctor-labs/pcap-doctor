@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+- Added the ICS_CONTROL_COMMAND detector (d20.ics_control): cleartext Modbus write, DNP3 control, S7comm Write Var and IEC 60870-5-104 command activations (#206).
+
 ### Changed
 
 - **Rename finished.** The internal import package is now `pcap_doctor` (was `pcapforensics`): `python -m pcap_doctor.cli`,

@@ -1046,6 +1046,26 @@ S7COMM_PASS = PassSpec(
 )
 
 #: OPC UA binary transport type and service node id for opcua.log (#206). No payload values.
+#: One batched pass for the ICS command detector (#206): Modbus, DNP3, S7comm and IEC 60870-5-104 command fields.
+ICS_CONTROL_PASS = PassSpec(
+    name="ics_control",
+    display_filter="modbus || dnp3 || s7comm || iec60870_104",
+    fields=with_addr(
+        (
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "modbus.func_code",
+            "dnp3.al.func",
+            "s7comm.header.rosctr",
+            "s7comm.param.func",
+            "iec60870_asdu.typeid",
+            "iec60870_asdu.causetx",
+        )
+    ),
+)
+
 OPCUA_PASS = PassSpec(
     name="opcua",
     display_filter="opcua",
@@ -1189,6 +1209,7 @@ PASSES: dict[str, PassSpec] = {
         BACNET_PASS,
         S7COMM_PASS,
         OPCUA_PASS,
+        ICS_CONTROL_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,
