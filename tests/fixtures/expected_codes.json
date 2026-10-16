@@ -186,6 +186,9 @@
     "TLS_VERSION_DEPRECATED"
   ],
   "ftp_odd_port.pcap": [],
+  "http2_cleartext.pcap": [
+    "HTTP2_CLEARTEXT"
+  ],
   "http_versions.pcap": [
     "HTTP_CLEARTEXT",
     "HTTP_MISSING_SECURITY_HEADERS"

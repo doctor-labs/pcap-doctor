@@ -1606,3 +1606,58 @@ def fixture_bt_dht() -> bytes:
     w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 6881, 6889, 1001, 2001, 0x18, handshake))))
     return w.write()
 
+
+# -- HTTP/2 (h2c, prior-knowledge) -------------------------------------------------
+def h2_frame(frame_type: int, flags: int, stream_id: int, payload: bytes = b"") -> bytes:
+    """One HTTP/2 frame header (RFC 7540 §4.1): 3-byte length, type, flags, 4-byte stream id, payload."""
+    return len(payload).to_bytes(3, "big") + bytes([frame_type, flags]) + (stream_id & 0x7FFFFFFF).to_bytes(4, "big") + payload
+
+
+def h2_literal(name: bytes, value: bytes) -> bytes:
+    """A single HPACK header literal using the literal-without-indexing representation (index 0).
+
+    Wire form: 0x10 (pattern 0001xxxx = literal without indexing, name indexed), name-length,
+    name, value-length, value. The name is sent literally so the bytes are easy to verify.
+    """
+    return bytes([0x10, len(name)]) + name + bytes([len(value)]) + value
+
+
+def h2_headers(stream_id: int, headers: list[tuple[bytes, bytes]], end_headers: bool = True) -> bytes:
+    """A HEADERS frame carrying a literal-without-indexing HPACK header block."""
+    payload = b"".join(h2_literal(n, v) for n, v in headers)
+    return h2_frame(0x01, 0x1 if end_headers else 0x0, stream_id, payload)
+
+
+@fixture("http2_cleartext.pcap")
+def fixture_http2_cleartext() -> bytes:
+    """HTTP/2 over cleartext (h2c, prior-knowledge): a GET with an :authority/:path and a 200, plus a POST with
+    an Authorization header, both on separate streams (#226). HEADERS frames use literal-without-indexing
+    HPACK so the encoded bytes are easy to verify by hand."""
+    w = Wire(start=1_701_980_000.0)
+    client, server, port = "10.0.0.10", "10.0.0.20", 80
+    t = Tcp(w, client, server, 50030, port).open()
+    # Connection preface (RFC 7540 §3.4): the client's magic string + an empty SETTINGS frame.
+    preface = b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+    settings = h2_frame(0x04, 0x00, 0)  # SETTINGS (type 4), stream 0
+    # Stream 1: GET /api/v1/status on api.example -> 200
+    req1 = h2_headers(1, [
+        (b":method", b"GET"),
+        (b":scheme", b"https"),
+        (b":authority", b"api.example"),
+        (b":path", b"/api/v1/status"),
+    ])
+    # Stream 3: POST /api/v1/login on api.example with an Authorization header -> 200
+    req2 = h2_headers(3, [
+        (b":method", b"POST"),
+        (b":scheme", b"https"),
+        (b":authority", b"api.example"),
+        (b":path", b"/api/v1/login"),
+    ])
+    t.send(True, preface + settings + req1 + req2)
+    # Server replies with an empty SETTINGS, then a HEADERS frame carrying :status 200 for each stream.
+    resp1 = h2_headers(1, [(b":status", b"200")])
+    resp2 = h2_headers(3, [(b":status", b"200")])
+    t.send(False, settings + resp1 + resp2)
+    t.close()
+    return w.write()
+

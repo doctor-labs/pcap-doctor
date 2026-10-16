@@ -33,6 +33,7 @@ _HTTP_HEADERS = "d15.http_headers"
 _WEB_ATTACK = "d16.web_attack"
 _ECH_0RTT = "d17.ech_early_data"
 _VPN = "d19.vpn_handshakes"
+_HTTP2 = "d5.http2"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -111,6 +112,7 @@ RULES: dict[str, Rule] = {
         Rule("VPN_IKE_HANDSHAKE", _VPN, "Network", "IKE/IPsec handshake seen (ISAKMP on UDP 500/4500)"),
         Rule("VPN_WIREGUARD_HANDSHAKE", _VPN, "Network", "WireGuard handshake seen (UDP 51820)"),
         Rule("VPN_OPENVPN_HANDSHAKE", _VPN, "Network", "OpenVPN control-channel handshake seen (UDP/TCP 1194)"),
+        Rule("HTTP2_CLEARTEXT", _HTTP2, "Cleartext", "HTTP/2 over cleartext (h2c) traffic is not encrypted"),
     )
 }
 
