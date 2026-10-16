@@ -12,7 +12,7 @@ from conftest import fixture, requires_tshark
 # Host inventory must NOT add to this: it reads the existing base pass (MAC, vendor, TTL) instead.
 EXPECTED_PASSES = {
     "base", "tls", "dtls", "http", "dns", "sip", "rtp", "ssh", "quic",
-    "services", "telnet", "smb", "arp_icmp", "capture_loss", "conn",
+    "services", "telnet", "smb", "arp_icmp", "capture_loss", "conn", "radius",
 }
 
 
