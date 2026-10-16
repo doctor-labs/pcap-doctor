@@ -105,9 +105,9 @@ def test_non_tty_stdout_is_byte_identical_across_runs(tmp_path) -> None:
         capture_output=True, text=True, check=True,
     )
     # progress stage lines live on stderr, never stdout
-    assert "pass 1/11" not in res_a.stdout
-    assert "pass 1/11" not in res_b.stdout
-    assert "pass 1/11" in res_a.stderr
-    assert "pass 1/11" in res_b.stderr
+    assert "pass 1/12" not in res_a.stdout
+    assert "pass 1/12" not in res_b.stdout
+    assert "pass 1/12" in res_a.stderr
+    assert "pass 1/12" in res_b.stderr
     # stdout is byte-identical across runs except for the output directory path
     assert res_a.stdout.replace("a/", "X/").replace("b/", "X/") == res_b.stdout.replace("a/", "X/").replace("b/", "X/")
