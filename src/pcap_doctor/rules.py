@@ -32,6 +32,7 @@ _HOSTNAMES = "d14.hostnames"
 _HTTP_HEADERS = "d15.http_headers"
 _WEB_ATTACK = "d16.web_attack"
 _ECH_0RTT = "d17.ech_early_data"
+_VPN = "d19.vpn_handshakes"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -107,6 +108,9 @@ RULES: dict[str, Rule] = {
         Rule("HTTP_WEB_ATTACK_COMMAND_INJECTION", _WEB_ATTACK, "Cleartext", "OS command injection in an HTTP request URI"),
         Rule("TLS_ECH_OFFERED", _ECH_0RTT, "Crypto", "Encrypted Client Hello (ECH) offered"),
         Rule("TLS_EARLY_DATA_OFFERED", _ECH_0RTT, "Crypto", "TLS 1.3 0-RTT early data offered"),
+        Rule("VPN_IKE_HANDSHAKE", _VPN, "Network", "IKE/IPsec handshake seen (ISAKMP on UDP 500/4500)"),
+        Rule("VPN_WIREGUARD_HANDSHAKE", _VPN, "Network", "WireGuard handshake seen (UDP 51820)"),
+        Rule("VPN_OPENVPN_HANDSHAKE", _VPN, "Network", "OpenVPN control-channel handshake seen (UDP/TCP 1194)"),
     )
 }
 

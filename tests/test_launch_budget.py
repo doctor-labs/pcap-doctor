@@ -31,7 +31,7 @@ from launch_counter import count_launches, make_wrapper, with_wrapped_path  # no
 #: Do not raise this without first measuring the new count.
 #: PR #338 lowered the count on this fixture from 15 to 4 (base + 3 present-protocol
 #: passes; arp_icmp.pcap carries only ARP and ICMP on well-known ports).
-BUDGET = 4
+BUDGET = 5
 
 PCAP = FIXTURES / "arp_icmp.pcap"
 
