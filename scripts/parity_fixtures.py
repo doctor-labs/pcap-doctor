@@ -1774,3 +1774,49 @@ def fixture_vnc_session() -> bytes:
     t.send(False, b"\x02")  # Bell
     t.close()
     return w.write()
+
+
+# -- rdp_session.pcap: plain (Standard RDP security) X.224 negotiation, fast-path keys and bitmap updates (#217) ------
+def _rdp_tpkt(payload: bytes) -> bytes:
+    return struct.pack(">BBH", 3, 0, len(payload) + 4) + payload
+
+
+def _rdp_x224(code: int, var: bytes) -> bytes:
+    body = bytes([code]) + b"\x00" * 5 + var  # destination ref, source ref, class
+    return _rdp_tpkt(bytes([len(body)]) + body)
+
+
+def _rdp_neg(kind: int, value: int) -> bytes:
+    return struct.pack("<BBHI", kind, 0, 8, value)  # RDP_NEG_* structure, little-endian
+
+
+def _rdp_pdu(head: int, body: bytes) -> bytes:
+    if len(body) + 2 < 0x80:
+        return bytes([head, len(body) + 2]) + body
+    return bytes([head, 0x80 | ((len(body) + 3) >> 8), (len(body) + 3) & 0xFF]) + body
+
+
+def _rdp_bitmap_update(left: int, top: int, w: int, h: int, bpp: int, rows_top_down: list[bytes]) -> bytes:
+    data = b"".join(reversed(rows_top_down))  # uncompressed rows are stored bottom-up
+    rect = struct.pack("<9H", left, top, left + w - 1, top + h - 1, w, h, bpp, 0, len(data)) + data
+    upd = struct.pack("<H", 1) + rect
+    return b"\x01" + struct.pack("<H", len(upd)) + upd
+
+
+@fixture("rdp_session.pcap")
+def fixture_rdp_session() -> bytes:
+    w = Wire(start=1_700_700_000.0)
+    c, s = "10.9.1.10", "10.9.1.20"
+    t = Tcp(w, c, s, 52000, 3389).open()
+    t.send(True, _rdp_x224(0xE0, _rdp_neg(1, 0)))  # X.224 CR with RDP_NEG_REQ: Standard RDP security
+    t.send(False, _rdp_x224(0xD0, _rdp_neg(2, 0)))  # CC with RDP_NEG_RSP selecting Standard RDP security
+    t.send(False, _rdp_tpkt(b"\x02\xf0\x80" + b"MCS-PLACEHOLDER"))  # slow path: skipped
+    t.send(False, _rdp_pdu(0x00, b"\x03\x00\x00")  # Synchronize update
+           + _rdp_pdu(0x00, _rdp_bitmap_update(0, 0, 2, 2, 32, [b"\x00\x00\xff\x00" * 2, b"\x00\xff\x00\x00" * 2])))
+    t.send(False, _rdp_pdu(0x00, _rdp_bitmap_update(0, 2, 2, 1, 16, [b"\x1f\x00" * 2])))  # RGB565 blue
+    events = [(0x23, False), (0x23, True), (0x17, False), (0x17, True), (0x2A, False), (0x1E, False),
+              (0x1E, True), (0x2A, True), (0x1C, False), (0x1C, True)]  # h i Shift+a Enter
+    body = b"".join(bytes([int(release), code]) for code, release in events)  # scancode events
+    t.send(True, _rdp_pdu(len(events) << 2, body))  # fast-path input, 10 events
+    t.close()
+    return w.write()
