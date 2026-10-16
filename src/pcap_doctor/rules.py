@@ -31,6 +31,7 @@ _CAPTURE_LOSS = "d13.capture_loss"
 _HOSTNAMES = "d14.hostnames"
 _HTTP_HEADERS = "d15.http_headers"
 _WEB_ATTACK = "d16.web_attack"
+_ECH_0RTT = "d17.ech_early_data"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -104,6 +105,8 @@ RULES: dict[str, Rule] = {
         Rule("HTTP_WEB_ATTACK_LFI", _WEB_ATTACK, "Cleartext", "Local file inclusion in an HTTP request URI"),
         Rule("HTTP_WEB_ATTACK_TRAVERSAL", _WEB_ATTACK, "Cleartext", "Path traversal in an HTTP request URI"),
         Rule("HTTP_WEB_ATTACK_COMMAND_INJECTION", _WEB_ATTACK, "Cleartext", "OS command injection in an HTTP request URI"),
+        Rule("TLS_ECH_OFFERED", _ECH_0RTT, "Crypto", "Encrypted Client Hello (ECH) offered"),
+        Rule("TLS_EARLY_DATA_OFFERED", _ECH_0RTT, "Crypto", "TLS 1.3 0-RTT early data offered"),
     )
 }
 

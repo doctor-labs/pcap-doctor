@@ -25,6 +25,11 @@
   "dns_plus_tls.pcap": [
     "DNS_CLEARTEXT"
   ],
+  "ech_0rtt_handshake.pcap": [
+    "TLS_EARLY_DATA_OFFERED",
+    "TLS_ECH_OFFERED",
+    "TLS_HANDSHAKE_TRUNCATED"
+  ],
   "dns_records.pcap": [
     "DNS_CLEARTEXT"
   ],
