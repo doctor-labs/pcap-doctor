@@ -101,6 +101,7 @@
     "SMB_SIGNING_NOT_REQUIRED"
   ],
   "mixed_ciphers.pcap": [
+    "TLS_NO_SCT",
     "TLS_OFFERS_WEAK_CIPHERS",
     "TLS_SELF_SIGNED_CHAIN",
     "TLS_SERVER_CIPHER_PREFERENCE"
@@ -109,6 +110,7 @@
   "no_pfs_tls12.pcap": [
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",
+    "TLS_NO_SCT",
     "TLS_SELF_SIGNED_CHAIN"
   ],
   "rsa_kx.pcap": [
@@ -117,6 +119,7 @@
     "TLS_CERT_WEAK_SIGALG",
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",
+    "TLS_NO_SCT",
     "TLS_OFFERS_WEAK_CIPHERS",
     "TLS_SERVER_CIPHER_PREFERENCE",
     "TLS_VERSION_DEPRECATED"
@@ -171,6 +174,7 @@
   "weak_tls.pcap": [
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",
+    "TLS_NO_SCT",
     "TLS_SELF_SIGNED_CHAIN",
     "TLS_VERSION_DEPRECATED"
   ],
@@ -182,7 +186,11 @@
   "os_ttls.pcap": [
     "SYN_SCAN_SHAPE"
   ],
+  "sct_tls12.pcap": [
+    "TLS_SELF_SIGNED_CHAIN"
+  ],
   "server_cipher_order.pcap": [
+    "TLS_NO_SCT",
     "TLS_OFFERS_WEAK_CIPHERS",
     "TLS_SELF_SIGNED_CHAIN",
     "TLS_SERVER_CIPHER_PREFERENCE"

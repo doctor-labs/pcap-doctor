@@ -252,5 +252,5 @@ def test_progress_reports_each_stage(cache_dir, tmp_path) -> None:
 @pytest.mark.parametrize("extra", [[], ["--verbose"]])
 def test_without_a_terminal_the_output_is_unchanged(cli_runner, tmp_path, cache_dir, extra) -> None:
     result = cli_runner.invoke(app, ["analyze", str(FIXTURES / "weak_tls.pcap"), "-o", str(tmp_path / "r"), *extra])
-    assert "Score 68/100 · needs work" in result.output  # the classic summary
+    assert "Score 66/100 · needs work" in result.output  # the classic summary
     assert "Review" not in result.output and "✔ Scanned" not in result.output

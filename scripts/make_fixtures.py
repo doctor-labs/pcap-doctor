@@ -722,6 +722,14 @@ TLS_FIXTURES = {
         "minimum": "TLSv1_2",
         "maximum": "TLSv1_2",
     },
+    # TLS 1.2 with a cert carrying the CT SCT extension (OID 1.3.6.1.4.1.11129.2.4.2):
+    # the leaf cert must NOT raise TLS_NO_SCT (#265).
+    "sct_tls12.pcap": {
+        "ciphers": "ECDHE-RSA-AES128-GCM-SHA256",
+        "minimum": "TLSv1_2",
+        "maximum": "TLSv1_2",
+        "server_name": "sct.example",
+    },
 }
 
 
@@ -743,7 +751,7 @@ def main() -> int:
                 ciphers=spec["ciphers"],
                 minimum=getattr(ssl.TLSVersion, spec["minimum"]),
                 maximum=getattr(ssl.TLSVersion, spec["maximum"]),
-                server_name="strong.example" if "strong" in name else "weak.example",
+                server_name=spec.get("server_name", "strong.example" if "strong" in name else "weak.example"),
                 server_ciphers=spec.get("server_ciphers"),
                 sport=40000 + i * 1000,
             )
