@@ -30,6 +30,7 @@ _ARP = "d12.arp_icmp"
 _CAPTURE_LOSS = "d13.capture_loss"
 _HOSTNAMES = "d14.hostnames"
 _HTTP_HEADERS = "d15.http_headers"
+_WEB_ATTACK = "d16.web_attack"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -97,6 +98,11 @@ RULES: dict[str, Rule] = {
         Rule("CAPTURE_LOSS", _CAPTURE_LOSS, "Network", "Capture loss"),
         Rule("INTERESTING_HOSTNAME", _HOSTNAMES, "DNS", "Sensitive hostname (login/admin panel) exposed in cleartext"),
         Rule("HTTP_MISSING_SECURITY_HEADERS", _HTTP_HEADERS, "Network", "Missing HTTP security headers"),
+        Rule("HTTP_WEB_ATTACK_SQLI", _WEB_ATTACK, "Cleartext", "SQL injection in an HTTP request URI"),
+        Rule("HTTP_WEB_ATTACK_XSS", _WEB_ATTACK, "Cleartext", "Cross-site scripting (XSS) in an HTTP request URI"),
+        Rule("HTTP_WEB_ATTACK_LFI", _WEB_ATTACK, "Cleartext", "Local file inclusion in an HTTP request URI"),
+        Rule("HTTP_WEB_ATTACK_TRAVERSAL", _WEB_ATTACK, "Cleartext", "Path traversal in an HTTP request URI"),
+        Rule("HTTP_WEB_ATTACK_COMMAND_INJECTION", _WEB_ATTACK, "Cleartext", "OS command injection in an HTTP request URI"),
     )
 }
 
@@ -174,6 +180,11 @@ _CLASSTYPES: dict[str, str] = {
     "SMB_ADMIN_SHARE_ACCESS": "attempted-admin",
     "SMB_REMOTE_EXEC_PIPE": "attempted-admin",
     "SIGNATURE_MATCH": "attempted-admin",
+    "HTTP_WEB_ATTACK_SQLI": "attempted-admin",
+    "HTTP_WEB_ATTACK_XSS": "attempted-admin",
+    "HTTP_WEB_ATTACK_LFI": "attempted-admin",
+    "HTTP_WEB_ATTACK_TRAVERSAL": "attempted-admin",
+    "HTTP_WEB_ATTACK_COMMAND_INJECTION": "attempted-admin",
     "TLS_SELF_SIGNED_CHAIN": "protocol-command-decode",
     "TLS_SNI_CERT_MISMATCH": "protocol-command-decode",
     "SMB1_IN_USE": "protocol-command-decode",

@@ -1060,3 +1060,41 @@ def fixture_http_headers() -> bytes:
              b"X-Content-Type-Options: nosniff\r\n"
              b"X-Frame-Options: DENY\r\n")
     return w.write()
+
+
+def _http_get(w, client: str, server: str, sport: int, uri: str, host: str = "shop.example") -> None:
+    """One full HTTP/1.1 GET on a fresh connection, reusing the module's Tcp helper."""
+    tcp = Tcp(w, client, server, sport, 80).open()
+    req = f"GET {uri} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: curl/7.58.0\r\n\r\n".encode()
+    resp = b"HTTP/1.1 200 OK\r\nServer: nginx\r\nContent-Length: 2\r\n\r\nok"
+    tcp.send(True, req)
+    tcp.send(False, resp)
+    tcp.close()
+
+
+@fixture("web_attack.pcap")
+def fixture_web_attack() -> bytes:
+    """HTTP requests carrying SQLi, XSS, LFI, path traversal and command-injection URIs (#233).
+
+    Each request goes to its own client IP so a finding can be attributed to exactly one
+    payload. The last request (client 10.61.0.9) is the benign control.
+    """
+    w = Wire(start=1_701_900_000.0)
+    server = "10.61.0.1"
+    payloads = [
+        # SQL injection: tautology with a comment terminator, in the query string.
+        ("10.61.0.2", "/items.php?id=1%27%20OR%20%271%27%3D%271%27--%20"),
+        # XSS: script tag with an onerror handler, reflected in the path.
+        ("10.61.0.3", "/search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E"),
+        # Local file inclusion: a /etc/passwd read through a PHP filter chain.
+        ("10.61.0.4", "/index.php?page=php%3A%2F%2Ffilter%2Fread%3Dconvert.base64-decoded%7Bresource%3D/etc/passwd%7D"),
+        # Path traversal: ../ repeated to escape the web root.
+        ("10.61.0.5", "/static/../../../../etc/shadow"),
+        # OS command injection: a pipe to /bin/sh inside a parameter.
+        ("10.61.0.6", "/cgi-bin/luci?cmd=%3Bcat+/etc/passwd%7Csh"),
+        # Benign control: an ordinary path, must never match a signature.
+        ("10.61.0.9", "/products/list?page=2&sort=name"),
+    ]
+    for i, (client, uri) in enumerate(payloads):
+        _http_get(w, client, server, 41000 + i, uri)
+    return w.write()
