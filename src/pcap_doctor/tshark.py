@@ -775,6 +775,20 @@ DNP3_PASS = PassSpec(
     ),
 )
 
+#: RDP Negotiation fields via TPKT heuristic (#218).
+#: Uses tcp.payload since RDP dissector availability varies by tshark version.
+RDP_PASS = PassSpec(
+    name="rdp",
+    display_filter="tcp.port == 3389",
+    fields=with_addr((
+        "frame.time_epoch",
+        "tcp.srcport",
+        "tcp.dstport",
+        "tcp.stream",
+        "tcp.payload",
+    )),
+)
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -899,6 +913,7 @@ PASSES: dict[str, PassSpec] = {
         ARP_ICMP_PASS,
         CAPTURE_LOSS_PASS,
         DEVICE_PASS,
+        RDP_PASS,
     )
 }
 
