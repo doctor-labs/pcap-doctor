@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import time
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
@@ -400,7 +401,12 @@ class CaptureIndex:
 class IndexBuilder:
     """Turns raw tshark rows into a :class:`CaptureIndex`."""
 
-    def __init__(self, runner: TsharkRunner, decrypt_args: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        runner: TsharkRunner,
+        decrypt_args: tuple[str, ...] = (),
+        on_event: Callable[[Any], None] | None = None,
+    ) -> None:
         self.runner = runner
         self.decrypt_args = decrypt_args
         self.index: CaptureIndex | None = None
@@ -408,6 +414,16 @@ class IndexBuilder:
         self._chains: dict[str, list[str]] = {}  # session key -> the first Certificate message's hex blobs
         self._verified: dict[tuple[str, ...], str | None] = {}  # one openssl verify per distinct chain
         self._sdp_media_ports: list[int] = []
+        self._on_event = on_event
+
+    def _emit(self, **fields: Any) -> None:
+        """Emit a pass-phase ProgressEvent if a callback is wired."""
+        cb = self._on_event
+        if cb is None:
+            return
+        from .pipeline import ProgressEvent  # local import: index must not import pipeline at module load
+
+        cb(ProgressEvent(**fields))
 
     def build(self) -> CaptureIndex:
         runner = self.runner
@@ -438,18 +454,29 @@ class IndexBuilder:
         index.runner = runner
         self.index = index
 
-        self._build_flows(index, runner.run("base"))
-        self._build_tls(index, runner.run("tls"), runner.run("dtls"))
-        self._build_http(index, runner.run("http", self.decrypt_args))
-        self._build_dns(index, runner.run("dns"))
-        self._build_sip(index, runner.run("sip"))
-        # SIP runs first so SDP can hand us the media ports for decode-as.
-        self._build_rtp(index, runner.run("rtp", runner.rtp_decode_args(self._sdp_media_ports)))
-        self._build_ssh(index, runner.run("ssh"))
-        self._build_quic(index, runner.run("quic"))
-        self._build_services(index, runner.run("services"))
-        self._build_telnet(index, runner.run("telnet"))
-        self._build_smb(index, runner.run("smb"))
+        # The logical decode passes, in the order they are consumed by the
+        # builder. Each maps to a tshark pass (see tshark.PASSES). Emitting a
+        # started/finished event per pass gives the live display its progress
+        # bar and per-pass elapsed time (issue #332).
+        pass_steps: list[tuple[str, Callable[[], None]]] = [
+            ("base", lambda: self._build_flows(index, runner.run("base"))),
+            ("tls", lambda: self._build_tls(index, runner.run("tls"), runner.run("dtls"))),
+            ("http", lambda: self._build_http(index, runner.run("http", self.decrypt_args))),
+            ("dns", lambda: self._build_dns(index, runner.run("dns"))),
+            ("sip", lambda: self._build_sip(index, runner.run("sip"))),
+            ("rtp", lambda: self._build_rtp(index, runner.run("rtp", runner.rtp_decode_args(self._sdp_media_ports)))),
+            ("ssh", lambda: self._build_ssh(index, runner.run("ssh"))),
+            ("quic", lambda: self._build_quic(index, runner.run("quic"))),
+            ("services", lambda: self._build_services(index, runner.run("services"))),
+            ("telnet", lambda: self._build_telnet(index, runner.run("telnet"))),
+            ("smb", lambda: self._build_smb(index, runner.run("smb"))),
+        ]
+        total = len(pass_steps)
+        for i, (name, step) in enumerate(pass_steps, start=1):
+            self._emit(kind="pass", name=name, phase="started", index=i, total=total)
+            _t0 = time.monotonic()
+            step()
+            self._emit(kind="pass", name=name, phase="finished", index=i, total=total, elapsed=time.monotonic() - _t0)
 
         # Enrich host inventory with MAC, vendor, hostname, and OS guess
         self._build_host_inventory(index, runner.run("base"))
