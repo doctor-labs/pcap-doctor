@@ -1373,6 +1373,71 @@ def fixture_rdp_nat() -> bytes:
     
     # Close the TCP connection
     t.close()
-    
+    return w.write()
+
+
+# --------------------------------------------------------------------------
+# PostgreSQL (pgsql) and Redis (RESP) dissection (#225)
+# --------------------------------------------------------------------------
+
+def _pgsql_startup(user: str, database: str) -> bytes:
+    """PostgreSQL StartupMessage: length(4) + protocol_version(4) + key\x00val\x00... + \x00."""
+    params = b"user\x00" + user.encode() + b"\x00database\x00" + database.encode() + b"\x00\x00"
+    body = struct.pack("!I", 0x00030000) + params  # protocol version 3.0
+    return struct.pack("!I", len(body) + 4) + body
+
+
+def _pgsql_auth_request(authtype: int) -> bytes:
+    """Server Authentication request ('R' + length 8 + authtype)."""
+    return b"R" + struct.pack("!II", 8, authtype)
+
+
+def _pgsql_password_message(password: str) -> bytes:
+    """Client PasswordMessage ('p' + length + password + \\x00)."""
+    body = password.encode() + b"\x00"
+    return b"p" + struct.pack("!I", len(body) + 4) + body
+
+
+def _pgsql_simple_query(query: str) -> bytes:
+    """Client Simple Query ('Q' + length + query + \\x00)."""
+    body = query.encode() + b"\x00"
+    return b"Q" + struct.pack("!I", len(body) + 4) + body
+
+
+def _pgsql_ready_for_query() -> bytes:
+    return b"Z" + struct.pack("!I", 5) + b"I"
+
+
+def _pgsql_command_complete(tag: str) -> bytes:
+    body = tag.encode() + b"\x00"
+    return b"C" + struct.pack("!I", len(body) + 4) + body
+
+
+@fixture("pgsql_redis.pcap")
+def fixture_pgsql_redis() -> bytes:
+    """A PostgreSQL cleartext-password exchange with a startup (user, database), an auth request, a password,
+    and a simple query; plus a Redis AUTH (password never logged) and a GET key (#225)."""
+    w = Wire(start=1_702_000_000.0)
+    c, s = "10.10.0.10", "10.10.0.20"
+    # PostgreSQL on port 5432
+    t = Tcp(w, c, s, 51000, 5432).open()
+    t.send(True, _pgsql_startup("admin", "appdb"))             # startup: user=admin, database=appdb
+    t.send(False, _pgsql_auth_request(1))                       # server: cleartext-password auth (type 1)
+    t.send(True, _pgsql_password_message("pf-pgsql-pw"))        # client: password (must never appear)
+    t.send(False, _pgsql_auth_request(0))                       # server: AuthenticationOk (type 0)
+    t.send(False, _pgsql_ready_for_query())                     # server: ready
+    t.send(True, _pgsql_simple_query("SELECT 1 FROM users"))   # client: simple query
+    t.send(False, _pgsql_command_complete("SELECT 1"))          # server: command complete
+    t.send(False, _pgsql_ready_for_query())                     # server: ready
+    t.close()
+    # Redis on port 6379
+    t = Tcp(w, c, s, 51001, 6379).open()
+    t.send(True, b"*2\r\n$4\r\nAUTH\r\n$12\r\npf-redis-pw\r\n")  # AUTH password (must never appear)
+    t.send(False, b"+OK\r\n")
+    t.send(True, b"*2\r\n$3\r\nGET\r\n$5\r\nmykey\r\n")          # GET mykey
+    t.send(False, b"$5\r\nhello\r\n")
+    t.send(True, b"*3\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$5\r\nvalue\r\n")  # SET mykey value (value never logged)
+    t.send(False, b"+OK\r\n")
+    t.close()
     return w.write()
 
