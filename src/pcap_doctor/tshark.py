@@ -833,6 +833,14 @@ VNC_PASS = PassSpec(
     )),
 )
 
+#: STUN (RFC 5389) on the well-known port; tshark exposes type and the XOR-decoded address (#224).
+STUN_PASS = PassSpec(name="stun", display_filter="stun", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
+       "udp.srcport", "udp.dstport", "stun.type", "stun.att.family", "stun.att.ipv4", "stun.att.ipv6",
+       "stun.att.port")))
+#: RTSP requests and responses over TCP (#224).
+RTSP_PASS = PassSpec(name="rtsp", display_filter="rtsp", fields=with_addr(("frame.time_epoch", "tcp.srcport", "tcp.dstport",
+       "rtsp.method", "rtsp.url", "rtsp.status")))
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -952,6 +960,8 @@ PASSES: dict[str, PassSpec] = {
         PGSQL_PASS,
         RESP_PASS,
         VNC_PASS,
+        STUN_PASS,
+        RTSP_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,

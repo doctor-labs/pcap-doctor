@@ -1517,3 +1517,42 @@ def fixture_rfb_vnc() -> bytes:
     send(False, server_init)
     return w.write()
 
+
+def stun_msg(msg_type: int, tid: bytes, body: bytes = b"") -> bytes:
+    """One RFC 5389 STUN message. ``tid`` is the 12-byte transaction id."""
+    return struct.pack("!HHI", msg_type, len(body), 0x2112A442) + tid + body
+
+
+def stun_xor_mapped_address(port: int, addr: str) -> bytes:
+    """XOR-MAPPED-ADDRESS attribute (RFC 5389 §14.2), IPv4 family, port in host order.
+
+    Per RFC 5389 the port is XOR'd with the most significant 16 bits of the magic cookie and the
+    address with the whole 32-bit cookie, so tshark decodes both back out again.
+    """
+    ip = struct.unpack("!I", socket.inet_aton(addr))[0]
+    xport = port ^ (0x2112A442 >> 16)
+    xaddr = ip ^ 0x2112A442
+    return struct.pack("!HH", 0x0020, 8) + struct.pack("!B", 0) + struct.pack("!B", 0x01) + struct.pack("!H", xport) + struct.pack("!I", xaddr)
+
+
+@fixture("stun_rtsp.pcap")
+def fixture_stun_rtsp() -> bytes:
+    """One STUN BINDING-REQUEST/RESPONSE pair with an XOR-MAPPED-ADDRESS, and a short RTSP OPTIONS->200 +
+    DESCRIBE->404 exchange on TCP/554 (#224)."""
+    w = Wire(start=1_702_000_000.0)
+    tid = bytes.fromhex("00112233445566778899aabb")
+    client, server = "10.10.0.1", "10.10.0.2"
+    # STUN: binding request, then a success response carrying XOR-MAPPED-ADDRESS 192.0.2.33:4432.
+    w.add(udp_frame(client, server, 49722, 3478, stun_msg(0x0001, tid)))
+    w.add(udp_frame(server, client, 3478, 49722, stun_msg(0x0101, tid, stun_xor_mapped_address(4432, "192.0.2.33")),
+                    dmac=MAC_A, smac=MAC_B))
+    # RTSP over TCP/554: OPTIONS -> 200 OK, then DESCRIBE -> 404.
+    t = Tcp(w, client, server, 49300, 554)
+    t.open()
+    t.send(True, b"OPTIONS * RTSP/1.0\r\nCSeq: 1\r\nUser-Agent: qa\r\n\r\n")
+    t.send(False, b"RTSP/1.0 200 OK\r\nCSeq: 1\r\nPublic: OPTIONS, DESCRIBE, SETUP, TEARDOWN\r\n\r\n")
+    t.send(True, b"DESCRIBE rtsp://10.10.0.2:554/stream/track1 RTSP/1.0\r\nCSeq: 2\r\nAccept: application/sdp\r\n\r\n")
+    t.send(False, b"RTSP/1.0 404 Stream Not Found\r\nCSeq: 2\r\n\r\n")
+    t.close()
+    return w.write()
+

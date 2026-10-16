@@ -966,6 +966,62 @@ def _rfb_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+#: STUN message types (RFC 5389 §6): the high nibble is the class, the rest the method.
+_STUN_METHODS = {0x0001: "REQUEST", 0x0101: "RESPONSE", 0x0111: "ERROR_RESPONSE",
+                 0x0002: "INDICATION", 0x0102: "RESPONSE_2"}
+_STUN_FAMILIES = {0x01: "IPv4", 0x02: "IPv6"}
+
+
+def _stun_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style ``stun.log``: one row per STUN message, recording ``type`` (message type as sent on
+    the wire) and the XOR-MAPPED-ADDRESS (family, IP and port) when present (#224)."""
+    table = LogTable("stun", [("ts", "time"), *ID_COLS, ("type", "string"), ("method", "string"),
+                              ("addr_type", "string"), ("mapped_ip", "addr"), ("mapped_port", "port")])
+    for row in ctx.runner.run("stun"):
+        key = ctx.row_key(row, "udp") or ctx.row_key(row, "tcp")
+        if not key:
+            continue
+        msg_type = first(row, "stun.type") or None
+        code = to_int_auto(msg_type) if msg_type else None
+        family = to_int_auto(first(row, "stun.att.family")) if first(row, "stun.att.family") else None
+        mapped_ip = first(row, "stun.att.ipv4") or first(row, "stun.att.ipv6") or None
+        mapped_port_raw = first(row, "stun.att.port")
+        mapped_port = to_int(mapped_port_raw) if mapped_port_raw else None
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "type": msg_type if msg_type else None,
+            "method": _STUN_METHODS.get(code, f"UNKNOWN_{code}") if code is not None else None,
+            "addr_type": _STUN_FAMILIES.get(family, f"UNKNOWN_{family}") if family is not None else None,
+            "mapped_ip": mapped_ip,
+            "mapped_port": mapped_port,
+        })
+    return table
+
+
+def _rtsp_log(ctx: _Ctx) -> LogTable:
+    """Zeek-style ``rtsp.log``: one row per RTSP request, pairing it with the response that tshark
+    associates and recording ``method``, ``url`` and the response ``status`` (#224)."""
+    table = LogTable("rtsp", [("ts", "time"), *ID_COLS, ("method", "string"), ("url", "string"), ("status", "port")])
+    pending: dict[str, dict[str, Any]] = {}
+    for row in ctx.runner.run("rtsp"):
+        key = ctx.row_key(row, "tcp")
+        if not key:
+            continue
+        method = first(row, "rtsp.method") or None
+        url = first(row, "rtsp.url") or None
+        status_raw = first(row, "rtsp.status")
+        status = to_int(status_raw) if status_raw else None
+        if method:  # a request line
+            entry: dict[str, Any] = {"ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+                                     "method": method, "url": url, "status": None}
+            table.rows.append(entry)
+            pending[key] = entry
+        elif status is not None and key in pending:  # the response that closes the request's row
+            entry = pending.pop(key)
+            entry["status"] = status
+    return table
+
+
 _TUNNEL_TYPE = {
     "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
     "mpls": "Tunnel::MPLS", "erspan": "Tunnel::ERSPAN", "pppoes": "Tunnel::PPPOE", "vlan": "VLAN",
@@ -1719,7 +1775,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "tunnel": _tunnel_log, "radius": _radius_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }
