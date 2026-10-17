@@ -43,6 +43,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 | `software` | versioned software from HTTP Server / User-Agent headers and SSH banners (Zeek software.log: HTTP::SERVER, HTTP::BROWSER, SSH::SERVER, SSH::CLIENT) | `software` pass |
 | `os` | passive OS-family guess per host from the initial TTL of its SYNs (p0f-style, TTL only: 64 Linux/Unix/Android/macOS, 128 Windows, 255 network device) | `os` pass |
 | `protocols` | protocol hierarchy breakdown: frames, bytes and share of frames per protocol layer (an extension, like `tshark -z io,phs` flattened) | `protocols` pass |
+| `syslog` | one row per syslog message over UDP/514, RFC 3164 and RFC 5424: facility, severity, version, timestamp text, hostname, app/tag, process id, message id and the message text (truncated to 200 chars) | `syslog` pass |
 | `capture_loss` | ACKs, gaps (segments after a mid-stream hole) and percent lost, like Zeek's capture_loss.log | `capture_loss` pass |
 | `conversations` | frames, bytes, first seen and duration per IP pair, both directions together (an extension, like `tshark -z conv,ip`) | `frames` pass |
 | `io` | frames and bytes per one-second bucket (an extension, like Wireshark's IO graph) | `frames` pass |

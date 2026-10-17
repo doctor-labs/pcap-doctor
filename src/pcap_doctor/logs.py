@@ -1749,6 +1749,50 @@ def _os_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+def _rfc3164_msg(version: str | None, ts_text: str | None, msg: str | None, msgid: str | None) -> tuple[str | None, str | None]:
+    # RFC 3164 has no msgid and tshark fills the fields in two shapes. tshark 4.2 (Ubuntu 24.04, CI): the whole line
+    # in syslog.msg and the text after the TAG in syslog.msgid. tshark 4.4: that text in syslog.msg ("123]: hi") and
+    # msgid empty. Return the 4.4 shape for both.
+    if not version and msg and msgid and ts_text and msg.startswith(ts_text):
+        return (msgid[1:] if msgid.startswith("[") else msgid), None
+    # RFC 5424 on tshark 4.2: msgid holds the rest of the line ("42 ID42 [sd] text") and msg the whole line; a real
+    # MSGID has no space (RFC 5424 6.2.7), so split it off and keep the remainder as msg.
+    if version and msgid and " " in msgid:
+        msgid, msg = msgid.split(" ", 1)
+    return msg, msgid
+
+
+def _syslog_log(ctx: _Ctx) -> LogTable:
+    """One row per syslog message over UDP/514, covering RFC 3164 and RFC 5424 (issue #228)."""
+    table = LogTable("syslog", [
+        ("ts", "time"), *ID_COLS, ("facility", "count"), ("level", "count"), ("version", "string"),
+        ("timestamp", "string"), ("hostname", "string"), ("appname", "string"), ("procid", "string"),
+        ("msgid", "string"), ("msg", "string")])
+    for row in ctx.runner.run("syslog"):
+        key = ctx.row_key(row, "udp")
+        ts = to_float(first(row, "frame.time_epoch"))
+        # RFC 5424 carries a parsed timestamp; RFC 3164's lives in timestamp_rfc3164. Prefer 5424's text.
+        ts_text = (first(row, "syslog.version") and first(row, "syslog.timestamp")) or first(row, "syslog.timestamp_rfc3164")
+        msg, msgid = _rfc3164_msg(first(row, "syslog.version"), ts_text, first(row, "syslog.msg") or None,
+                                  first(row, "syslog.msgid") or None)
+        if msg is not None and len(msg) > 200:
+            msg = msg[:200]
+        table.rows.append({
+            "ts": ts, **(ctx.ids(key) if key else {}),
+            "facility": to_int(first(row, "syslog.facility")),
+            "level": to_int(first(row, "syslog.level")),
+            "version": first(row, "syslog.version") or None,
+            "timestamp": ts_text,
+            "hostname": first(row, "syslog.hostname") or None,
+            "appname": first(row, "syslog.appname") or None,
+            "procid": first(row, "syslog.procid") or None,
+            "msgid": msgid,
+            "msg": msg,
+        })
+    table.rows.sort(key=lambda r: (r["ts"] is None, r["ts"] or 0.0))
+    return table
+
+
 def _protocols_log(ctx: _Ctx) -> LogTable:
     """Protocol hierarchy breakdown: frames and bytes per protocol layer (issue #279)."""
     table = LogTable("protocols", [("protocol", "string"), ("frames", "count"), ("bytes", "count"), ("percent_frames", "double")])
@@ -2189,7 +2233,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "bacnet": _bacnet_log, "s7comm": _s7comm_log, "opcua": _opcua_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "bacnet": _bacnet_log, "s7comm": _s7comm_log, "opcua": _opcua_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log, "syslog": _syslog_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }
