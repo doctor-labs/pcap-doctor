@@ -1,9 +1,9 @@
-"""File extraction: HTTP, FTP, SMB, TFTP, SMTP, IMAP and POP3 bodies written to disk (issue #202).
+"""File extraction: HTTP, FTP, SMB, TFTP, SMTP, IMAP and POP3 bodies, and IRC chat text, written to disk (#202, #213).
 
 HTTP, FTP data, SMB and TFTP objects are reassembled by tshark (``--export-objects``). Mail is parsed here from the
 reassembled TCP stream, because tshark does not hand POP3 or IMAP messages to its mail dissector: the message is
 cut out of the SMTP ``DATA``, POP3 ``RETR`` or IMAP ``FETCH`` exchange, written as ``.eml`` and split into its
-attachments with the standard ``email`` package.
+attachments with the standard ``email`` package. IRC chat is cut from the TCP payloads into a per-conversation transcript.
 
 Extracted bytes are untrusted and may be malware. Names are reduced to a safe basename, every path is checked to
 stay inside the output directory, files get mode 0600 (never executable) and nothing is ever opened or run.
@@ -29,7 +29,8 @@ from .tshark import TsharkRunError
 
 TSHARK_PROTOCOLS = ("http", "ftp-data", "smb", "tftp", "dicom")
 MAIL_PROTOCOLS = ("smtp", "pop3", "imap")
-PROTOCOLS = (*TSHARK_PROTOCOLS, *MAIL_PROTOCOLS)
+CHAT_PROTOCOLS = ("irc",)
+PROTOCOLS = (*TSHARK_PROTOCOLS, *MAIL_PROTOCOLS, *CHAT_PROTOCOLS)
 MAIL_PORTS = {"smtp": (25, 587, 2525), "pop3": (110,), "imap": (143,)}
 
 
@@ -161,6 +162,55 @@ def _split_message(raw: bytes, protocol: str, outdir: Path, stem: str) -> list[E
     return found
 
 
+# ------------------------------------------------------------------------------------------ chat
+# Plain IRC only: the 6660-6669 block. TLS IRC (6697) would need the keys, so it is not read here.
+# ponytail: frames are joined in capture order, not TCP sequence order; reordered segments are a known gap.
+IRC_PORTS = tuple(range(6660, 6670))
+_CHAT_COMMANDS = (b"PRIVMSG", b"NOTICE")
+
+
+def _irc_lines(frames: list[tuple[int, str, bytes]]) -> list[tuple[int, str, str]]:
+    """(frame, sender, line) for each PRIVMSG or NOTICE; a line split over segments is joined before it is judged."""
+    pending: dict[str, bytes] = {}
+    out: list[tuple[int, str, str]] = []
+    for frame, src, payload in frames:
+        *lines, rest = (pending.get(src, b"") + payload).split(b"\n")
+        pending[src] = rest
+        for raw in lines:
+            line = raw.rstrip(b"\r")
+            body = line[1:].split(b" ", 1)[1] if line.startswith(b":") and b" " in line else line
+            if body.split(b" ", 1)[0].upper() in _CHAT_COMMANDS:
+                out.append((frame, src, line.decode("utf-8", "replace")))
+    return out
+
+
+def _irc(pcap: Path, outdir: Path) -> list[ExtractedFile]:
+    from .ondemand import run_fields
+
+    ports = " || ".join(f"tcp.port == {p}" for p in IRC_PORTS)
+    rows = run_fields(pcap, ["tcp.stream", "frame.number", "ip.src", "ipv6.src", "tcp.payload"],
+                      f"({ports}) && tcp.len > 0")
+    streams: dict[int, list[tuple[int, str, bytes]]] = {}
+    for conv, frame, ip4, ip6, payload in rows:
+        if not (conv.isdigit() and frame.isdigit() and payload):
+            continue
+        try:
+            data = bytes.fromhex(payload.replace(":", ""))
+        except ValueError:
+            continue
+        streams.setdefault(int(conv), []).append((int(frame), ip4 or ip6, data))
+    found: list[ExtractedFile] = []
+    for stream, frames in sorted(streams.items()):
+        lines = _irc_lines(frames)
+        if not lines:
+            continue
+        text = "".join(f"frame {frame} {src}: {line}\n" for frame, src, line in lines).encode("utf-8")
+        stored = _store(outdir, "irc", f"chat-{stream}.txt", data=text)
+        found.append(ExtractedFile("irc", stored.name, stored, stored.stat().st_size, "",
+                                   {"kind": "chat", "messages": str(len(lines))}))
+    return found
+
+
 def _streams_on(pcap: Path, ports: tuple[int, ...]) -> list[int]:
     from .ondemand import run_fields
 
@@ -200,6 +250,8 @@ def extract(pcap: Path, outdir: Path, protocols: tuple[str, ...] = PROTOCOLS,
     for protocol in protocols:
         if protocol in TSHARK_PROTOCOLS:
             found += _tshark_objects(pcap, protocol, outdir, decrypt_args)
+        elif protocol in CHAT_PROTOCOLS:
+            found += _irc(pcap, outdir)
         else:
             found += _mail(pcap, protocol, outdir, decrypt_args)
     for item in found:
