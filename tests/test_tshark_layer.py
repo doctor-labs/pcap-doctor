@@ -312,7 +312,7 @@ def test_prefetch_runs_passes_concurrently_and_run_reuses_them(monkeypatch) -> N
         return [{"pass": [spec.name]}]
 
     monkeypatch.setattr(runner, "_run", fake_run)
-    runner.prefetch({"base": (), "tls": (), "http": ("-o", "x:y")})
+    runner.prefetch({"base": (), "tls": (), "http": ("-o", "x:y")}, count=2)
     assert peak[0] >= 2
     assert runner.run("base") == [{"pass": ["base"]}]
     assert runner.run("http", ("-o", "x:y")) == [{"pass": ["http"]}]
