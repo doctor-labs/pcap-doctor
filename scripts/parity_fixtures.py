@@ -744,7 +744,7 @@ def fixture_dns_dnssec() -> bytes:
         ("DS", DNSRRDS(rrname="example.org", ttl=300, keytag=12345, algorithm=13, digesttype=2, digest=b"\xab\xcd")),
         ("NSEC", DNSRRNSEC(rrname="example.org", ttl=300, nextname="www.example.org", typebitmaps=[1])),
         ("NSEC3", DNSRRNSEC3(rrname="example.org", ttl=300, hashalg=1, flags=0, iterations=0, salt=b"",
-                              hashlength=20, nexthashedownername=os.urandom(20))),
+                              hashlength=20, nexthashedownername=bytes(range(20)))),
         ("RRSIG", DNSRRRSIG(rrname="example.org", ttl=300, typecovered=1, algorithm=13, labels=3, originalttl=300,
                             expiration=1234567890, inception=1234500000, keytag=12345, signersname="example.org",
                             signature=b"\xab\xcd\xef")),
