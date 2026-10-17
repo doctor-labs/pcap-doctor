@@ -19,16 +19,21 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 TAB = "\t"
 AGG = "\x1f"  # unit separator: safe inside field values, never in tshark output
 MULTI = "\x1e"  # record separator, used by -z statistics passes
 
 Row = dict[str, list[str]]
+
+#: Environment variable for overriding the tshark worker pool size.
+JOBS_ENV_VAR = "PCAP_DOCTOR_JOBS"
 
 
 class TsharkMissingError(RuntimeError):
@@ -37,6 +42,63 @@ class TsharkMissingError(RuntimeError):
 
 class TsharkRunError(RuntimeError):
     pass
+
+
+def worker_count(jobs: int | None, env: dict[str, str] | None = None) -> int:
+    """Pick how many tshark passes may run at once (issue #331).
+
+    Precedence: explicit ``jobs`` (from --jobs) > ``PCAP_DOCTOR_JOBS`` env var >
+    CPU-based default of ``max(1, min(3, cpu_count // 2))``.
+
+    ``int < 1`` is rejected so a misconfigured env var can never silently
+    serialise the run or spawn a zero-worker pool.
+
+    ``env`` is optional for testability; it defaults to ``os.environ``.
+    """
+    environ = env if env is not None else os.environ
+    raw = jobs
+    if raw is None:
+        env_jobs = environ.get(JOBS_ENV_VAR)
+        if env_jobs:
+            try:
+                raw = int(env_jobs)
+            except ValueError:
+                raise ValueError(
+                    f"{JOBS_ENV_VAR} must be an integer, got {env_jobs!r}"
+                ) from None
+    if raw is not None:
+        if raw < 1:
+            raise ValueError(f"--jobs must be >= 1, got {raw}")
+        return raw
+    cpus = os.cpu_count() or 4
+    return max(1, min(3, cpus // 2))
+
+
+def _low_priority_prefix() -> list[str]:
+    """Prefix the tshark argv with ``nice`` on POSIX so children run at low priority (issue #331).
+
+    ``preexec_fn`` is unsafe here because ``prefetch`` calls ``subprocess.run`` from a
+    ``ThreadPoolExecutor`` and Python docs warn that ``preexec_fn`` can deadlock the child
+    when the parent has threads.  Prefixing the command with the ``nice`` binary avoids
+    forking Python code in the child: if ``shutil.which("nice")`` is missing we return
+    an empty prefix and the process runs at the parent's priority (graceful degradation).
+    """
+    if sys.platform == "win32":
+        return []
+    if shutil.which("nice") is not None:
+        return ["nice", "-n", "10"]
+    return []
+
+
+def _low_priority_kwargs() -> dict[str, Any]:
+    """Extra kwargs for ``subprocess.run`` to lower child priority on Windows (issue #331).
+
+    POSIX uses the ``nice`` prefix (``_low_priority_prefix``) instead; this returns an
+    empty dict on POSIX.  Windows uses ``creationflags=BELOW_NORMAL_PRIORITY_CLASS``.
+    """
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}
+    return {}
 
 
 @dataclass(frozen=True)
@@ -1301,12 +1363,14 @@ class TsharkRunner:
         timeout: int = 600,
         extra_args: tuple[str, ...] = (),
         fast: bool = False,
+        jobs: int | None = None,
     ) -> None:
         self.pcap = pcap
         self.timeout = timeout
         self.use_cache = use_cache
         self.extra_args = extra_args
         self.fast = fast
+        self._jobs = jobs
         self.version = tshark_version()
         self.sha = file_sha256(pcap) if pcap.is_file() else "unknown"
         self.stats: dict[str, dict[str, int | float | str]] = {}
@@ -1398,7 +1462,7 @@ class TsharkRunner:
     def _command(
         self, spec: PassSpec, extra_args: tuple[str, ...] = (), pcap: Path | None = None
     ) -> list[str]:
-        cmd = [tshark_path(), "-r", str(pcap or self.pcap), "-n", "-l"]
+        cmd = [*_low_priority_prefix(), tshark_path(), "-r", str(pcap or self.pcap), "-n", "-l"]
         display_filter = self._filter_for(spec)
         if display_filter:
             cmd += ["-Y", display_filter]
@@ -1520,8 +1584,10 @@ class TsharkRunner:
             return []
 
         cmd = self._command(spec, extra_args, pcap=pcap)
+        # Issue #331: run tshark at low priority so the machine stays responsive.
+        low_prio = _low_priority_kwargs()
         for _attempt in range(6):
-            proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=self.timeout)
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=self.timeout, **low_prio)
             if proc.returncode == 0:
                 break
             bad_pref = re.search(r'-o flag "([^"]+)" specifies unknown preference', proc.stderr)
@@ -1600,7 +1666,7 @@ class TsharkRunner:
             return self._prefetched[(pass_name, extra_args)]
         return self._run(spec, extra_args)
 
-    def prefetch(self, jobs: dict[str, tuple[str, ...]]) -> None:
+    def prefetch(self, jobs: dict[str, tuple[str, ...]], *, count: int | None = None) -> None:
         """Run independent passes (name -> per-call extra args) concurrently; ``run`` then returns their rows.
 
         Each pass is its own tshark process re-reading the capture, so threads are enough: they only wait.
@@ -1622,12 +1688,15 @@ class TsharkRunner:
         # Remaining passes run concurrently; _run skips each whose protocols are absent.
         if not remaining:
             return
-        with ThreadPoolExecutor(max_workers=max(1, min(len(remaining), os.cpu_count() or 4))) as pool:
+        # Issue #331: cap concurrency via --jobs / PCAP_DOCTOR_JOBS / CPU-based default.
+        limit = count if count is not None else worker_count(self._jobs)
+        limit = max(1, min(limit, len(remaining)))
+        with ThreadPoolExecutor(max_workers=limit) as pool:
             futures = {
                 (name, args): pool.submit(self._run, PASSES[name], args) for name, args in remaining.items()
             }
-            for key, future in futures.items():
-                self._prefetched[key] = future.result()
+        for key, future in futures.items():
+            self._prefetched[key] = future.result()
 
     def all_passes(self) -> dict[str, list[Row]]:
         out = {}
