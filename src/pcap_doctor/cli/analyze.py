@@ -89,6 +89,10 @@ def analyze_cmd(
         None, "--signatures", exists=True, dir_okay=False,
         help="Suricata rules (*.rules) or Zeek signatures (*.sig) to match against the payloads (repeatable)",
     ),
+    ioc: list[Path] = typer.Option(
+        None, "--ioc", exists=True, dir_okay=False,
+        help="local indicator file: IPs/CIDRs, domains, http(s) URLs, one per line (repeatable). Never fetched over the network",
+    ),
     decode_as: list[str] = typer.Option(
         None, "--decode-as",
         help="dissect a port as a protocol, like tshark -d (repeatable): tcp.port==2121,ftp",
@@ -181,6 +185,7 @@ def analyze_cmd(
                 firmware_keys=firmware_keys,
                 signatures=tuple(signatures or ()),
                 signature_vars=sig_vars,
+                iocs=tuple(ioc or ()),
                 decode_as=tuple(decode_as or ()),
                 fast=fast,
                 jobs=jobs,

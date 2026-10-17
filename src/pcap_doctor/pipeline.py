@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import ssl
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -96,6 +97,7 @@ def analyze(
     firmware_keys: dict[str, str] | None = None,
     signatures: tuple[Path, ...] = (),
     signature_vars: dict[str, str] | None = None,
+    iocs: tuple[Path, ...] = (),
     decode_as: tuple[str, ...] = (),
     fast: bool = False,
     jobs: int | None = None,
@@ -148,6 +150,24 @@ def analyze(
             index.add_note(f"[signatures] {warning}")
         index.signature_hits = match(index, rules)
         index.add_note(f"[signatures] {len(rules)} rule(s) loaded, {len(index.signature_hits)} match(es)")
+
+    if iocs:
+        from .ioc import load_hash_iocs, load_iocs, match_file_hashes, match_iocs
+
+        indicators, ioc_warnings = load_iocs(list(iocs))
+        for warning in ioc_warnings:
+            index.add_note(warning)
+        index.ioc_hits = match_iocs(index, indicators)
+        hashes = load_hash_iocs(list(iocs))
+        if hashes:
+            # Hashes need the objects themselves: extract to a temp dir, hash, match; the bytes are discarded (#236).
+            from .extract import PROTOCOLS, extract
+
+            with tempfile.TemporaryDirectory() as tmp:
+                extracted = extract(pcap, Path(tmp), PROTOCOLS, decrypt_args)
+                index.ioc_hits += match_file_hashes(index, hashes, extracted)
+            index.add_note(f"[ioc] {len(hashes)} hash indicator(s) checked against {len(extracted)} extracted object(s)")
+        index.add_note(f"[ioc] {len(indicators)} indicator(s) loaded, {len(index.ioc_hits)} match(es)")
 
     detectors = enabled_detectors(include=only)
     findings: list[Finding] = []

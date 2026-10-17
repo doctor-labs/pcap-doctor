@@ -65,6 +65,7 @@ from .tshark import (
 )
 
 if TYPE_CHECKING:
+    from .ioc import IocHit
     from .signatures import SignatureHit
     from .smb import SmbOp
 
@@ -350,6 +351,7 @@ class CaptureIndex:
         self.notes: list[str] = []
         self.smb: list[SmbOp] = []
         self.signature_hits: list[SignatureHit] = []  # filled by the pipeline when --signatures is given (#201)
+        self.ioc_hits: list[IocHit] = []  # filled by the pipeline when --ioc is given (#236)
         self.firmware_keys: dict[str, str] = {}  # {cert SPKI fingerprint: firmware path} supplied via --firmware
         self.cert_der: dict[str, bytes] = {}  # {sha256(DER): DER} for certificate export (#212)
         self.dropped_fields: list[str] = []

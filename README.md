@@ -513,6 +513,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 | `d14.hostnames` | `detectors/hostnames.py` | hostnames with a login/admin/sign-in-style first label seen in DNS queries, TLS SNI and HTTP Host headers (Zeek Interesting_Hostname_Login / External_Name parity) |
 | `d18.radius` | `detectors/radius.py` | RADIUS Access-Request with cleartext User-Name (User-Password encrypted with shared secret, not TLS) |
 | `d19.vpn_handshakes` | `detectors/vpn_handshakes.py` | IKE/IPsec (ISAKMP on UDP 500/4500), WireGuard (handshake initiation on UDP 51820), and OpenVPN (control-channel opcodes on UDP/TCP 1194) |
+| `d21.ioc_match` | `detectors/ioc_match.py` | IPs, domains and URLs seen in the capture that match an indicator file you pass with `analyze --ioc` (`IOC_MATCH`); local file only, never fetched |
 | `d4.dns_quic_ssh` | `detectors/dns_quic_ssh.py` | plaintext DNS leakage, DNS tunnelling heuristics (label depth + entropy + TXT/NULL volume), external resolvers (IPv4 and IPv6), QUIC version inventory and payload opacity, weak SSH kex/cipher/MAC/host-key offers, Terrapin exposure (CVE-2023-48795) |
 | `d14.http_headers` | `detectors/http_headers.py` | cleartext HTTP responses missing Strict-Transport-Security, Content-Security-Policy, X-Content-Type-Options or X-Frame-Options (HTTP_MISSING_SECURITY_HEADERS) |
 | `d17.ech_early_data` | `detectors/ech_early_data.py` | Encrypted Client Hello (ECH, extension 0xfe0d per RFC 9849) and TLS 1.3 0-RTT early data (early_data extension 42 per RFC 8446) offered in ClientHello |
