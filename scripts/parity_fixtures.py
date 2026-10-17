@@ -719,7 +719,6 @@ def fixture_dns_records() -> bytes:
 @fixture("dns_dnssec.pcap")
 def fixture_dns_dnssec() -> bytes:
     """SVCB, HTTPS, RRSIG, DNSKEY, DS, NSEC and NSEC3 answers (#229)."""
-    import os
 
     from scapy.layers.dns import (
         DNS,
