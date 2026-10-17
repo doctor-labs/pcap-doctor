@@ -97,7 +97,12 @@
     "HTTP_CLEARTEXT",
     "HTTP_MISSING_SECURITY_HEADERS"
   ],
-  "ics_mix.pcap": [],
+  "ics_control.pcap": [
+    "ICS_CONTROL_COMMAND"
+  ],
+  "ics_mix.pcap": [
+    "ICS_CONTROL_COMMAND"
+  ],
   "irc_chat.pcap": [
     "CLEARTEXT_SERVICE"
   ],
@@ -118,7 +123,17 @@
     "TLS_SELF_SIGNED_CHAIN",
     "TLS_SERVER_CIPHER_PREFERENCE"
   ],
+  "mqtt.pcap": [],
+  "enip.pcap": [],
+  "iec104.pcap": [
+    "ICS_CONTROL_COMMAND"
+  ],
+  "bacnet.pcap": [],
   "netbios_names.pcap": [],
+  "opcua.pcap": [],
+  "s7comm.pcap": [
+    "ICS_CONTROL_COMMAND"
+  ],
   "no_pfs_tls12.pcap": [
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",

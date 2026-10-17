@@ -34,6 +34,7 @@ _WEB_ATTACK = "d16.web_attack"
 _ECH_0RTT = "d17.ech_early_data"
 _VPN = "d19.vpn_handshakes"
 _HTTP2 = "d5.http2"
+_ICS = "d20.ics_control"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -66,6 +67,7 @@ RULES: dict[str, Rule] = {
         Rule("TLS_SERVER_CIPHER_PREFERENCE", _TLS, "Crypto", "Server imposes its own cipher preference order"),
         Rule("TLS_INSECURE_RENEGOTIATION", _TLS, "Crypto", "Insecure TLS renegotiation"),
         Rule("CLEARTEXT_CREDENTIAL", _TRANSPORT, "Credentials", "Credential sent in cleartext"),
+        Rule("ICS_CONTROL_COMMAND", _ICS, "Cleartext", "Cleartext ICS write or control command"),
         Rule("HTTP_BASIC_AUTH", _TRANSPORT, "Credentials", "HTTP Basic authentication"),
         Rule("HTTP_CLEARTEXT_AUTH", _TRANSPORT, "Credentials", "HTTP authentication over cleartext"),
         Rule("HTTP_CLEARTEXT", _TRANSPORT, "Cleartext", "HTTP (or a firmware download) without TLS"),
@@ -175,6 +177,7 @@ _CLASSTYPES: dict[str, str] = {
     "TLS_COMPRESSION_ENABLED": "policy-violation",
     "TLS_INSECURE_RENEGOTIATION": "policy-violation",
     "CLEARTEXT_CREDENTIAL": "policy-violation",
+    "ICS_CONTROL_COMMAND": "policy-violation",
     "HTTP_BASIC_AUTH": "policy-violation",
     "HTTP_CLEARTEXT_AUTH": "policy-violation",
     "HTTP_COOKIE_NO_SECURE": "policy-violation",

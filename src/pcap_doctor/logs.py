@@ -1,5 +1,5 @@
 """Zeek-style per-protocol logs (TSV or JSON): conn, dns, http, ssl, x509, files, notice, weird, dhcp, dhcpv6, ftp, smtp,
-ssh, smb (issue #199).
+ssh, smb (issue #199), mqtt, enip, iec104, bacnet (#206).
 
 The tables are built on demand from the :class:`CaptureIndex` plus a few extra tshark passes (``conn``, ``dhcp``,
 ``dhcpv6``, ``ftp``, ``smtp``, ``smb``, ``weird``) that ``analyze`` never runs. The column names and types follow Zeek's, so
@@ -867,7 +867,7 @@ _DNP3_FUNCS = {0: "CONFIRM", 1: "READ", 2: "WRITE", 3: "SELECT", 4: "OPERATE", 5
 
 
 def _modbus_log(ctx: _Ctx) -> LogTable:
-    table = LogTable("modbus", [("ts", "time"), *ID_COLS, ("func", "string"), ("exception", "string")])
+    table = LogTable("modbus", [("ts", "time"), *ID_COLS, ("unit_id", "count"), ("func", "string"), ("exception", "string")])
     for row in ctx.runner.run("modbus"):
         key = ctx.row_key(row, "tcp")
         if not key:
@@ -879,6 +879,7 @@ def _modbus_log(ctx: _Ctx) -> LogTable:
         exc = to_int(first(row, "modbus.exception_code"))
         table.rows.append({
             "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "unit_id": to_int(first(row, "mbtcp.unit_id")),
             "func": _MODBUS_FUNCS.get(code, f"UNKNOWN_{code}") if code is not None else None,
             "exception": _MODBUS_EXCEPTIONS.get(exc, f"UNKNOWN_{exc}") if exc is not None else None,
         })
@@ -886,7 +887,8 @@ def _modbus_log(ctx: _Ctx) -> LogTable:
 
 
 def _dnp3_log(ctx: _Ctx) -> LogTable:
-    table = LogTable("dnp3", [("ts", "time"), *ID_COLS, ("fc_request", "string"), ("fc_reply", "string"), ("iin", "count")])
+    table = LogTable("dnp3", [("ts", "time"), *ID_COLS, ("src", "count"), ("dst", "count"), ("fc_request", "string"),
+                              ("fc_reply", "string"), ("iin", "count")])
     pending: dict[str, dict[str, Any]] = {}
     for row in ctx.runner.run("dnp3"):
         proto = "tcp" if first(row, "tcp.srcport") else "udp"
@@ -898,12 +900,14 @@ def _dnp3_log(ctx: _Ctx) -> LogTable:
             continue
         if func < 128:
             entry: dict[str, Any] = {"ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+                                     "src": to_int(first(row, "dnp3.src")), "dst": to_int(first(row, "dnp3.dst")),
                                      "fc_request": _DNP3_FUNCS.get(func, f"UNKNOWN_{func}"), "fc_reply": None, "iin": None}
             table.rows.append(entry)
             pending[key] = entry
         else:
             entry = pending.pop(key) if key in pending else {
                 "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+                "src": to_int(first(row, "dnp3.src")), "dst": to_int(first(row, "dnp3.dst")),
                 "fc_request": None, "fc_reply": None, "iin": None}
             entry["fc_reply"] = _DNP3_FUNCS.get(func, f"UNKNOWN_{func}")
             iin_raw = first(row, "dnp3.al.iin")
@@ -1023,6 +1027,279 @@ def _rtsp_log(ctx: _Ctx) -> LogTable:
             entry["status"] = status
     return table
 
+
+# Names are tshark's own value strings (tshark -G values, mqtt.msgtype); a code tshark does not list prints as a number.
+_MQTT_TYPES = {0: "Reserved", 1: "Connect Command", 2: "Connect Ack", 3: "Publish Message", 4: "Publish Ack",
+    5: "Publish Received", 6: "Publish Release", 7: "Publish Complete", 8: "Subscribe Request", 9: "Subscribe Ack",
+    10: "Unsubscribe Request", 11: "Unsubscribe Ack", 12: "Ping Request", 13: "Ping Response", 14: "Disconnect Req",
+    15: "Authentication Exchange", 16: "Reserved"}
+
+
+def _mqtt_log(ctx: _Ctx) -> LogTable:
+    """One row per MQTT control packet (first one when a segment carries several). Never the password (#206)."""
+    table = LogTable("mqtt", [("ts", "time"), *ID_COLS, ("version", "count"), ("msg_type", "string"),
+                              ("client_id", "string"), ("username", "string"), ("topic", "string"),
+                              ("return_code", "count")])
+    for row in ctx.runner.run("mqtt"):
+        key = ctx.row_key(row, "tcp")
+        mtype = to_int(first(row, "mqtt.msgtype"))
+        if not key or mtype is None:
+            continue
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "version": to_int(first(row, "mqtt.ver")),
+            "msg_type": _MQTT_TYPES.get(mtype, str(mtype)),
+            "client_id": first(row, "mqtt.clientid") or None,
+            "username": first(row, "mqtt.username") or None,
+            "topic": first(row, "mqtt.topic") or None,
+            "return_code": to_int(first(row, "mqtt.conack.val")),
+        })
+    return table
+
+# Names are tshark's own value strings (tshark -G values: enip.command, cip.sc); unlisted codes print as numbers.
+_ENIP_COMMANDS = {0x0: "NOP", 0x4: "List Services", 0x63: "List Identity", 0x64: "List Interfaces",
+    0x65: "Register Session", 0x66: "Unregister Session", 0x6F: "Send RR Data", 0x70: "Send Unit Data", 0xC8: "StartDTLS"}
+#: CIP service names (cip.sc), reply bit removed.
+_CIP_SERVICES = {0x1: "Get Attributes All", 0x2: "Set Attributes All", 0x3: "Get Attribute List",
+    0x4: "Set Attribute List", 0x5: "Reset", 0x6: "Start", 0x7: "Stop", 0x8: "Create", 0x9: "Delete",
+    0xA: "Multiple Service Packet", 0xD: "Apply Attributes", 0xE: "Get Attribute Single", 0x10: "Set Attribute Single",
+    0x11: "Find Next Object Instance", 0x15: "Restore", 0x16: "Save", 0x17: "Nop", 0x18: "Get Member", 0x19: "Set Member",
+    0x1A: "Insert Member", 0x1B: "Remove Member", 0x1C: "Group Sync"}
+
+
+def _enip_log(ctx: _Ctx) -> LogTable:
+    """One row per EtherNet/IP encapsulation packet: command, session, status and the CIP service and class (#206)."""
+    table = LogTable("enip", [("ts", "time"), *ID_COLS, ("command", "string"), ("session", "count"), ("status", "count"),
+                              ("cip_service", "string"), ("cip_reply", "bool"), ("cip_class", "count")])
+    for row in ctx.runner.run("enip"):
+        key = ctx.row_key(row, "tcp" if first(row, "tcp.srcport") else "udp")
+        command = to_int_auto(first(row, "enip.command"))
+        if not key or command is None:
+            continue
+        service = to_int_auto(first(row, "cip.service"))
+        rr = to_int_auto(first(row, "cip.rr"))
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "command": _ENIP_COMMANDS.get(command, str(command)),
+            "session": to_int_auto(first(row, "enip.session")), "status": to_int_auto(first(row, "enip.status")),
+            "cip_service": None if service is None else _CIP_SERVICES.get(service & 0x7F, str(service & 0x7F)),
+            "cip_reply": None if rr is None else rr == 1,
+            "cip_class": to_int_auto(first(row, "cip.class")),
+        })
+    return table
+
+
+# Names are tshark's own value strings (tshark -G values); a code tshark does not list prints as a number.
+# U-frame function (iec60870_104.utype).
+_IEC_UTYPE = {1: 'STARTDT act', 2: 'STARTDT con', 4: 'STOPDT act', 8: 'STOPDT con', 16: 'TESTFR act', 32:
+    'TESTFR con'}
+# ASDU type identifier (iec60870_asdu.typeid).
+_IEC_TYPEID = {1: 'M_SP_NA_1', 2: 'M_SP_TA_1', 3: 'M_DP_NA_1', 4: 'M_DP_TA_1', 5: 'M_ST_NA_1', 6: 'M_ST_TA_1',
+    7: 'M_BO_NA_1', 8: 'M_BO_TA_1', 9: 'M_ME_NA_1', 10: 'M_ME_TA_1', 11: 'M_ME_NB_1', 12: 'M_ME_TB_1', 13:
+    'M_ME_NC_1', 14: 'M_ME_TC_1', 15: 'M_IT_NA_1', 16: 'M_IT_TA_1', 20: 'M_PS_NA_1', 21: 'M_ME_ND_1', 30:
+    'M_SP_TB_1', 31: 'M_DP_TB_1', 32: 'M_ST_TB_1', 33: 'M_BO_TB_1', 34: 'M_ME_TD_1', 35: 'M_ME_TE_1', 36:
+    'M_ME_TF_1', 37: 'M_IT_TB_1', 38: 'M_EP_TD_1', 39: 'M_EP_TE_1', 40: 'M_EP_TF_1', 41: 'S_IT_TC_1', 45:
+    'C_SC_NA_1', 46: 'C_DC_NA_1', 47: 'C_RC_NA_1', 48: 'C_SE_NA_1', 49: 'C_SE_NB_1', 50: 'C_SE_NC_1', 51:
+    'C_BO_NA_1', 58: 'C_SC_TA_1', 59: 'C_DC_TA_1', 60: 'C_RC_TA_1', 61: 'C_SE_TA_1', 62: 'C_SE_TB_1', 63:
+    'C_SE_TC_1', 64: 'C_BO_TA_1', 70: 'M_EI_NA_1', 81: 'S_CH_NA_1', 82: 'S_RP_NA_1', 83: 'S_AR_NA_1', 84:
+    'S_KR_NA_1', 85: 'S_KS_NA_1', 86: 'S_KC_NA_1', 87: 'S_ER_NA_1', 90: 'S_US_NA_1', 91: 'S_UQ_NA_1', 92:
+    'S_UR_NA_1', 93: 'S_UK_NA_1', 94: 'S_UA_NA_1', 95: 'S_UC_NA_1', 100: 'C_IC_NA_1', 101: 'C_CI_NA_1', 102:
+    'C_RD_NA_1', 103: 'C_CS_NA_1', 105: 'C_RP_NA_1', 107: 'C_TS_TA_1', 110: 'P_ME_NA_1', 111: 'P_ME_NB_1',
+    112: 'P_ME_NC_1', 113: 'P_AC_NA_1', 120: 'F_FR_NA_1', 121: 'F_SR_NA_1', 122: 'F_SC_NA_1', 123:
+    'F_LS_NA_1', 124: 'F_AF_NA_1', 125: 'F_SG_NA_1', 126: 'F_DR_TA_1', 127: 'F_SC_NB_1'}
+# ASDU cause of transmission (iec60870_asdu.causetx).
+_IEC_CAUSE = {1: 'Per/Cyc', 2: 'Back', 3: 'Spont', 4: 'Init', 5: 'Req', 6: 'Act', 7: 'ActCon', 8: 'Deact', 9:
+    'DeactCon', 10: 'ActTerm', 11: 'Retrem', 12: 'Retloc', 13: 'File', 14: 'Auth', 15: 'Seskey', 16: 'Usrkey',
+    20: 'Inrogen', 21: 'Inro1', 22: 'Inro2', 23: 'Inro3', 24: 'Inro4', 25: 'Inro5', 26: 'Inro6', 27: 'Inro7',
+    28: 'Inro8', 29: 'Inro9', 30: 'Inro10', 31: 'Inro11', 32: 'Inro12', 33: 'Inro13', 34: 'Inro14', 35:
+    'Inro15', 36: 'Inro16', 37: 'Reqcogen', 38: 'Reqco1', 39: 'Reqco2', 40: 'Reqco3', 41: 'Reqco4', 44:
+    'UkTypeId', 45: 'UkCauseTx', 46: 'UkComAdrASDU', 47: 'UkIOA'}
+_IEC_APCI = {0: "I", 1: "S", 3: "U"}
+
+
+def _iec104_log(ctx: _Ctx) -> LogTable:
+    """One row per IEC 60870-5-104 APDU (first one when a segment carries several): frame type, U function,
+    ASDU type, cause, common address and information object address (#206). No payload values."""
+    table = LogTable("iec104", [("ts", "time"), *ID_COLS, ("apci", "string"), ("u_function", "string"),
+                                ("asdu_type", "string"), ("cause", "string"), ("common_addr", "count"), ("ioa", "count")])
+    for row in ctx.runner.run("iec104"):
+        key = ctx.row_key(row, "tcp")
+        apci = to_int_auto(first(row, "iec60870_104.type"))
+        if not key or apci is None:
+            continue
+        utype = to_int_auto(first(row, "iec60870_104.utype"))
+        typeid = to_int(first(row, "iec60870_asdu.typeid"))
+        cause_code = to_int(first(row, "iec60870_asdu.causetx"))
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "apci": _IEC_APCI.get(apci, str(apci)),
+            "u_function": None if utype is None else _IEC_UTYPE.get(utype, str(utype)),
+            "asdu_type": None if typeid is None else _IEC_TYPEID.get(typeid, str(typeid)),
+            "cause": None if cause_code is None else _IEC_CAUSE.get(cause_code, str(cause_code)),
+            "common_addr": to_int(first(row, "iec60870_asdu.addr")),
+            "ioa": to_int(first(row, "iec60870_asdu.ioa")),
+        })
+    return table
+
+# Names are tshark's own value strings (tshark -G values); a code tshark does not list prints as a number.
+# BVLC function (bvlc.function).
+_BVLC_FUNCTIONS = {0: 'BVLC-Result', 1: 'Write-Broadcast-Distribution-Table', 2: 'Read-Broadcast-Distribution-Table', 3: 'Read-Broadcast-Distribution-Table-Ack',
+    4: 'Forwarded-NPDU', 5: 'Register-Foreign-Device', 6: 'Read-Foreign-Device-Table', 7: 'Read-Foreign-Device-Table-Ack',
+    8: 'Delete-Foreign-Device-Table-Entry', 9: 'Distribute-Broadcast-To-Network', 10: 'Original-Unicast-NPDU', 11: 'Original-Broadcast-NPDU',
+    12: 'Secured-BVLL'}
+# APDU type (bacapp.type).
+_BACNET_APDU = {0: 'Confirmed-REQ', 1: 'Unconfirmed-REQ', 2: 'Simple-ACK', 3: 'Complex-ACK',
+    4: 'Segment-ACK', 5: 'Error', 6: 'Reject', 7: 'Abort'}
+# Confirmed service choice (bacapp.confirmed_service).
+_BACNET_CONFIRMED = {0: 'acknowledgeAlarm', 1: 'confirmedCOVNotification', 2: 'confirmedEventNotification', 3: 'getAlarmSummary',
+    4: 'getEnrollmentSummary', 5: 'subscribeCOV', 6: 'atomicReadFile', 7: 'atomicWriteFile',
+    8: 'addListElement', 9: 'removeListElement', 10: 'createObject', 11: 'deleteObject',
+    12: 'readProperty', 13: 'readPropertyConditional', 14: 'readPropertyMultiple', 15: 'writeProperty',
+    16: 'writePropertyMultiple', 17: 'deviceCommunicationControl', 18: 'confirmedPrivateTransfer', 19: 'confirmedTextMessage',
+    20: 'reinitializeDevice', 21: 'vtOpen', 22: 'vtClose', 23: 'vtData',
+    24: 'authenticate', 25: 'requestKey', 26: 'readRange', 27: 'lifeSafetyOperation',
+    28: 'subscribeCOVProperty', 29: 'getEventInformation', 30: 'subscribeCovPropertyMultiple', 31: 'confirmedCovNotificationMultiple',
+    32: 'confirmedAuditNotification', 33: 'auditLogQuery', 34: 'authRequest'}
+# Unconfirmed service choice (bacapp.unconfirmed_service).
+_BACNET_UNCONFIRMED = {0: 'i-Am', 1: 'i-Have', 2: 'unconfirmedCOVNotification', 3: 'unconfirmedEventNotification',
+    4: 'unconfirmedPrivateTransfer', 5: 'unconfirmedTextMessage', 6: 'timeSynchronization', 7: 'who-Has',
+    8: 'who-Is', 9: 'utcTimeSynchronization', 10: 'writeGroup', 11: 'unconfirmedCovNotificationMultiple',
+    12: 'unconfirmedAuditNotification', 13: 'who-am-I', 14: 'you-are'}
+
+
+def _bacnet_log(ctx: _Ctx) -> LogTable:
+    """One row per BACnet/IP APDU: BVLC function, APDU type, service and invoke id (#206). Property values are not read."""
+    table = LogTable("bacnet", [("ts", "time"), *ID_COLS, ("bvlc_function", "string"), ("apdu_type", "string"),
+                                ("service", "string"), ("invoke_id", "count")])
+    for row in ctx.runner.run("bacnet"):
+        key = ctx.row_key(row, "udp")
+        ptype = to_int(first(row, "bacapp.type"))
+        if not key or ptype is None:
+            continue
+        bfn = to_int_auto(first(row, "bvlc.function"))
+        unconfirmed = ptype == 1
+        code = to_int(first(row, "bacapp.unconfirmed_service" if unconfirmed else "bacapp.confirmed_service"))
+        names = _BACNET_UNCONFIRMED if unconfirmed else _BACNET_CONFIRMED
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "bvlc_function": None if bfn is None else _BVLC_FUNCTIONS.get(bfn, str(bfn)),
+            "apdu_type": _BACNET_APDU.get(ptype, str(ptype)),
+            "service": None if code is None else names.get(code, str(code)),
+            "invoke_id": to_int(first(row, "bacapp.invoke_id")),
+        })
+    return table
+
+# Names are tshark's own value strings (tshark -G values); a code tshark does not list prints as a number.
+# ROSCTR (s7comm.header.rosctr).
+_S7_ROSCTR = {1: 'Job', 2: 'Ack', 3: 'Ack_Data', 7: 'Userdata'}
+# Parameter function (s7comm.param.func).
+_S7_FUNCTIONS = {0: 'CPU services', 1: 'Mode transition', 4: 'Read Var', 5: 'Write Var',
+    26: 'Request download', 27: 'Download block', 28: 'Download ended', 29: 'Start upload',
+    30: 'Upload', 31: 'End upload', 40: 'PI-Service', 41: 'PLC Stop',
+    240: 'Setup communication'}
+# Item memory area (s7comm.param.item.area).
+_S7_AREAS = {1: 'Data record', 3: 'System info of 200 family', 5: 'System flags of 200 family', 6: 'Analog inputs of 200 family',
+    7: 'Analog outputs of 200 family', 28: 'S7 counters (C)', 29: 'S7 timers (T)', 30: 'IEC counters (200 family)',
+    31: 'IEC timers (200 family)', 128: 'Direct peripheral access (P)', 129: 'Inputs (I)', 130: 'Outputs (Q)',
+    131: 'Flags (M)', 132: 'Data blocks (DB)', 133: 'Instance data blocks (DI)', 134: 'Local data (L)',
+    135: 'Unknown yet (V)'}
+
+
+def _s7comm_log(ctx: _Ctx) -> LogTable:
+    """One row per S7comm PDU: ROSCTR, function, item count, and the memory area and DB of the first item (#206).
+    Read and write values are not logged."""
+    table = LogTable("s7comm", [("ts", "time"), *ID_COLS, ("rosctr", "string"), ("function", "string"),
+                                ("item_count", "count"), ("area", "string"), ("db", "count")])
+    for row in ctx.runner.run("s7comm"):
+        key = ctx.row_key(row, "tcp")
+        rosctr = to_int(first(row, "s7comm.header.rosctr"))
+        if not key or rosctr is None:
+            continue
+        func = to_int_auto(first(row, "s7comm.param.func"))
+        area = to_int_auto(first(row, "s7comm.param.item.area"))
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key),
+            "rosctr": _S7_ROSCTR.get(rosctr, str(rosctr)),
+            "function": None if func is None else _S7_FUNCTIONS.get(func, str(func)),
+            "item_count": to_int(first(row, "s7comm.param.itemcount")),
+            "area": None if area is None else _S7_AREAS.get(area, str(area)),
+            "db": to_int(first(row, "s7comm.param.item.db")),
+        })
+    return table
+
+# Service names are tshark's own value strings for opcua.servicenodeid.numeric (tshark -G values); a code tshark
+# does not list prints as a number.
+_OPCUA_SERVICES = {396: 'ServiceFault (XML Encoding)', 397: 'ServiceFault', 409: 'TestStackRequest (XML Encoding)',
+    410: 'TestStackRequest', 412: 'TestStackResponse (XML Encoding)', 413: 'TestStackResponse',
+    415: 'TestStackExRequest (XML Encoding)', 416: 'TestStackExRequest', 418: 'TestStackExResponse (XML Encoding)',
+    419: 'TestStackExResponse', 421: 'FindServersRequest (XML Encoding)', 422: 'FindServersRequest',
+    424: 'FindServersResponse (XML Encoding)', 425: 'FindServersResponse', 427: 'GetEndpointsRequest (XML Encoding)',
+    428: 'GetEndpointsRequest', 430: 'GetEndpointsResponse (XML Encoding)', 431: 'GetEndpointsResponse',
+    436: 'RegisterServerRequest (XML Encoding)', 437: 'RegisterServerRequest', 439: 'RegisterServerResponse (XML Encoding)',
+    440: 'RegisterServerResponse', 445: 'OpenSecureChannelRequest (XML Encoding)', 446: 'OpenSecureChannelRequest',
+    448: 'OpenSecureChannelResponse (XML Encoding)', 449: 'OpenSecureChannelResponse', 451: 'CloseSecureChannelRequest (XML Encoding)',
+    452: 'CloseSecureChannelRequest', 454: 'CloseSecureChannelResponse (XML Encoding)', 455: 'CloseSecureChannelResponse',
+    460: 'CreateSessionRequest (XML Encoding)', 461: 'CreateSessionRequest', 463: 'CreateSessionResponse (XML Encoding)',
+    464: 'CreateSessionResponse', 466: 'ActivateSessionRequest (XML Encoding)', 467: 'ActivateSessionRequest',
+    469: 'ActivateSessionResponse (XML Encoding)', 470: 'ActivateSessionResponse', 472: 'CloseSessionRequest (XML Encoding)',
+    473: 'CloseSessionRequest', 475: 'CloseSessionResponse (XML Encoding)', 476: 'CloseSessionResponse',
+    478: 'CancelRequest (XML Encoding)', 479: 'CancelRequest', 481: 'CancelResponse (XML Encoding)',
+    482: 'CancelResponse', 487: 'AddNodesRequest (XML Encoding)', 488: 'AddNodesRequest',
+    490: 'AddNodesResponse (XML Encoding)', 491: 'AddNodesResponse', 493: 'AddReferencesRequest (XML Encoding)',
+    494: 'AddReferencesRequest', 496: 'AddReferencesResponse (XML Encoding)', 497: 'AddReferencesResponse',
+    499: 'DeleteNodesRequest (XML Encoding)', 500: 'DeleteNodesRequest', 502: 'DeleteNodesResponse (XML Encoding)',
+    503: 'DeleteNodesResponse', 505: 'DeleteReferencesRequest (XML Encoding)', 506: 'DeleteReferencesRequest',
+    508: 'DeleteReferencesResponse (XML Encoding)', 509: 'DeleteReferencesResponse', 526: 'BrowseRequest (XML Encoding)',
+    527: 'BrowseRequest', 529: 'BrowseResponse (XML Encoding)', 530: 'BrowseResponse',
+    532: 'BrowseNextRequest (XML Encoding)', 533: 'BrowseNextRequest', 535: 'BrowseNextResponse (XML Encoding)',
+    536: 'BrowseNextResponse', 553: 'TranslateBrowsePathsToNodeIdsRequest (XML Encoding)', 554: 'TranslateBrowsePathsToNodeIdsRequest',
+    556: 'TranslateBrowsePathsToNodeIdsResponse (XML Encoding)', 557: 'TranslateBrowsePathsToNodeIdsResponse', 559: 'RegisterNodesRequest (XML Encoding)',
+    560: 'RegisterNodesRequest', 562: 'RegisterNodesResponse (XML Encoding)', 563: 'RegisterNodesResponse',
+    565: 'UnregisterNodesRequest (XML Encoding)', 566: 'UnregisterNodesRequest', 568: 'UnregisterNodesResponse (XML Encoding)',
+    569: 'UnregisterNodesResponse', 614: 'QueryFirstRequest (XML Encoding)', 615: 'QueryFirstRequest',
+    617: 'QueryFirstResponse (XML Encoding)', 618: 'QueryFirstResponse', 620: 'QueryNextRequest (XML Encoding)',
+    621: 'QueryNextRequest', 623: 'QueryNextResponse (XML Encoding)', 624: 'QueryNextResponse',
+    630: 'ReadRequest (XML Encoding)', 631: 'ReadRequest', 633: 'ReadResponse (XML Encoding)',
+    634: 'ReadResponse', 663: 'HistoryReadRequest (XML Encoding)', 664: 'HistoryReadRequest',
+    666: 'HistoryReadResponse (XML Encoding)', 667: 'HistoryReadResponse', 672: 'WriteRequest (XML Encoding)',
+    673: 'WriteRequest', 675: 'WriteResponse (XML Encoding)', 676: 'WriteResponse',
+    699: 'HistoryUpdateRequest (XML Encoding)', 700: 'HistoryUpdateRequest', 702: 'HistoryUpdateResponse (XML Encoding)',
+    703: 'HistoryUpdateResponse', 711: 'CallRequest (XML Encoding)', 712: 'CallRequest',
+    714: 'CallResponse (XML Encoding)', 715: 'CallResponse', 750: 'CreateMonitoredItemsRequest (XML Encoding)',
+    751: 'CreateMonitoredItemsRequest', 753: 'CreateMonitoredItemsResponse (XML Encoding)', 754: 'CreateMonitoredItemsResponse',
+    762: 'ModifyMonitoredItemsRequest (XML Encoding)', 763: 'ModifyMonitoredItemsRequest', 765: 'ModifyMonitoredItemsResponse (XML Encoding)',
+    766: 'ModifyMonitoredItemsResponse', 768: 'SetMonitoringModeRequest (XML Encoding)', 769: 'SetMonitoringModeRequest',
+    771: 'SetMonitoringModeResponse (XML Encoding)', 772: 'SetMonitoringModeResponse', 774: 'SetTriggeringRequest (XML Encoding)',
+    775: 'SetTriggeringRequest', 777: 'SetTriggeringResponse (XML Encoding)', 778: 'SetTriggeringResponse',
+    780: 'DeleteMonitoredItemsRequest (XML Encoding)', 781: 'DeleteMonitoredItemsRequest', 783: 'DeleteMonitoredItemsResponse (XML Encoding)',
+    784: 'DeleteMonitoredItemsResponse', 786: 'CreateSubscriptionRequest (XML Encoding)', 787: 'CreateSubscriptionRequest',
+    789: 'CreateSubscriptionResponse (XML Encoding)', 790: 'CreateSubscriptionResponse', 792: 'ModifySubscriptionRequest (XML Encoding)',
+    793: 'ModifySubscriptionRequest', 795: 'ModifySubscriptionResponse (XML Encoding)', 796: 'ModifySubscriptionResponse',
+    798: 'SetPublishingModeRequest (XML Encoding)', 799: 'SetPublishingModeRequest', 801: 'SetPublishingModeResponse (XML Encoding)',
+    802: 'SetPublishingModeResponse', 825: 'PublishRequest (XML Encoding)', 826: 'PublishRequest',
+    828: 'PublishResponse (XML Encoding)', 829: 'PublishResponse', 831: 'RepublishRequest (XML Encoding)',
+    832: 'RepublishRequest', 834: 'RepublishResponse (XML Encoding)', 835: 'RepublishResponse',
+    840: 'TransferSubscriptionsRequest (XML Encoding)', 841: 'TransferSubscriptionsRequest', 843: 'TransferSubscriptionsResponse (XML Encoding)',
+    844: 'TransferSubscriptionsResponse', 846: 'DeleteSubscriptionsRequest (XML Encoding)', 847: 'DeleteSubscriptionsRequest',
+    849: 'DeleteSubscriptionsResponse (XML Encoding)', 850: 'DeleteSubscriptionsResponse', 12196: 'FindServersOnNetworkRequest (XML Encoding)',
+    12197: 'FindServersOnNetworkResponse (XML Encoding)', 12199: 'RegisterServer2Request (XML Encoding)', 12200: 'RegisterServer2Response (XML Encoding)',
+    12208: 'FindServersOnNetworkRequest', 12209: 'FindServersOnNetworkResponse', 12211: 'RegisterServer2Request',
+    12212: 'RegisterServer2Response'}
+
+def _opcua_log(ctx: _Ctx) -> LogTable:
+    """One row per OPC UA binary transport message: HEL/ACK/OPN/MSG/CLO and the service it carries (#206)."""
+    table = LogTable("opcua", [("ts", "time"), *ID_COLS, ("transport", "string"), ("service", "string")])
+    for row in ctx.runner.run("opcua"):
+        key = ctx.row_key(row, "tcp")
+        kind = first(row, "opcua.transport.type")
+        if not key or not kind:
+            continue
+        code = to_int(first(row, "opcua.servicenodeid.numeric"))
+        table.rows.append({
+            "ts": to_float(first(row, "frame.time_epoch")), **ctx.ids(key), "transport": kind,
+            "service": None if code is None else _OPCUA_SERVICES.get(code, str(code)),
+        })
+    return table
 
 _TUNNEL_TYPE = {
     "gre": "Tunnel::GRE", "vxlan": "Tunnel::VXLAN", "geneve": "Tunnel::GENEVE", "gtp": "Tunnel::GTPv1",
@@ -1912,7 +2189,7 @@ BUILDERS: dict[str, Callable[[_Ctx], LogTable]] = {
     "conn": _conn_log, "dns": _dns_log, "http": _http_log, "ssl": _ssl_log, "x509": _x509_log, "files": _files_log,
     "notice": _notice_log, "weird": _weird_log, "expert": _expert_log, "dhcp": _dhcp_log, "dhcpv6": _dhcpv6_log, "netbios": _netbios_log, "ftp": _ftp_log, "smtp": _smtp_log,
     "ssh": _ssh_log, "smb": _smb_log, "kerberos": _kerberos_log, "ntlm": _ntlm_log,
-    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
+    "modbus": _modbus_log, "dnp3": _dnp3_log, "pgsql": _pgsql_log, "redis": _redis_log, "mqtt": _mqtt_log, "enip": _enip_log, "iec104": _iec104_log, "bacnet": _bacnet_log, "s7comm": _s7comm_log, "opcua": _opcua_log, "tunnel": _tunnel_log, "radius": _radius_log, "stun": _stun_log, "rtsp": _rtsp_log, "bittorrent": _bittorrent_log,
     "device": _device_log, "software": _software_log, "os": _os_log, "protocols": _protocols_log, "capture_loss": _capture_loss_log,
     "conversations": _conversations_log, "io": _io_log, "known_services": _known_services_log, "rdp": _rdp_log, "rfb": _rfb_log,
 }

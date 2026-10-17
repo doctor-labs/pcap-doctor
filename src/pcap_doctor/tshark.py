@@ -843,6 +843,7 @@ MODBUS_PASS = PassSpec(
             "tcp.srcport",
             "tcp.dstport",
             "mbtcp.trans_id",
+            "mbtcp.unit_id",
             "modbus.func_code",
             "modbus.exception_code",
         )
@@ -858,6 +859,8 @@ DNP3_PASS = PassSpec(
             "tcp.dstport",
             "udp.srcport",
             "udp.dstport",
+            "dnp3.src",
+            "dnp3.dst",
             "dnp3.al.func",
             "dnp3.al.iin",
         )
@@ -946,6 +949,137 @@ BT_DHT_PASS = PassSpec(
     )),
 )
 
+#: MQTT control packets for mqtt.log (#206): type, version, client id, user name, topic, CONNACK return code.
+#: Never the password field.
+MQTT_PASS = PassSpec(
+    name="mqtt",
+    display_filter="mqtt",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "mqtt.msgtype",
+            "mqtt.ver",
+            "mqtt.clientid",
+            "mqtt.username",
+            "mqtt.topic",
+            "mqtt.conack.val",
+        )
+    ),
+)
+
+#: EtherNet/IP encapsulation and CIP service for enip.log (#206). No CIP payload data, only the service and class.
+ENIP_PASS = PassSpec(
+    name="enip",
+    display_filter="enip",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "enip.command",
+            "enip.session",
+            "enip.status",
+            "cip.service",
+            "cip.rr",
+            "cip.class",
+        )
+    ),
+)
+
+#: IEC 60870-5-104 APCI and ASDU header for iec104.log (#206). No information element values.
+IEC104_PASS = PassSpec(
+    name="iec104",
+    display_filter="iec60870_104",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "iec60870_104.type",
+            "iec60870_104.utype",
+            "iec60870_asdu.typeid",
+            "iec60870_asdu.causetx",
+            "iec60870_asdu.addr",
+            "iec60870_asdu.ioa",
+        )
+    ),
+)
+
+#: BACnet/IP BVLC function, APDU type, service choice and invoke id for bacnet.log (#206). No property values.
+BACNET_PASS = PassSpec(
+    name="bacnet",
+    display_filter="bvlc || bacapp",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "udp.srcport",
+            "udp.dstport",
+            "bvlc.function",
+            "bacapp.type",
+            "bacapp.invoke_id",
+            "bacapp.confirmed_service",
+            "bacapp.unconfirmed_service",
+        )
+    ),
+)
+
+#: S7comm PDU header, function, item count and first item's area and DB for s7comm.log (#206). No data values.
+S7COMM_PASS = PassSpec(
+    name="s7comm",
+    display_filter="s7comm",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "s7comm.header.rosctr",
+            "s7comm.param.func",
+            "s7comm.param.itemcount",
+            "s7comm.param.item.area",
+            "s7comm.param.item.db",
+        )
+    ),
+)
+
+#: OPC UA binary transport type and service node id for opcua.log (#206). No payload values.
+#: One batched pass for the ICS command detector (#206): Modbus, DNP3, S7comm and IEC 60870-5-104 command fields.
+ICS_CONTROL_PASS = PassSpec(
+    name="ics_control",
+    display_filter="modbus || dnp3 || s7comm || iec60870_104",
+    fields=with_addr(
+        (
+            "tcp.srcport",
+            "tcp.dstport",
+            "udp.srcport",
+            "udp.dstport",
+            "modbus.func_code",
+            "dnp3.al.func",
+            "s7comm.header.rosctr",
+            "s7comm.param.func",
+            "iec60870_asdu.typeid",
+            "iec60870_asdu.causetx",
+        )
+    ),
+)
+
+OPCUA_PASS = PassSpec(
+    name="opcua",
+    display_filter="opcua",
+    fields=with_addr(
+        (
+            "frame.time_epoch",
+            "tcp.srcport",
+            "tcp.dstport",
+            "opcua.transport.type",
+            "opcua.servicenodeid.numeric",
+        )
+    ),
+)
+
 #: tshark expert info at warning and error level: malformed packets, bad lengths, broken checksums...
 WEIRD_PASS = PassSpec(
     name="weird",
@@ -989,7 +1123,7 @@ _TRANSPORT_PREFIXES: frozenset[str] = frozenset({
 _APP_PROTOCOLS: frozenset[str] = frozenset({
     "tls", "dtls", "http", "dns", "sip", "sdp", "rtp", "rtcp", "ssh", "quic",
     "ftp", "smtp", "smb", "smb2", "imf", "kerberos", "ntlmssp", "ntlm",
-    "modbus", "mbtcp", "dnp3", "telnet", "dhcp", "dhcpv6",
+    "modbus", "mbtcp", "dnp3", "mqtt", "enip", "cip", "iec60870_104", "bvlc", "bacapp", "s7comm", "opcua", "telnet", "dhcp", "dhcpv6",
     "tftp", "ntp", "snmp", "mysql", "ldap", "imap", "pop", "radius", "ike",
     "nfs",
 })
@@ -1069,6 +1203,13 @@ PASSES: dict[str, PassSpec] = {
         STUN_PASS,
         RTSP_PASS,
         BT_DHT_PASS,
+        MQTT_PASS,
+        ENIP_PASS,
+        IEC104_PASS,
+        BACNET_PASS,
+        S7COMM_PASS,
+        OPCUA_PASS,
+        ICS_CONTROL_PASS,
         TUNNEL_PASS,
         PROTOCOLS_PASS,
         FRAMES_PASS,

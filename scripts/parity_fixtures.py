@@ -1820,3 +1820,193 @@ def fixture_rdp_session() -> bytes:
     t.send(True, _rdp_pdu(len(events) << 2, body))  # fast-path input, 10 events
     t.close()
     return w.write()
+
+
+def mqtt_str(text: str) -> bytes:
+    return struct.pack("!H", len(text)) + text.encode()
+
+
+@fixture("mqtt.pcap")
+def fixture_mqtt() -> bytes:
+    """MQTT 3.1.1 over TCP 1883: a sensor session (CONNECT, two PUBLISH, ping, DISCONNECT) and a refused login (#206).
+
+    The CONNECT of the refused client carries a password that must never reach mqtt.log.
+    """
+    w = Wire(start=1_702_100_000.0)
+    broker = "10.12.0.1"
+    s = Tcp(w, "10.12.0.5", broker, 50100, 1883).open()
+    body = mqtt_str("MQTT") + bytes([4, 0xC2]) + struct.pack("!H", 60) + mqtt_str("pf-sensor-7") + mqtt_str("plant") + mqtt_str("hunter2")
+    s.send(True, bytes([0x10, len(body)]) + body)  # CONNECT, clean session, user name and password flags
+    s.send(False, bytes([0x20, 2, 0, 0]))  # CONNACK, return code 0
+    for value in (b"21.5", b"21.7"):
+        topic = mqtt_str("plant/line1/temp") + value
+        s.send(True, bytes([0x30, len(topic)]) + topic)  # PUBLISH, QoS 0
+    s.send(True, b"\xc0\x00")  # PINGREQ
+    s.send(False, b"\xd0\x00")  # PINGRESP
+    s.send(True, b"\xe0\x00")  # DISCONNECT
+    s.close()
+    r = Tcp(w, "10.12.0.66", broker, 50200, 1883).open()
+    body = mqtt_str("MQTT") + bytes([4, 0xC2]) + struct.pack("!H", 60) + mqtt_str("scanner") + mqtt_str("admin") + mqtt_str("x")
+    r.send(True, bytes([0x10, len(body)]) + body)
+    r.send(False, bytes([0x20, 2, 0, 5]))  # CONNACK, return code 5: not authorized
+    r.close()
+    return w.write()
+
+
+def enip_header(command: int, data: bytes, *, session: int = 0, status: int = 0) -> bytes:
+    return struct.pack("<HHII", command, len(data), session, status) + bytes(8) + struct.pack("<I", 0) + data
+
+
+def enip_cip_request(service: int, cls: int, instance: int) -> bytes:
+    """A CIP request on an unconnected SendRRData item: service, path words, then the class and instance segments."""
+    path = bytes([0x20, cls, 0x24, instance])
+    return bytes([service, len(path) // 2]) + path
+
+
+@fixture("enip.pcap")
+def fixture_enip() -> bytes:
+    """EtherNet/IP over TCP 44818: ListIdentity, RegisterSession, then SendRRData carrying CIP Get_Attribute_Single (#206)."""
+    w = Wire(start=1_702_200_000.0)
+    c, s = "10.13.0.5", "10.13.0.20"
+    t = Tcp(w, c, s, 51100, 44818).open()
+    t.send(True, enip_header(0x0063, b""))  # ListIdentity
+    t.send(False, enip_header(0x0063, struct.pack("<H", 0)))
+    t.send(True, enip_header(0x0065, struct.pack("<HH", 1, 0)))  # RegisterSession, version 1
+    t.send(False, enip_header(0x0065, struct.pack("<HH", 1, 0), session=0x1A2B3C4D))
+    cip = enip_cip_request(0x0E, 0x01, 0x01)  # Get_Attribute_Single, class 1 instance 1
+    cpf = struct.pack("<HHHHH", 2, 0, 0, 0x00B2, len(cip)) + cip  # item count 2: null address, unconnected data
+    rr = struct.pack("<IH", 0, 10) + cpf
+    t.send(True, enip_header(0x006F, rr, session=0x1A2B3C4D))  # SendRRData request
+    reply = bytes([0x8E, 0x00, 0x00, 0x00])  # reply to service 0x0E, general status 0
+    cpf_reply = struct.pack("<HHHHH", 2, 0, 0, 0x00B2, len(reply)) + reply
+    t.send(False, enip_header(0x006F, struct.pack("<IH", 0, 10) + cpf_reply, session=0x1A2B3C4D))
+    t.close()
+    return w.write()
+
+
+@fixture("iec104.pcap")
+def fixture_iec104() -> bytes:
+    """IEC 60870-5-104 on TCP 2404: STARTDT, a general interrogation, a spontaneous single point, a single command,
+    S-frame acknowledgement and TESTFR (#206)."""
+    w = Wire(start=1_702_300_000.0)
+    m, o = "10.14.0.5", "10.14.0.20"
+    t = Tcp(w, m, o, 52100, 2404).open()
+    t.send(True, bytes([0x68, 4, 0x07, 0, 0, 0]))  # U: STARTDT act
+    t.send(False, bytes([0x68, 4, 0x0B, 0, 0, 0]))  # U: STARTDT con
+    t.send(True, bytes([0x68, 14, 0, 0, 0, 0]) + bytes([100, 1, 6, 0, 1, 0, 0, 0, 0, 20]))  # I: C_IC_NA_1 interrogation
+    t.send(False, bytes([0x68, 14, 0, 0, 2, 0]) + bytes([1, 1, 3, 0, 1, 0, 1, 0, 0, 1]))  # I: M_SP_NA_1 spontaneous, on
+    t.send(True, bytes([0x68, 4, 1, 0, 2, 0]))  # S: acknowledges the outstation's frame
+    t.send(True, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 6, 0, 1, 0, 0x65, 0, 0, 1]))  # I: C_SC_NA_1 single command
+    t.send(True, bytes([0x68, 4, 0x43, 0, 0, 0]))  # U: TESTFR act
+    t.send(False, bytes([0x68, 4, 0x83, 0, 0, 0]))  # U: TESTFR con
+    t.close()
+    return w.write()
+
+
+def bacnet_frame(apdu: bytes) -> bytes:
+    """BACnet/IP: BVLC Original-Unicast-NPDU (0x0A) around an NPDU with no routing."""
+    npdu = bytes([0x01, 0x00]) + apdu
+    return bytes([0x81, 0x0A]) + struct.pack("!H", 4 + len(npdu)) + npdu
+
+
+@fixture("bacnet.pcap")
+def fixture_bacnet() -> bytes:
+    """BACnet/IP over UDP 47808: Who-Is, I-Am, a ReadProperty with its Complex-ACK, and a WriteProperty acknowledged (#206)."""
+    w = Wire(start=1_702_400_000.0)
+    ctl, dev = "10.15.0.5", "10.15.0.20"
+    w.add(udp_frame(ctl, "10.15.0.255", 47808, 47808, bytes([0x81, 0x0B, 0, 12, 0x01, 0x20, 0xFF, 0xFF, 0x00, 0xFF, 0x10, 0x08])))  # Who-Is
+    w.add(udp_frame(dev, ctl, 47808, 47808, bacnet_frame(bytes([0x10, 0x00]) + bytes([0xC4, 0x02, 0x00, 0x00, 0x2A]))))  # I-Am
+    obj_ai1 = bytes([0x0C, 0x00, 0x00, 0x00, 0x01]) + bytes([0x19, 0x55])  # object analog-input 1, present-value
+    w.add(udp_frame(ctl, dev, 47808, 47808, bacnet_frame(bytes([0x00, 0x05, 0x01, 0x0C]) + obj_ai1)))  # ReadProperty invoke 1
+    w.add(udp_frame(dev, ctl, 47808, 47808, bacnet_frame(bytes([0x30, 0x01, 0x0C]) + obj_ai1 + bytes([0x3E, 0x44, 0x41, 0xB8, 0, 0, 0x3F]))))  # ACK
+    write_body = bytes([0x0C, 0x00, 0x00, 0x00, 0x05]) + bytes([0x19, 0x55, 0x3E, 0x44, 0x42, 0xC8, 0, 0, 0x3F])  # AV 5 := 100.0
+    w.add(udp_frame(ctl, dev, 47808, 47808, bacnet_frame(bytes([0x00, 0x05, 0x02, 0x0F]) + write_body)))  # WriteProperty invoke 2
+    w.add(udp_frame(dev, ctl, 47808, 47808, bacnet_frame(bytes([0x20, 0x02, 0x0F]))))  # Simple-ACK invoke 2
+    return w.write()
+
+
+@fixture("s7comm.pcap")
+def fixture_s7comm() -> bytes:
+    """S7comm over TPKT/COTP on TCP 102: setup, a Read Var of DB 1 with its data, a Write Var, and the acknowledgements (#206)."""
+    w = Wire(start=1_702_500_000.0)
+    hmi, plc = "10.16.0.5", "10.16.0.20"
+    t = Tcp(w, hmi, plc, 51300, 102).open()
+
+    def s7(rosctr: int, params: bytes, data: bytes = b"") -> bytes:
+        errors = bytes([0, 0]) if rosctr in (2, 3) else b""  # error class and code exist in acknowledgements only
+        pdu = bytes([0x32, rosctr, 0, 0, 0, 1]) + struct.pack("!HH", len(params), len(data)) + errors + params + data
+        cotp = bytes([0x02, 0xF0, 0x80]) + pdu  # COTP data transfer
+        return bytes([3, 0]) + struct.pack("!H", 4 + len(cotp)) + cotp  # TPKT
+
+    def item(area: int, db: int, count: int) -> bytes:
+        return bytes([0x12, 0x0A, 0x10, 0x02]) + struct.pack("!HHB", count, db, area) + bytes(3)
+
+    t.send(True, s7(1, bytes([0xF0, 0x00]) + struct.pack("!HHH", 1, 1, 480)))  # Job: setup communication
+    t.send(False, s7(2, bytes([0xF0, 0x00]) + struct.pack("!HHH", 1, 1, 480)))  # Ack
+    t.send(True, s7(1, bytes([0x04, 1]) + item(0x84, 1, 2)))  # Job: read var, DB 1, two bytes
+    t.send(False, s7(3, bytes([0x04, 1]), bytes([0xFF, 0x04, 0x00, 0x10, 0x12, 0x34])))  # Ack_Data with the value
+    t.send(True, s7(1, bytes([0x05, 1]) + item(0x84, 2, 2), bytes([0x00, 0x04, 0x00, 0x10, 0x00, 0x64])))  # write DB 2
+    t.send(False, s7(2, bytes([0x05, 1]), bytes([0xFF])))  # Ack: write accepted
+    t.close()
+    return w.write()
+
+
+def opcua_chunk(kind: bytes, body: bytes, *, channel: int = 0) -> bytes:
+    """A binary OPC UA transport message: three-letter type, chunk flag 'F', total size, then the body."""
+    return kind + b"F" + struct.pack("<I", 8 + len(body)) + body
+
+
+def opcua_string(text: str) -> bytes:
+    return struct.pack("<i", len(text)) + text.encode()
+
+
+@fixture("opcua.pcap")
+def fixture_opcua() -> bytes:
+    """OPC UA binary on TCP 4840: Hello/Acknowledge, OpenSecureChannel, and a CreateSession and a Browse request (#206)."""
+    w = Wire(start=1_702_600_000.0)
+    cli, srv = "10.17.0.5", "10.17.0.20"
+    t = Tcp(w, cli, srv, 51400, 4840).open()
+    hello = struct.pack("<IIIII", 0, 65536, 65536, 0, 0) + opcua_string("opc.tcp://10.17.0.20:4840")
+    t.send(True, opcua_chunk(b"HEL", hello))
+    t.send(False, opcua_chunk(b"ACK", struct.pack("<IIIII", 0, 65536, 65536, 0, 0)))
+    osc = struct.pack("<I", 0) + opcua_string("http://opcfoundation.org/UA/SecurityPolicy#None") + struct.pack("<ii", -1, -1)
+    osc += struct.pack("<II", 1, 1) + bytes([0x01, 0x00]) + struct.pack("<H", 446) + bytes(16)  # OpenSecureChannelRequest
+    t.send(True, opcua_chunk(b"OPN", osc))
+    msg = struct.pack("<IIII", 1, 1, 2, 2)  # channel, token, sequence, request id
+    t.send(True, opcua_chunk(b"MSG", msg + bytes([0x01, 0x00]) + struct.pack("<H", 461) + bytes(16)))  # CreateSessionRequest
+    t.send(True, opcua_chunk(b"MSG", struct.pack("<IIII", 1, 1, 3, 3) + bytes([0x01, 0x00]) + struct.pack("<H", 527) + bytes(16)))  # BrowseRequest
+    t.close()
+    return w.write()
+
+
+@fixture("ics_control.pcap")
+def fixture_ics_control() -> bytes:
+    # Cleartext write and control commands on four ICS protocols (#206). The Modbus read and the IEC 104
+    # activation confirmation (cause 7) sit in the same capture and must not be flagged.
+    w = Wire(start=1_702_600_000.0)
+    hmi = "10.9.0.10"
+    m = Tcp(w, hmi, "10.9.0.20", 49300, 502).open()
+    m.send(True, modbus_adu(1, 1, bytes([3]) + struct.pack("!HH", 0, 2)))  # read holding registers: not a write
+    m.send(False, modbus_adu(1, 1, bytes([3, 4]) + struct.pack("!HH", 7, 9)))
+    m.send(True, modbus_adu(2, 1, bytes([6]) + struct.pack("!HH", 1, 1234)))  # write single register 1
+    m.send(False, modbus_adu(2, 1, bytes([6]) + struct.pack("!HH", 1, 1234)))
+    m.close()
+    d = Tcp(w, hmi, "10.9.0.30", 49400, 20000).open()
+    d.send(True, dnp3_frame(bytes([0xC1, 0x04]), dst=10, src=1, primary=True))  # OPERATE
+    d.send(False, dnp3_frame(bytes([0xC1, 0x81, 0x00, 0x00]), dst=1, src=10, primary=False))  # RESPONSE
+    d.close()
+    s = Tcp(w, hmi, "10.9.0.40", 51400, 102).open()
+
+    def s7_job(params: bytes, data: bytes) -> bytes:
+        pdu = bytes([0x32, 1, 0, 0, 0, 1]) + struct.pack("!HH", len(params), len(data)) + params + data
+        cotp = bytes([0x02, 0xF0, 0x80]) + pdu
+        return bytes([3, 0]) + struct.pack("!H", 4 + len(cotp)) + cotp
+
+    item = bytes([0x12, 0x0A, 0x10, 0x02]) + struct.pack("!HHB", 2, 2, 0x84) + bytes(3)
+    s.send(True, s7_job(bytes([0x05, 1]) + item, bytes([0x00, 0x04, 0x00, 0x10, 0x00, 0x64])))  # Write Var, DB 2
+    s.close()
+    i = Tcp(w, hmi, "10.9.0.50", 49500, 2404).open()
+    i.send(True, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 6, 0, 1, 0, 0x65, 0, 0, 1]))  # C_SC_NA_1, activation
+    i.send(False, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 7, 0, 1, 0, 0x65, 0, 0, 1]))  # activation confirmation
+    i.close()
+    return w.write()
