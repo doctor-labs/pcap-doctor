@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from conftest import fixture, requires_tshark
-from pcap_doctor.logs import log_rows
+from pcap_doctor.logs import _rfc3164_msg, log_rows
 
 
 @requires_tshark
@@ -43,3 +43,13 @@ def test_syslog_log_has_connection_endpoints(analyze_capture) -> None:
     row = next(r for r in rows if r["hostname"] == "myhost")
     assert (row["id.orig_h"], row["id.orig_p"], row["id.resp_h"], row["id.resp_p"]) == (
         "10.0.0.10", 51400, "10.0.0.20", 514)
+
+
+def test_rfc3164_msg_normalises_both_tshark_shapes() -> None:
+    ts = "Oct 11 22:14:15"
+    new = ("123]: hi", None)  # tshark 4.4: msg after the TAG, msgid empty
+    assert _rfc3164_msg(None, ts, "123]: hi", None) == new
+    # tshark 4.2 (CI, Ubuntu 24.04): whole line in msg, text after the TAG in msgid
+    assert _rfc3164_msg(None, ts, ts + " myhost myapp[123]: hi", "[123]: hi") == new
+    # RFC 5424 is never rewritten
+    assert _rfc3164_msg("1", "2024-01-01T00:00:00Z", "ID42 hi", "42") == ("ID42 hi", "42")

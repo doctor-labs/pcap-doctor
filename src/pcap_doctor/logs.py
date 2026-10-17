@@ -1749,6 +1749,15 @@ def _os_log(ctx: _Ctx) -> LogTable:
     return table
 
 
+def _rfc3164_msg(version: str | None, ts_text: str | None, msg: str | None, msgid: str | None) -> tuple[str | None, str | None]:
+    # RFC 3164 has no msgid and tshark fills the fields in two shapes. tshark 4.2 (Ubuntu 24.04, CI): the whole line
+    # in syslog.msg and the text after the TAG in syslog.msgid. tshark 4.4: that text in syslog.msg ("123]: hi") and
+    # msgid empty. Return the 4.4 shape for both.
+    if not version and msg and msgid and ts_text and msg.startswith(ts_text):
+        return (msgid[1:] if msgid.startswith("[") else msgid), None
+    return msg, msgid
+
+
 def _syslog_log(ctx: _Ctx) -> LogTable:
     """One row per syslog message over UDP/514, covering RFC 3164 and RFC 5424 (issue #228)."""
     table = LogTable("syslog", [
@@ -1760,7 +1769,8 @@ def _syslog_log(ctx: _Ctx) -> LogTable:
         ts = to_float(first(row, "frame.time_epoch"))
         # RFC 5424 carries a parsed timestamp; RFC 3164's lives in timestamp_rfc3164. Prefer 5424's text.
         ts_text = (first(row, "syslog.version") and first(row, "syslog.timestamp")) or first(row, "syslog.timestamp_rfc3164")
-        msg = first(row, "syslog.msg") or None
+        msg, msgid = _rfc3164_msg(first(row, "syslog.version"), ts_text, first(row, "syslog.msg") or None,
+                                  first(row, "syslog.msgid") or None)
         if msg is not None and len(msg) > 200:
             msg = msg[:200]
         table.rows.append({
@@ -1772,7 +1782,7 @@ def _syslog_log(ctx: _Ctx) -> LogTable:
             "hostname": first(row, "syslog.hostname") or None,
             "appname": first(row, "syslog.appname") or None,
             "procid": first(row, "syslog.procid") or None,
-            "msgid": first(row, "syslog.msgid") or None,
+            "msgid": msgid,
             "msg": msg,
         })
     table.rows.sort(key=lambda r: (r["ts"] is None, r["ts"] or 0.0))
