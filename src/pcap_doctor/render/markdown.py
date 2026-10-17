@@ -173,6 +173,22 @@ def render_index(report: Report, index: CaptureIndex) -> Path:
     return _write(Path(report.artifacts[0].path).parent / "index.md", "\n".join(lines))
 
 
+def _host_table(index: CaptureIndex) -> str:
+    """Host inventory table. The ASN column appears only when a --geoip-db filled one (#237), so default output is unchanged."""
+    hosts = sorted(index.hosts.values(), key=lambda x: -x.bytes)[:60]
+    with_asn = any(h.asn_note for h in hosts)
+    header = ["IP", "MAC", "Vendor", "Hostname", "OS guess"]
+    header += ["ASN / country"] if with_asn else []
+    header += ["Flows", "Packets", "Bytes", "First seen", "Last seen"]
+    rows = []
+    for h in hosts:
+        row = [h.ip, h.mac or "-", h.vendor or "-", h.hostname or "-", h.os_guess or "-"]
+        row += [h.asn_note or "-"] if with_asn else []
+        row += [str(h.flows), f"{h.packets:,}", f"{h.bytes:,}", _ts(h.first_seen), _ts(h.last_seen)]
+        rows.append(row)
+    return _table(header, rows)
+
+
 # ------------------------------------------------------------------- flows
 def render_flows(report: Report, index: CaptureIndex) -> Path:
     flows = sorted(index.flows.values(), key=lambda f: (-f.bytes, f.key))
@@ -186,24 +202,7 @@ def render_flows(report: Report, index: CaptureIndex) -> Path:
         _table(["App protocol", "Flows"], [[k, str(v)] for k, v in report.stats.app_protocols.items()]),
         "## Hosts",
         "",
-        _table(
-            ["IP", "MAC", "Vendor", "Hostname", "OS guess", "Flows", "Packets", "Bytes", "First seen", "Last seen"],
-            [
-                [
-                    h.ip,
-                    h.mac or "-",
-                    h.vendor or "-",
-                    h.hostname or "-",
-                    h.os_guess or "-",
-                    str(h.flows),
-                    f"{h.packets:,}",
-                    f"{h.bytes:,}",
-                    _ts(h.first_seen),
-                    _ts(h.last_seen),
-                ]
-                for h in sorted(index.hosts.values(), key=lambda x: -x.bytes)[:60]
-            ],
-        ),
+        _host_table(index),
         "## Conversations",
         "",
     ]

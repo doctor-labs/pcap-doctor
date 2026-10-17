@@ -14,6 +14,7 @@ from pathlib import Path
 from . import policy
 from .config import Config
 from .config import apply as apply_config
+from .geoip import GeoIpDb
 from .index import CaptureIndex, IndexBuilder
 from .keymaterial import KeyMaterial
 from .models import SEVERITY_ORDER, ArtifactRef, Finding, Report
@@ -101,6 +102,7 @@ def analyze(
     decode_as: tuple[str, ...] = (),
     fast: bool = False,
     jobs: int | None = None,
+    geoip: GeoIpDb | None = None,
 ) -> RunResult:
     policy.validate(only=only, categories=categories, min_severity=min_severity)
     pcap = Path(pcap)
@@ -116,7 +118,7 @@ def analyze(
         jobs=jobs,
     )
     decrypt_args = tuple(keys.tshark_args()) if keys is not None and not keys.is_empty() else ()
-    builder = IndexBuilder(runner, decrypt_args=decrypt_args, on_event=on_event)
+    builder = IndexBuilder(runner, decrypt_args=decrypt_args, geoip=geoip, on_event=on_event)
     if progress:
         progress("Reading the capture with tshark")
     index = builder.build()
