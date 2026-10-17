@@ -16,6 +16,7 @@ from pcap_doctor.rules import CLASS_TYPES, RULES, classtype_of
 #: Every code the rule registry must map (the full set of detector codes in src/pcap_doctor/rules.py).
 CODES = (
     "ICS_CONTROL_COMMAND",
+    "SERVICE_VULNERABLE_VERSION",
     "TLS_VERSION_DEPRECATED", "TLS_LEGACY_RECORD_VERSION", "TLS_CIPHER_UNKNOWN", "TLS_CIPHER_WEAK",
     "TLS_OFFERS_WEAK_CIPHERS", "TLS_NO_FORWARD_SECRECY", "TLS_KEY_IN_FIRMWARE", "TLS_CERT_EXPIRED",
     "TLS_CERT_EXPIRED_NOW", "TLS_CERT_EXPIRING", "TLS_CERT_WEAK_KEY", "TLS_CERT_WEAK_SIGALG",

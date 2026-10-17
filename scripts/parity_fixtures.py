@@ -917,6 +917,38 @@ def fixture_http_versions() -> bytes:
     return w.write()
 
 
+@fixture("vuln_versions.pcap")
+def fixture_vuln_versions() -> bytes:
+    """An HTTP server announcing Apache/2.4.49, a version with a published path-traversal CVE (#235)."""
+    w = Wire(start=1_701_800_000.0)
+    c, s = "10.90.0.1", "10.90.0.2"
+    req = b"GET / HTTP/1.1\r\nHost: 10.90.0.2\r\nUser-Agent: curl/8.4.0\r\n\r\n"
+    resp = b"HTTP/1.1 200 OK\r\nServer: Apache/2.4.49 (Unix)\r\nContent-Length: 2\r\n\r\nok"
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42100, 80, 1000, 0, 0x02))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 80, 42100, 9000, 1001, 0x12))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42100, 80, 1001, 9001, 0x10))))
+    w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, 42100, 80, 1001, 9001, 0x18, req))))
+    w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, 80, 42100, 9001, 1001 + len(req), 0x18, resp))))
+    return w.write()
+
+
+@fixture("vuln_greetings.pcap")
+def fixture_vuln_greetings() -> bytes:
+    """SMTP and FTP 220 greetings announcing Exim 4.89 and ProFTPD 1.3.5, both in known-vulnerable ranges (#235)."""
+    w = Wire(start=1_701_900_000.0)
+    c = "10.91.0.1"
+    sessions = (
+        ("10.91.0.2", 25, 41500, b"220 mail.lab ESMTP Exim 4.89 Mon, 1 Jan 2024 00:00:00 +0000\r\n"),
+        ("10.91.0.3", 21, 41600, b"220 ProFTPD 1.3.5 Server (lab) [10.91.0.3]\r\n"),
+    )
+    for s, dport, sport, greeting in sessions:
+        w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, sport, dport, 1000, 0, 0x02))))
+        w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, dport, sport, 9000, 1001, 0x12))))
+        w.add(ether(MAC_A, MAC_B, ip_packet(c, s, 6, tcp_segment(c, s, sport, dport, 1001, 9001, 0x10))))
+        w.add(ether(MAC_B, MAC_A, ip_packet(s, c, 6, tcp_segment(s, c, dport, sport, 9001, 1001, 0x18, greeting))))
+    return w.write()
+
+
 @fixture("mail_logins.pcap")
 def fixture_mail_logins() -> bytes:
     """Cleartext POP3 USER/PASS, IMAP LOGIN and SMTP AUTH PLAIN logins (#230)."""

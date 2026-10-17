@@ -253,5 +253,14 @@
   ],
   "rfb_vnc.pcap": [],
   "vnc_session.pcap": [],
-  "rdp_session.pcap": []
+  "rdp_session.pcap": [],
+  "vuln_versions.pcap": [
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS",
+    "SERVICE_VULNERABLE_VERSION"
+  ],
+  "vuln_greetings.pcap": [
+    "CLEARTEXT_SERVICE",
+    "SERVICE_VULNERABLE_VERSION"
+  ]
 }
