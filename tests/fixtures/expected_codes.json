@@ -236,5 +236,7 @@
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"
   ],
-  "rfb_vnc.pcap": []
+  "rfb_vnc.pcap": [],
+  "vnc_session.pcap": [],
+  "rdp_session.pcap": []
 }
