@@ -304,6 +304,7 @@ Every key is optional.
 | `disable` | codes that are never reported |
 | `[severity]` | re-rate a code, e.g. `TLS_CERT_EXPIRING = "low"`; the finding id does not change |
 | `[[allow]]` | accept one known finding: `code`, `subject` and/or `flow_key` (fnmatch patterns, all must match) and a required `reason` |
+| `[notice.CODE]` | per-code notice policy: `action` = `report` (default), `log` (notes only, not in findings) or `suppress` (dropped, count noted); `dedup = true` keeps the worst finding per code, flow and subject; `max = N` rate-limits a code to N findings per run |
 
 - **Precedence:** command-line flags win over the config, and the config wins over its profile
   (`--profile NAME` replaces the config's own `profile`).
