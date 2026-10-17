@@ -23,7 +23,8 @@ def test_hosts_tab_lists_every_host_with_os_guess(cache_dir) -> None:
 def test_files_tab_has_smb_creates_with_frame_and_flow(cache_dir) -> None:
     rows = browse_tabs.files(_index("smb_attack.pcap"))
     psexec = next(r for r in rows if r.name == "PSEXESVC.exe")
-    assert psexec.source == "smb" and psexec.frame == 28 and psexec.flow
+    # 28 is the create request, 30 its response: which one tshark attributes the file name to varies by version (Linux 28, macOS 30)
+    assert psexec.source == "smb" and psexec.frame in (28, 30) and psexec.flow
 
 
 @requires_tshark
