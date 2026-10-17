@@ -7,7 +7,9 @@ the same rule the index applies when it builds them.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TypeVar
 
 from .index import CaptureIndex
 
@@ -75,3 +77,16 @@ def credentials(index: CaptureIndex) -> list[CredentialRow]:
         if op.user is not None and not op.anonymous and not op.response and op.command == "SESSION_SETUP":
             rows.append(CredentialRow(op.frame, "smb", op.user, "", op.key))
     return sorted(rows, key=lambda r: r.frame)
+
+T = TypeVar("T")
+
+
+def narrow(rows: Sequence[T], text: str | None) -> list[T]:
+    """Keep the rows with ``text`` in any column, ignoring case. A read-only display filter.
+
+    Every field of the row dataclasses is a column its tab shows, so a match is always visible in the table.
+    """
+    if not text:
+        return list(rows)
+    needle = text.lower()
+    return [r for r in rows if any(needle in str(v).lower() for v in vars(r).values())]
