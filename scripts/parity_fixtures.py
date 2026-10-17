@@ -1694,3 +1694,4 @@ def fixture_irc_chat() -> bytes:
     t.send(True, b"PRIVMSG #ops :split ")
     t.send(True, b"message\r\n")
     t.close()
+    return w.write()
