@@ -249,6 +249,14 @@ def dns_answers(row: Row) -> list[str]:
     for field in ("dns.mx.mail_exchange", "dns.ns", "dns.ptr.domain_name", "dns.srv.target", "dns.soa.mname"):
         out += many(row, field)
     out += [f"{tag} {value}" for tag, value in zip(row.get("dns.caa.tag", []), row.get("dns.caa.value", []), strict=False)]
+    # SVCB and HTTPS records share the dns.svcb.* fields (#229)
+    out += many(row, "dns.svcb.targetname")
+    # DNSSEC records: each contributes identifying data for its owner name (#229)
+    out += many(row, "dns.rrsig.signers_name")
+    out += many(row, "dns.dnskey.key_id")
+    out += many(row, "dns.ds.key_id")
+    out += many(row, "dns.nsec.next_domain_name")
+    out += many(row, "dns.nsec3.hash_value")
     return out
 
 

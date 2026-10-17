@@ -9,7 +9,7 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
 |---|---|---|
 | `conn` | TCP/UDP connection, originator = first sender | `conn` pass (flags, lengths) |
 | `known_services` | each server host, the ports it serves and the service name (Zeek known_services) | from flows |
-| `dns` | query, with its answers, TXT/MX/NS/PTR/SRV/SOA/CAA answers and rcode | `dns` pass |
+| `dns` | query, with its answers, TXT/MX/NS/PTR/SRV/SOA/CAA/SVCB/HTTPS/RRSIG/DNSKEY/DS/NSEC/NSEC3 answers and rcode | `dns` pass |
 | `http` | request/response exchange | `http` pass |
 | `ssl` | TLS/DTLS session: version, cipher name, SNI, ALPN, JA5/JA5S, JA5/JA5S, certificate ids, `validation_status` (openssl at capture time, `--ca-bundle` to pin a trust store), `hostname_match` | `tls` pass |
 | `x509` | certificate in a handshake, including its fingerprint (SHA-256 of the DER; the certificate is exported as `certificates/<fingerprint>.pem`) | `tls` pass |
@@ -71,4 +71,4 @@ per line with unset fields left out. Every table is also a query source: `pcap-d
   | `Bad checksum` (ICMP) | `bad_ICMP_checksum` |
 - `files` lists the files `extract` recovers, with `seen_bytes`, `md5`, `sha1`, `sha256` and a magic-byte `mime_type`; only HTTP files carry hosts and a connection uid.
 - `#open` / `#close` carry the capture's first and last packet time, so two runs give identical files.
-- `dns.answers` holds A/AAAA/CNAME/MX/NS/PTR/SRV-target/SOA-mname values as they are, TXT as `TXT <len> <text>` and CAA as `<tag> <value>`; an extra last column `edns_udp_size` gives the query's EDNS payload size (#229).
+- `dns.answers` holds A/AAAA/CNAME/MX/NS/PTR/SRV-target/SOA-mname values as they are, TXT as `TXT <len> <text>` and CAA as `<tag> <value>`, SVCB/HTTPS as their target name, RRSIG as the signer's name, DNSKEY as the key tag, DS as the key tag, NSEC as the next domain name and NSEC3 as the next hashed owner name; an extra last column `edns_udp_size` gives the query's EDNS payload size (#229).

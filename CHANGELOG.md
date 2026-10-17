@@ -65,6 +65,7 @@ All notable changes to this project are documented here. The format follows
 - File hashing and MIME typing: every file `extract` writes is hashed (MD5, SHA-1, SHA-256) and typed by magic bytes (executables, archives, documents, images, media, scripts; the file name is only a fallback) in `manifest.json`. The Zeek-style `files.log` now lists the extracted files with `seen_bytes md5 sha1 sha256 mime_type`, and the `eve` `fileinfo` events carry the same hashes, size and `magic`.
 - SMB / SMB2 / SMB3 dissection: a new `smb` pass feeds `index.smb` (command, status, share, file, NTLM user/domain/workstation, dialects, signing mode), queryable with `query -s smb` and shown by `pcap-doctor smb CAPTURE` (users, shares, files). New detector `d10.smb` (category SMB): `SMB1_IN_USE`, `SMB_SIGNING_NOT_REQUIRED`, `SMB_NULL_SESSION`, `SMB_ADMIN_SHARE_ACCESS`, `SMB_REMOTE_EXEC_PIPE` (svcctl/atsvc/PSEXESVC), `SMB_EXECUTABLE_ON_SHARE`.
 - New detector `d19.vpn_handshakes` (category Network): identifies IKE/IPsec ISAKMP handshakes on UDP 500/4500, WireGuard handshakes on UDP 51820 and OpenVPN control-channel traffic on UDP/TCP 1194, as informational findings (#223).
+- `dns.log` now records SVCB, HTTPS, RRSIG, DNSKEY, DS, NSEC and NSEC3 answer values alongside the already-supported TXT/MX/NS/PTR/SRV/SOA/CAA (#229).
 
 ## [0.8.0] — 2026-10-09
 

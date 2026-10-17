@@ -33,6 +33,9 @@
   "dns_records.pcap": [
     "DNS_CLEARTEXT"
   ],
+  "dns_dnssec.pcap": [
+    "DNS_CLEARTEXT"
+  ],
   "dns_tunnel.pcap": [
     "DNS_CLEARTEXT",
     "DNS_TUNNEL_SHAPE"
