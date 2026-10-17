@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows
   (`uses: doctor-labs/pcap-doctor@v...`). `PCAP_FORENSICS_CACHE` is still honoured.
 
 ### Added
+- pcap-doctor tabs --filter TEXT (#252): narrows the host, file and credential tabs to the rows with TEXT in any column (case-insensitive). Display only; the capture is read once, as before. The interactive TUI part of #252 is not done: it needs a TUI library, so it waits for a dependency decision.
 
 - `pcap-doctor search CAPTURE PATTERN`: keyword / byte-pattern search across packet payloads (TCP and UDP data, reassembled per frame). A literal text keyword by default, or a hex byte string with `--hex` (e.g. `deadbeef`); matches print with frame, protocol, direction, endpoint, offset, length and a hex snippet, and `--json` emits the same shape for CI gating. Exits 1 when nothing matches, 0 otherwise (#215).
 - `extract` writes plain IRC chat (ports 6660-6669) as one transcript per conversation: every PRIVMSG and NOTICE with its frame number, lines split across TCP segments joined, TLS IRC on 6697 not read. Email (SMTP, IMAP, POP3) was already extracted (#202). (#213)
