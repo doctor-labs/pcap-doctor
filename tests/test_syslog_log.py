@@ -52,4 +52,6 @@ def test_rfc3164_msg_normalises_both_tshark_shapes() -> None:
     # tshark 4.2 (CI, Ubuntu 24.04): whole line in msg, text after the TAG in msgid
     assert _rfc3164_msg(None, ts, ts + " myhost myapp[123]: hi", "[123]: hi") == new
     # RFC 5424 is never rewritten
-    assert _rfc3164_msg("1", "2024-01-01T00:00:00Z", "ID42 hi", "42") == ("ID42 hi", "42")
+    assert _rfc3164_msg("1", "2024-01-01T00:00:00Z", "ID42 hi", "42") == ("ID42 hi", "42")  # tshark 4.4
+    # tshark 4.2: msgid holds the rest of the line, msg the whole line
+    assert _rfc3164_msg("1", "t", "1 t h a 123 42 ID42 [sd] hi", "42 ID42 [sd] hi") == ("ID42 [sd] hi", "42")

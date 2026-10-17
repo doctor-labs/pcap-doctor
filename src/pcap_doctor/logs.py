@@ -1755,6 +1755,10 @@ def _rfc3164_msg(version: str | None, ts_text: str | None, msg: str | None, msgi
     # msgid empty. Return the 4.4 shape for both.
     if not version and msg and msgid and ts_text and msg.startswith(ts_text):
         return (msgid[1:] if msgid.startswith("[") else msgid), None
+    # RFC 5424 on tshark 4.2: msgid holds the rest of the line ("42 ID42 [sd] text") and msg the whole line; a real
+    # MSGID has no space (RFC 5424 6.2.7), so split it off and keep the remainder as msg.
+    if version and msgid and " " in msgid:
+        msgid, msg = msgid.split(" ", 1)
     return msg, msgid
 
 
