@@ -506,6 +506,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 | `d5.http2` | `detectors/http2.py` | HTTP/2 over cleartext (h2c, prior-knowledge): reports HTTP2_CLEARTEXT with the decoded `:method`, `:path`, `:authority` and `:status` pseudo-headers per stream; TLS-encrypted HTTP/2 is out of scope |
 | `d9.user_signatures` | `detectors/user_signatures.py` | matches of Suricata-style rules / Zeek signatures you pass with `analyze --signatures` (`SIGNATURE_MATCH`) |
 | `d10.smb` | `detectors/smb.py` | SMBv1, SMB signing not required, null sessions, administrative shares, remote-execution pipes (svcctl, atsvc, PSEXESVC), executables opened on shares |
+| `d23.kerberos_ntlm` | `detectors/kerberos_ntlm.py` | Kerberos replies with DES or RC4-HMAC, AS replies without pre-authentication the KDC never asked for, NTLMv1 responses, NTLM challenges that do not negotiate signing |
 | `d16.web_attack` | `detectors/web_attack.py` | SQL injection, XSS, local file inclusion, path traversal and OS command injection in HTTP request URIs (`HTTP_WEB_ATTACK_*`) |
 | `d11.brute_force` | `detectors/brute_force.py` | Password guessing: 20+ failed FTP, 10+ failed HTTP Basic/Digest or 10+ failed SMB logins from one client to one server |
 | `d12.arp_icmp` | `detectors/arp_icmp.py` | ARP spoofing (one IPv4 claimed by two MACs) and ICMP redirects |

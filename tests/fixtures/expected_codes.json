@@ -107,6 +107,15 @@
     "CLEARTEXT_SERVICE"
   ],
   "kerberos.pcap": [],
+  "kerberos_weak.pcap": [
+    "KERBEROS_NO_PREAUTH",
+    "KERBEROS_WEAK_ETYPE"
+  ],
+  "ntlm_v1.pcap": [
+    "NTLM_SIGNING_NOT_NEGOTIATED",
+    "NTLM_V1_AUTH",
+    "SMB_SIGNING_NOT_REQUIRED"
+  ],
   "mail_logins.pcap": [
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"

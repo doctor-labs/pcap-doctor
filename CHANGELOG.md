@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows
   (`uses: doctor-labs/pcap-doctor@v...`). `PCAP_FORENSICS_CACHE` is still honoured.
 
 ### Added
+- Kerberos and NTLM findings (part of #205), detector `d23.kerberos_ntlm` (category Credentials): `KERBEROS_WEAK_ETYPE` (DES in a reply: high; RC4-HMAC: medium), `KERBEROS_NO_PREAUTH` (AS reply to a request with no pre-authentication that the KDC never asked for), `NTLM_V1_AUTH` (24-byte NTLMv1 response), `NTLM_SIGNING_NOT_NEGOTIATED` (CHALLENGE without the sign flag). Metadata only: no tickets, hashes, responses or ciphertext. Core wiring: `index.kerberos` / `index.ntlm` fed by the existing `kerberos` and `ntlm` passes (new fields `kerberos.padata_type`, `ntlmssp.negotiateflags`, `ntlmssp.blob.length`).
 - pcap-doctor tabs --filter TEXT (#252): narrows the host, file and credential tabs to the rows with TEXT in any column (case-insensitive). Display only; the capture is read once, as before. The interactive TUI part of #252 is not done: it needs a TUI library, so it waits for a dependency decision.
 
 - `pcap-doctor search CAPTURE PATTERN`: keyword / byte-pattern search across packet payloads (TCP and UDP data, reassembled per frame). A literal text keyword by default, or a hex byte string with `--hex` (e.g. `deadbeef`); matches print with frame, protocol, direction, endpoint, offset, length and a hex snippet, and `--json` emits the same shape for CI gating. Exits 1 when nothing matches, 0 otherwise (#215).

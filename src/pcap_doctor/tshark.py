@@ -699,6 +699,7 @@ KERBEROS_PASS = PassSpec(
             "kerberos.realm",
             "kerberos.crealm",
             "kerberos.error_code",
+            "kerberos.padata_type",
             "kerberos.etype",
         )
     ),
@@ -716,6 +717,8 @@ NTLM_PASS = PassSpec(
             "udp.srcport",
             "udp.dstport",
             "ntlmssp.messagetype",
+            "ntlmssp.negotiateflags",
+            "ntlmssp.blob.length",
             "ntlmssp.auth.username",
             "ntlmssp.auth.domain",
             "ntlmssp.auth.hostname",
