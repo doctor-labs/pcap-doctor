@@ -68,6 +68,7 @@ from .tshark import (
 
 if TYPE_CHECKING:
     from .ioc import IocHit
+    from .krb_ntlm import KrbMsg, NtlmMsg
     from .signatures import SignatureHit
     from .smb import SmbOp
 
@@ -353,6 +354,8 @@ class CaptureIndex:
         self.telnet_logins: list[TelnetLogin] = []
         self.notes: list[str] = []
         self.smb: list[SmbOp] = []
+        self.kerberos: list[KrbMsg] = []  # AS/TGS messages from the kerberos pass (#205)
+        self.ntlm: list[NtlmMsg] = []  # NTLMSSP messages from the ntlm pass (#205)
         self.signature_hits: list[SignatureHit] = []  # filled by the pipeline when --signatures is given (#201)
         self.ioc_hits: list[IocHit] = []  # filled by the pipeline when --ioc is given (#236)
         self.firmware_keys: dict[str, str] = {}  # {cert SPKI fingerprint: firmware path} supplied via --firmware
@@ -496,7 +499,7 @@ class IndexBuilder:
             ("quic", lambda: self._build_quic(index, runner.run("quic"))),
             ("services", lambda: self._build_services(index, runner.run("services"))),
             ("telnet", lambda: self._build_telnet(index, runner.run("telnet"))),
-            ("smb", lambda: self._build_smb(index, runner.run("smb"))),
+            ("smb", lambda: self._build_smb_auth(index, runner)),
         ]
         total = len(pass_steps)
         for i, (name, step) in enumerate(pass_steps, start=1):
@@ -1241,6 +1244,25 @@ class IndexBuilder:
         from .smb import parse_smb
 
         index.smb = parse_smb(rows, lambda row: self._stream_key(index, row))
+
+    def _build_smb_auth(self, index: CaptureIndex, runner: TsharkRunner) -> None:
+        # Kerberos and NTLM passes run only where they can occur (port 88 flows, SMB sessions), so captures
+        # without them keep the baseline set of tshark passes (#205).
+        self._build_smb(index, runner.run("smb"))
+        if any(88 in (f.port_a, f.port_b) for f in index.flows.values()):
+            self._build_kerberos(index, runner.run("kerberos"))
+        if index.smb:
+            self._build_ntlm(index, runner.run("ntlm"))
+
+    def _build_kerberos(self, index: CaptureIndex, rows: list[Row]) -> None:
+        from .krb_ntlm import parse_kerberos
+
+        index.kerberos = parse_kerberos(rows, lambda row: self._stream_key(index, row))
+
+    def _build_ntlm(self, index: CaptureIndex, rows: list[Row]) -> None:
+        from .krb_ntlm import parse_ntlm
+
+        index.ntlm = parse_ntlm(rows, lambda row: self._stream_key(index, row))
 
     def _build_telnet(self, index: CaptureIndex, rows: list[Row]) -> None:
         scanners: dict[str, TelnetLoginScanner] = {}

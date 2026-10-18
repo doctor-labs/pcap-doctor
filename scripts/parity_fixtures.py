@@ -181,10 +181,10 @@ def ntlm_negotiate() -> bytes:
     return b"NTLMSSP\x00" + struct.pack("<II", 1, 0xE2088297) + _secbuf(0, 32) + _secbuf(0, 32)
 
 
-def ntlm_challenge(challenge: bytes, target: str = "CORP") -> bytes:
+def ntlm_challenge(challenge: bytes, target: str = "CORP", flags: int = 0xE2898215) -> bytes:
     tname = utf16(target)
     info = struct.pack("<HH", 2, len(tname)) + tname + struct.pack("<HH", 0, 0)  # MsvAvNbDomainName, MsvAvEOL
-    head = b"NTLMSSP\x00" + struct.pack("<I", 2) + _secbuf(len(tname), 56) + struct.pack("<I", 0xE2898215)
+    head = b"NTLMSSP\x00" + struct.pack("<I", 2) + _secbuf(len(tname), 56) + struct.pack("<I", flags)
     head += challenge + bytes(8) + _secbuf(len(info), 56 + len(tname)) + bytes(8)
     return head + tname + info
 
@@ -618,6 +618,66 @@ def fixture_kerberos() -> bytes:
     w.add(udp_frame(k, c, 88, 50003, _krb(KRB_TGS_REP(msgType=13, crealm=realm, cname=name(1, "alice"),
                                                       ticket=KRB_Ticket(realm=realm, sname=cifs, encPart=enc()),
                                                       encPart=enc()))))
+    return w.write()
+
+
+@fixture("kerberos_weak.pcap")
+def fixture_kerberos_weak() -> bytes:
+    """An AS exchange with no pre-authentication that the KDC never asked for, answered with an RC4-HMAC ticket, and a
+    TGS reply that uses DES (#205). Names only, no keys."""
+    from scapy.asn1.asn1 import ASN1_GENERAL_STRING, ASN1_GENERALIZED_TIME
+    from scapy.layers.kerberos import (
+        KRB_AS_REP,
+        KRB_AS_REQ,
+        KRB_KDC_REQ_BODY,
+        KRB_TGS_REP,
+        KRB_TGS_REQ,
+        EncryptedData,
+        KRB_Ticket,
+        PrincipalName,
+    )
+
+    realm, when = "CORP.EXAMPLE", ASN1_GENERALIZED_TIME("20231115000000Z")
+
+    def name(kind: int, *parts: str) -> PrincipalName:
+        return PrincipalName(nameType=kind, nameString=[ASN1_GENERAL_STRING(p) for p in parts])
+
+    def req(cname: str | None, sname: PrincipalName, etypes: list[int]) -> KRB_KDC_REQ_BODY:
+        return KRB_KDC_REQ_BODY(cname=name(1, cname) if cname else None, realm=realm, sname=sname, etype=etypes,
+                                nonce=1, till=when, rtime=when)
+
+    def enc(etype: int) -> EncryptedData:
+        return EncryptedData(etype=etype, cipher=bytes(16))
+
+    krbtgt, cifs = name(2, "krbtgt", realm), name(2, "cifs", "fs1.corp.example")
+    w = Wire(start=1_700_410_000.0)
+    c, k = "10.3.1.10", "10.3.1.2"
+    w.add(udp_frame(c, k, 50010, 88, _krb(KRB_AS_REQ(reqBody=req("bob", krbtgt, [23])))))
+    w.add(udp_frame(k, c, 88, 50010, _krb(KRB_AS_REP(crealm=realm, cname=name(1, "bob"),
+                                                     ticket=KRB_Ticket(realm=realm, sname=krbtgt, encPart=enc(23)),
+                                                     encPart=enc(23)))))
+    w.add(udp_frame(c, k, 50011, 88, _krb(KRB_TGS_REQ(reqBody=req(None, cifs, [3])))))
+    w.add(udp_frame(k, c, 88, 50011, _krb(KRB_TGS_REP(msgType=13, crealm=realm, cname=name(1, "bob"),
+                                                      ticket=KRB_Ticket(realm=realm, sname=cifs, encPart=enc(3)),
+                                                      encPart=enc(3)))))
+    return w.write()
+
+
+@fixture("ntlm_v1.pcap")
+def fixture_ntlm_v1() -> bytes:
+    """An SMB2 session setup answered with NTLMv1 (24-byte LM and NT responses) by a server whose challenge does not
+    negotiate signing (#205). The detector reads only lengths and flags; the response bytes are zeros."""
+    w = Wire(start=1_700_420_000.0)
+    c, s = "10.5.1.10", "10.5.1.20"
+    t = Tcp(w, c, s, 49610, 445).open()
+    t.send(True, smb2_negotiate_request())
+    t.send(False, smb2_negotiate_response())
+    t.send(True, smb2_session_setup(ntlm_negotiate(), msg_id=1))
+    t.send(False, smb2_session_setup(ntlm_challenge(bytes(8), flags=0xE2898205), response=True, msg_id=1,
+                                     session=0x100, status=0xC0000016))
+    t.send(True, smb2_session_setup(ntlm_authenticate("carol", "CORP", "PF-LAPTOP", bytes(24), bytes(24)),
+                                    msg_id=2, session=0x100))
+    t.send(False, smb2_session_setup(b"", response=True, msg_id=2, session=0x100))  # STATUS_SUCCESS: logon accepted
     return w.write()
 
 
