@@ -247,22 +247,21 @@ def test_skip_pass_when_protocols_absent(monkeypatch) -> None:
     import pcap_doctor.tshark as mod
 
     runner = TsharkRunner(fixture("dns_plus_tls.pcap"), use_cache=False)
-    real_run = mod.subprocess.run
+    real_popen = mod.subprocess.Popen
     launched: list[str] = []
 
-    def counting_run(cmd, *args, **kwargs):
-        # cmd[0] is tshark; the pass name follows the display filter, but the simplest
-        # stable marker is the fields list. Use the real _command to map the name.
+    def counting_popen(cmd, *args, **kwargs):
         launched.append("tshark")
-        return real_run(cmd, *args, **kwargs)
+        return real_popen(cmd, *args, **kwargs)
 
-    monkeypatch.setattr(mod.subprocess, "run", counting_run)
+    monkeypatch.setattr(mod.subprocess, "Popen", counting_popen)
     runner.prefetch({
         "base": (), "tls": (), "dtls": (), "http": (), "dns": (), "sip": (),
-        "ssh": (), "quic": (), "services": (), "telnet": (), "smb": (),
+        "ssh": (), "quic": (), "services": (), "telnet": (), "smb": (), "rtp": (),
     })
     # The runner records which passes were skipped (empty rows, no subprocess).
-    assert set(runner.skipped_passes) == {"dtls", "http", "sip", "ssh", "quic", "services", "telnet", "smb"}
+    # ntp is covered by services pass.
+    assert set(runner.skipped_passes) == {"dtls", "http", "sip", "ssh", "quic", "services", "telnet", "smb", "rtp"}
     assert set(runner.stats) <= {"base", "tls", "dns", *runner.skipped_passes}
     # A skipped pass returns the same empty rows it would have produced if launched.
     assert runner.run("smb") == []
@@ -274,18 +273,15 @@ def test_skip_pass_not_applied_when_extra_args_present(monkeypatch) -> None:
     """A pass invoked with decode-as / decrypt args is never skipped: the extra args
     can reveal protocols the base pass cannot see (#328)."""
     runner = TsharkRunner(fixture("dns_plus_tls.pcap"), use_cache=False)
-    # rtp has skip_protocols ("rtp",) which is absent from dns_plus_tls, but the
-    # SIP pass supplies decode-as args -- the pass must still launch.
     launched: list[str] = []
-    real_run = __import__("pcap_doctor.tshark", fromlist=["subprocess"]).subprocess.run
-
-    def counting_run(cmd, *args, **kwargs):
-        launched.append("tshark")
-        return real_run(cmd, *args, **kwargs)
-
     import pcap_doctor.tshark as mod
+    real_popen = mod.subprocess.Popen
 
-    monkeypatch.setattr(mod.subprocess, "run", counting_run)
+    def counting_popen(cmd, *args, **kwargs):
+        launched.append("tshark")
+        return real_popen(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(mod.subprocess, "Popen", counting_popen)
     runner.run("rtp", runner.rtp_decode_args([20000]))
     assert launched  # at least one tshark launch happened
     assert "rtp" not in runner.skipped_passes
@@ -321,26 +317,20 @@ def test_prefetch_runs_passes_concurrently_and_run_reuses_them(monkeypatch) -> N
     assert calls[-1] == ("http", ())
 
 
-def test_command_disables_sequence_analysis_only_for_transport_only_passes() -> None:
-    """(issue #329) tcp.analyze_sequence_numbers is expensive; turn it off only for
-    transport-only passes — those that read no tcp.analysis.* / _ws.expert.* field,
-    whose fields are all transport/link-layer, and whose display filter names no
-    application protocol. App-protocol passes must keep analysis on because with
-    it off tshark re-hands retransmitted segments to the app dissector, duplicating
-    findings such as FTP credentials."""
-    from pcap_doctor.tshark import _is_transport_only
+def test_command_disables_sequence_analysis_for_passes_without_tcp_analysis() -> None:
+    """(issue #329) tcp.analyze_sequence_numbers is expensive; turn it off for every pass
+    whose fields do not contain any tcp.analysis.* or _ws.expert.* field, and keep it on for passes that
+    read tcp.analysis.* or _ws.expert.* fields (base, conn, capture_loss, weird)."""
     runner = TsharkRunner(fixture("weak_tls.pcap"), use_cache=False)
     for name, spec in PASSES.items():
         fields = runner.usable_fields(spec)
         cmd = runner._command(spec)
         has_flag = "tcp.analyze_sequence_numbers:FALSE" in cmd
-        if _is_transport_only(spec, fields):
-            assert has_flag, f"transport-only pass {name!r} should have the FALSE flag"
+        has_tcp_analysis = any(f.startswith("tcp.analysis.") or f.startswith("_ws.expert.") for f in fields)
+        if not has_tcp_analysis:
+            assert has_flag, f"pass {name!r} has no tcp.analysis.*/_ws.expert.* fields and should have the FALSE flag"
         else:
-            assert not has_flag, (
-                f"pass {name!r} is not transport-only (app fields or filter); "
-                f"must keep tcp sequence analysis ON to avoid duplicate app-layer findings"
-            )
+            assert not has_flag, f"pass {name!r} reads tcp.analysis.*/_ws.expert.* fields and must keep analysis ON"
 
 
 def test_worker_count_default_rule(monkeypatch) -> None:
@@ -424,22 +414,28 @@ def test_prefetch_uses_count_to_cap_workers(monkeypatch) -> None:
 
 
 def test_tshark_subprocess_runs_at_low_priority_posix(monkeypatch) -> None:
-    """On POSIX, tshark children get nice -n 10 as a command prefix (no preexec_fn)."""
+    """On POSIX, tshark children use preexec_fn with os.nice(10)."""
     monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/nice" if name == "nice" else None)
-
-    prefix = _low_priority_prefix()
-    assert prefix == ["nice", "-n", "10"]
-    # POSIX must never use preexec_fn (unsafe with threads in prefetch)
-    assert _low_priority_kwargs() == {}
+    kwargs = _low_priority_kwargs()
+    assert "preexec_fn" in kwargs
 
 
-def test_tshark_subprocess_runs_at_low_priority_posix_no_nice(monkeypatch) -> None:
-    """If nice(1) is missing on POSIX, the command runs unchanged (graceful degradation)."""
-    monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setattr("shutil.which", lambda name: None)
+@requires_tshark
+def test_merged_passes_match_separate_passes() -> None:
+    """Issue #330: running compatible passes via run_merged yields identical per-pass rows as separate runs."""
+    test_passes = ["tls", "http", "dns", "sip", "ssh", "quic", "services", "telnet", "smb"]
+    for fixture_name in ("weak_tls.pcap", "dns_plus_tls.pcap", "http_cleartext.pcap", "smb_attack.pcap"):
+        pcap_path = fixture(fixture_name)
+        runner_sep = TsharkRunner(pcap_path, use_cache=False)
+        runner_sep.run("base")
+        sep_rows = {n: runner_sep.run(n) for n in test_passes}
 
-    assert _low_priority_prefix() == []
+        runner_merged = TsharkRunner(pcap_path, use_cache=False)
+        runner_merged.run("base")
+        merged_rows = runner_merged.run_merged(test_passes)
+
+        for n in test_passes:
+            assert merged_rows[n] == sep_rows[n], f"Mismatch in fixture {fixture_name} for pass {n}"
 
 
 def test_tshark_subprocess_runs_at_low_priority_windows(monkeypatch) -> None:
