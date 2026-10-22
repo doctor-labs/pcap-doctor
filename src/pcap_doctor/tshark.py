@@ -70,35 +70,26 @@ def worker_count(jobs: int | None, env: dict[str, str] | None = None) -> int:
         if raw < 1:
             raise ValueError(f"--jobs must be >= 1, got {raw}")
         return raw
-    cpus = os.cpu_count() or 4
-    return max(1, min(3, cpus // 2))
+    cpus = os.cpu_count() or 2
+    return min(3, max(1, cpus // 2))
+
+
+def _set_low_priority_posix() -> None:
+    try:
+        os.nice(10)
+    except (AttributeError, OSError):
+        pass
 
 
 def _low_priority_prefix() -> list[str]:
-    """Prefix the tshark argv with ``nice`` on POSIX so children run at low priority (issue #331).
-
-    ``preexec_fn`` is unsafe here because ``prefetch`` calls ``subprocess.run`` from a
-    ``ThreadPoolExecutor`` and Python docs warn that ``preexec_fn`` can deadlock the child
-    when the parent has threads.  Prefixing the command with the ``nice`` binary avoids
-    forking Python code in the child: if ``shutil.which("nice")`` is missing we return
-    an empty prefix and the process runs at the parent's priority (graceful degradation).
-    """
-    if sys.platform == "win32":
-        return []
-    if shutil.which("nice") is not None:
-        return ["nice", "-n", "10"]
     return []
 
 
 def _low_priority_kwargs() -> dict[str, Any]:
-    """Extra kwargs for ``subprocess.run`` to lower child priority on Windows (issue #331).
-
-    POSIX uses the ``nice`` prefix (``_low_priority_prefix``) instead; this returns an
-    empty dict on POSIX.  Windows uses ``creationflags=BELOW_NORMAL_PRIORITY_CLASS``.
-    """
+    """Extra kwargs for process creation to lower child priority (issue #331)."""
     if sys.platform == "win32":
         return {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}
-    return {}
+    return {"preexec_fn": _set_low_priority_posix}
 
 
 @dataclass(frozen=True)
@@ -1140,25 +1131,8 @@ _APP_PROTOCOLS: frozenset[str] = frozenset({
 })
 
 def _is_transport_only(spec: PassSpec, fields: tuple[str, ...]) -> bool:
-    """True when the pass reads no tcp.analysis.* / _ws.expert.* fields, all of
-    its fields are transport/link-layer, and its display filter names no
-    application protocol (issue #329)."""
-    # Reads tcp.analysis.* or _ws.expert.* -> analysis produces those values.
-    if any(f.startswith("tcp.analysis.") or f.startswith("_ws.expert.") for f in fields):
-        return False
-    # Any field outside the transport/link-layer set -> app-layer work.
-    if any(f.split(".")[0] not in _TRANSPORT_PREFIXES for f in fields):
-        return False
-    # Display filter mentioning an app protocol -> app-layer filter.
-    if spec.display_filter:
-        # Split on operators and whitespace to get bare field/protocol tokens.
-        for token in re.split(r"[\s()=<>!&|]+", spec.display_filter):
-            if not token:
-                continue
-            root = token.split(".")[0]
-            if root in _APP_PROTOCOLS:
-                return False
-    return True
+    """True when the pass reads no tcp.analysis.* or _ws.expert.* fields (issue #329)."""
+    return not any(f.startswith("tcp.analysis.") or f.startswith("_ws.expert.") for f in fields)
 
 #: Every TCP/UDP payload, for the user-supplied signature engine (#201). Only run when signatures are given.
 PAYLOAD_PASS = PassSpec(
@@ -1746,10 +1720,19 @@ class TsharkRunner:
         # Issue #331: run tshark at low priority so the machine stays responsive.
         low_prio = _low_priority_kwargs()
         for _attempt in range(6):
-            proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=self.timeout, **low_prio)
-            if proc.returncode == 0:
-                break
-            bad_pref = re.search(r'-o flag "([^"]+)" specifies unknown preference', proc.stderr)
+            with subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                **low_prio,
+            ) as proc:
+                rows = self._parse_stream(proc.stdout, fields) if proc.stdout else []
+                stderr_out = proc.stderr.read() if proc.stderr else ""
+                proc.wait(timeout=self.timeout)
+                if proc.returncode == 0:
+                    break
+            bad_pref = re.search(r'-o flag "([^"]+)" specifies unknown preference', stderr_out)
             if bad_pref:
                 offending = bad_pref.group(1).split(":", 1)[0]
                 if offending not in _UNSUPPORTED_PREFS:
@@ -1757,14 +1740,14 @@ class TsharkRunner:
                     cmd = self._command(spec, extra_args, pcap=pcap)
                     continue
             bad_proto = re.search(
-                r'"([A-Za-z0-9_.-]+)" is not a valid protocol or protocol field', proc.stderr
+                r'"([A-Za-z0-9_.-]+)" is not a valid protocol or protocol field', stderr_out
             )
             if bad_proto:
                 offender = bad_proto.group(1)
                 self._banned_protocols.add(offender)
                 cmd = self._command(spec, extra_args, pcap=pcap)
                 continue
-            bad_field = re.search(r"^\t(\S+) is not a valid field", proc.stderr, re.MULTILINE)
+            bad_field = re.search(r"^\t(\S+) is not a valid field", stderr_out, re.MULTILINE)
             if bad_field:
                 field = bad_field.group(1)
                 dropped = f"{spec.name}:{field}"
@@ -1775,11 +1758,10 @@ class TsharkRunner:
                 continue
             raise TsharkRunError(
                 f"tshark pass {spec.name!r} failed (exit {proc.returncode}):\n"
-                f"{proc.stderr.strip()[:2000]}\ncmd: {' '.join(cmd)}"
+                f"{stderr_out.strip()[:2000]}\ncmd: {' '.join(cmd)}"
             )
         else:
             raise TsharkRunError(f"tshark pass {spec.name!r} kept hitting unknown preferences")
-        rows = self._parse(proc.stdout, fields)
         if spec.name == "base":
             self._collect_protocols(rows)
         if self.use_cache:
@@ -1793,19 +1775,34 @@ class TsharkRunner:
         return rows
 
     @staticmethod
-    def _parse(stdout: str, fields: tuple[str, ...]) -> list[Row]:
-        lines = stdout.splitlines()
-        if not lines:
+    def _parse_stream(stream: Iterable[str], fields: tuple[str, ...]) -> list[Row]:
+        lines_iter = iter(stream)
+        try:
+            first_line = next(lines_iter)
+        except StopIteration:
             return []
-        header = lines[0].split(TAB)
+
+        first_line = first_line.rstrip("\r\n")
+        if not first_line.strip():
+            lines = [first_line] + list(lines_iter)
+            return TsharkRunner._parse("\n".join(lines), fields)
+
+        header = first_line.split(TAB)
         if header == list(fields) or (header and header[0] == "frame.number"):
             names = header
-            body = lines[1:]
+            start_rows: list[Row] = []
         else:
             names = list(fields)
-            body = lines
-        rows: list[Row] = []
-        for line in body:
+            parts = first_line.split(TAB)
+            r: Row = {}
+            for i, name in enumerate(names):
+                raw = parts[i] if i < len(parts) else ""
+                r[name] = split_multi(raw)
+            start_rows = [r]
+
+        rows = start_rows
+        for line in lines_iter:
+            line = line.rstrip("\r\n")
             if not line.strip():
                 continue
             parts = line.split(TAB)
@@ -1816,6 +1813,10 @@ class TsharkRunner:
             rows.append(row)
         return rows
 
+    @staticmethod
+    def _parse(stdout: str, fields: tuple[str, ...]) -> list[Row]:
+        return TsharkRunner._parse_stream(stdout.splitlines(), fields)
+
     # -- public API --------------------------------------------------------
     def run(self, pass_name: str, extra_args: tuple[str, ...] = ()) -> list[Row]:
         spec = PASSES.get(pass_name)
@@ -1824,6 +1825,80 @@ class TsharkRunner:
         if (pass_name, extra_args) in self._prefetched:
             return self._prefetched[(pass_name, extra_args)]
         return self._run(spec, extra_args)
+
+    def run_merged(self, pass_names: list[str]) -> dict[str, list[Row]]:
+        """Run compatible passes in one wide tshark invocation (#330)."""
+        active_names = [n for n in pass_names if not self._should_skip(n)]
+        res: dict[str, list[Row]] = {n: [] for n in pass_names}
+        if not active_names:
+            for n in pass_names:
+                if self._should_skip(n):
+                    self.skipped_passes.append(n)
+                    self.stats[n] = {"rows": 0, "cached": 0, "skipped": 1}
+            return res
+        if len(active_names) == 1:
+            name = active_names[0]
+            rows = self._run(PASSES[name])
+            res[name] = rows
+            self._prefetched[(name, ())] = rows
+            return res
+
+        fields_list: list[str] = []
+        for n in active_names:
+            for f in self.usable_fields(PASSES[n]):
+                if f not in fields_list:
+                    fields_list.append(f)
+
+        filters = [self._filter_for(PASSES[n]) for n in active_names if self._filter_for(PASSES[n])]
+        merged_filter = " || ".join(f"({f})" for f in filters) if len(filters) == len(active_names) else None
+
+        merged_spec = PassSpec(name="merged", fields=tuple(fields_list), display_filter=merged_filter)
+        wide_rows = self._run(merged_spec)
+
+        for n in pass_names:
+            if n not in active_names:
+                self.skipped_passes.append(n)
+                self.stats[n] = {"rows": 0, "cached": 0, "skipped": 1}
+                res[n] = []
+                self._prefetched[(n, ())] = []
+                continue
+            spec = PASSES[n]
+            spec_fields = self.usable_fields(spec)
+            tokens = set(spec.skip_protocols or protocols_in_filter(spec.display_filter or ""))
+            prefixes = (
+                (n,)
+                if n != "services"
+                else (
+                    "ntp",
+                    "tftp",
+                    "ftp",
+                    "snmp",
+                    "ldap",
+                    "smtp",
+                    "imap",
+                    "pop",
+                    "resp",
+                    "mysql",
+                    "irc",
+                    "socks",
+                    "telnet",
+                )
+            )
+            proto_fields = [f for f in spec_fields if any(f.startswith(p + ".") for p in prefixes)]
+            p_rows: list[Row] = []
+            for r in wide_rows:
+                frame_protos = (
+                    set(r.get("frame.protocols", [""])[0].split(":")) if r.get("frame.protocols") else set()
+                )
+                rel = True if spec.display_filter is None or not tokens else bool(tokens & frame_protos)
+                if not rel and proto_fields:
+                    rel = any(r.get(f) for f in proto_fields)
+                if rel:
+                    p_rows.append(Row({f: r.get(f, []) for f in spec_fields}))
+            res[n] = p_rows
+            self.stats[n] = {"rows": len(p_rows), "cached": 0}
+            self._prefetched[(n, ())] = p_rows
+        return res
 
     def prefetch(self, jobs: dict[str, tuple[str, ...]], *, count: int | None = None) -> None:
         """Run independent passes (name -> per-call extra args) concurrently; ``run`` then returns their rows.

@@ -265,6 +265,7 @@ class TransportExposureDetector(Detector):
             "socks.password": "SOCKS5 password",
         }
         out: list[Finding] = []
+        seen_creds: set[tuple[str, str, str]] = set()
         for hit in index.services:
             fields: dict[str, str] = {}
             for part in (hit.detail or "").split(" | "):
@@ -288,6 +289,10 @@ class TransportExposureDetector(Detector):
                 value: str | None = fields.get(field)
                 if not value:
                     continue
+                cred_key = (hit.key, field, value)
+                if cred_key in seen_creds:
+                    continue
+                seen_creds.add(cred_key)
                 out.append(
                     self.finding(
                         code="CLEARTEXT_CREDENTIAL",

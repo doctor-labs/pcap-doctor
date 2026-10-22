@@ -34,9 +34,8 @@ tshark launches      15
 
 ## Baseline (measured 2026-10-13 class machine)
 
-- 15 tshark pass launches per `analyze` with a cold cache on a small fixture
-  (11 prefetched passes + `rtp` + the on-demand `arp_icmp`, `capture_loss` and
-  the `conn` log pass read by the transport-exposure detector).
+- 5 tshark pass launches per `analyze` with a cold cache on `arp_icmp.pcap`
+  (`base` pass + active passes `arp_icmp`, `capture_loss`, `conn`; protocol-absent passes skipped via #328).
 - This count is deterministic across fixtures and tshark builds: pass *count*
   depends only on `PASSES` and which detectors are enabled, not on which fields
   a build knows.
@@ -45,9 +44,14 @@ tshark launches      15
 
 `tests/test_launch_budget.py` runs `analyze` on `tests/fixtures/arp_icmp.pcap`
 through the launch counter and asserts the pass-launch count is `<= BUDGET`
-(`BUDGET = 15` today). It has **no timing assertions** — wall time is noisy, launch
-count is not. When a speed-up lands, the relevant issue must raise `BUDGET` to
-the new measurement:
+(`BUDGET = 5`). It has **no timing assertions** — wall time is noisy, launch
+count is not.
 
-- #328 skip passes for protocols absent from the capture,
-- #330 merge several passes into one tshark invocation.
+## Optimization Results Summary (#328 - #333)
+
+- **#328**: Skip passes for protocols absent from the capture (lowered launch count from 15 to 5 on `arp_icmp.pcap`).
+- **#329**: Turn off tcp sequence analysis (`-o tcp.analyze_sequence_numbers:FALSE`) on passes that do not read `tcp.analysis.*` or `_ws.expert.*`.
+- **#330**: Merge compatible tshark passes into wide passes (`run_merged`), verified matching 100% on fixture per-pass rows.
+- **#331**: Cap concurrency via `--jobs` / `PCAP_DOCTOR_JOBS`, start tshark children at low priority (`os.nice(10)` on POSIX / `BELOW_NORMAL_PRIORITY_CLASS` on Windows), and stream output line-by-line from pipe `Popen`.
+- **#332**: Structured progress events and live stderr progress status line while keeping stdout machine output 100% clean/unchanged in `--json` and non-TTY modes.
+- **#333**: Deterministic `scripts/bench_large.py` capture benchmark and CI launch budget regression guard.
