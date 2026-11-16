@@ -40,7 +40,10 @@
     "DNS_CLEARTEXT",
     "DNS_TUNNEL_SHAPE"
   ],
-  "bt_dht.pcap": [],
+  "bt_dht.pcap": [
+    "SERVICE_BITTORRENT_INFOHASH",
+    "SERVICE_DHT_BOOTSTRAP"
+  ],
   "capture_loss.pcap": [
     "CAPTURE_LOSS"
   ],
@@ -104,6 +107,7 @@
     "ICS_CONTROL_COMMAND"
   ],
   "irc_chat.pcap": [
+    "CLEARTEXT_IRC",
     "CLEARTEXT_SERVICE"
   ],
   "kerberos.pcap": [],
@@ -187,7 +191,9 @@
     "SSH_WEAK_MAC"
   ],
   "stun_rtsp.pcap": [],
-  "syslog.pcap": [],
+  "syslog.pcap": [
+    "CLEARTEXT_SYSLOG"
+  ],
   "strong_tls13.pcap": [],
   "rtp_quality.pcap": [
     "RTP_MEDIA_UNPROTECTED",
@@ -254,12 +260,22 @@
     "VPN_OPENVPN_HANDSHAKE",
     "VPN_WIREGUARD_HANDSHAKE"
   ],
-  "dhcpv6.pcap": [],
+  "dhcp_rogue.pcap": [
+    "DHCP_CLIENT_INVENTORY",
+    "DHCP_DOMAIN_LEAK",
+    "DHCP_ROGUE_SERVER",
+    "DHCP_VENDOR_FINGERPRINT"
+  ],
+  "dhcpv6.pcap": [
+    "DHCPV6_CLIENT_INVENTORY"
+  ],
   "rdp_nat.pcap": [],
   "pgsql_redis.pcap": [],
   "irc_socks_creds.pcap": [
     "CLEARTEXT_CREDENTIAL",
-    "CLEARTEXT_SERVICE"
+    "CLEARTEXT_IRC",
+    "CLEARTEXT_SERVICE",
+    "CLEARTEXT_SOCKS"
   ],
   "mssql_tds.pcap": [
     "CLEARTEXT_CREDENTIAL",
@@ -287,5 +303,13 @@
   "vuln_greetings.pcap": [
     "CLEARTEXT_SERVICE",
     "SERVICE_VULNERABLE_VERSION"
+  ],
+  "long_tail_ports.pcap": [
+    "SERVICE_FINGER_EXPOSED",
+    "SERVICE_IDENT_EXPOSED",
+    "SERVICE_LPR_EXPOSED",
+    "SERVICE_NCP_EXPOSED",
+    "SERVICE_PIA_EXPOSED",
+    "SERVICE_XMPP_CLEARTEXT"
   ]
 }

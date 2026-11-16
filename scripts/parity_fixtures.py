@@ -2238,3 +2238,67 @@ def fixture_ics_control() -> bytes:
     i.send(False, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 7, 0, 1, 0, 0x65, 0, 0, 1]))  # activation confirmation
     i.close()
     return w.write()
+
+
+def _dhcp4_opt(code: int, data: bytes) -> bytes:
+    """One DHCPv4 option (code, length, payload)."""
+    return bytes([code, len(data)]) + data
+
+
+def _dhcp4_packet(op: int, xid: int, *, ciaddr: str = "", yiaddr: str = "", siaddr: str = "",
+                  mac: str = "aa:bb:cc:dd:ee:ff", options: bytes = b"", broadcast: bool = False) -> bytes:
+    """A DHCPv4 packet: fixed 236-byte header, magic cookie, options, end marker."""
+    flags = 0x8000 if broadcast else 0
+    head = struct.pack("!BBBBIHH", op, 1, 6, 0, xid, 0, flags)
+    head += socket.inet_aton(ciaddr) if ciaddr else b"\0" * 4
+    head += socket.inet_aton(yiaddr) if yiaddr else b"\0" * 4
+    head += socket.inet_aton(siaddr) if siaddr else b"\0" * 4
+    head += b"\0" * 4  # giaddr
+    head += bytes.fromhex(mac.replace(":", "")) + b"\0" * 10  # chaddr, padded to 16
+    head += b"\0" * 64 + b"\0" * 128  # sname, file
+    return head + b"\x63\x82\x53\x63" + options + b"\xff"
+
+
+@fixture("dhcp_rogue.pcap")
+def fixture_dhcp_rogue() -> bytes:
+    """A DHCP exchange where two servers answer the same transaction with different addresses (#220).
+
+    The client names itself and its vendor, the good server offers an address in the site network,
+    and a second server on the same segment offers one from a network the client never asked for.
+    """
+    mac = "aa:bb:cc:dd:ee:ff"
+    xid = 0x11223344
+    client_options = (
+        _dhcp4_opt(53, b"\x01")
+        + _dhcp4_opt(12, b"iot-sensor-01")  # option 12 is the host name (55 is the parameter request list)
+        + _dhcp4_opt(15, b"corp.internal")  # the domain the client learned, repeated in the clear
+        + _dhcp4_opt(60, b"ubiquiti")
+        + _dhcp4_opt(61, b"\x01" + bytes.fromhex(mac.replace(":", "")))
+    )
+    server_options = _dhcp4_opt(53, b"\x02") + _dhcp4_opt(54, socket.inet_aton("10.0.0.1")) + _dhcp4_opt(
+        51, struct.pack("!I", 3600))
+    rogue_options = _dhcp4_opt(53, b"\x02") + _dhcp4_opt(54, socket.inet_aton("10.0.0.66"))
+    w = Wire(start=1_700_450_000.0)
+    client, server, rogue = "10.0.7.50", "10.0.0.1", "10.0.0.66"
+    w.add(udp_frame(client, "255.255.255.255", 68, 67,
+                     _dhcp4_packet(1, xid, options=client_options, broadcast=True)))
+    w.add(udp_frame(server, client, 67, 68,
+                     _dhcp4_packet(2, xid, yiaddr="10.0.7.42", siaddr=server, options=server_options)))
+    w.add(udp_frame(rogue, client, 67, 68,
+                     _dhcp4_packet(2, xid, yiaddr="192.168.77.9", siaddr=rogue, options=rogue_options)))
+    w.add(udp_frame(client, server, 68, 67,
+                     _dhcp4_packet(3, xid, ciaddr="10.0.7.42",
+                                   options=client_options + _dhcp4_opt(50, socket.inet_aton("10.0.7.42")))))
+    w.add(udp_frame(server, client, 67, 68,
+                     _dhcp4_packet(5, xid, yiaddr="10.0.7.42", siaddr=server,
+                                   options=_dhcp4_opt(53, b"\x05") + _dhcp4_opt(54, socket.inet_aton("10.0.0.1"))
+                                   + _dhcp4_opt(51, struct.pack("!I", 3600))
+                                   + _dhcp4_opt(15, b"corp.internal"))))
+@fixture("long_tail_ports.pcap")
+def fixture_long_tail_ports() -> bytes:
+    """Finger, Ident, XMPP, LPR, PIA and NCP service ports observed as TCP flows (#228)."""
+    w = Wire(start=1_702_500_000.0)
+    c, s = "10.77.0.10", "10.77.0.20"
+    for i, dport in enumerate((79, 113, 5222, 515, 6543, 524)):
+        Tcp(w, c, s, 50000 + i, dport).open().send(True, b"probe\r\n").close()
+    return w.write()

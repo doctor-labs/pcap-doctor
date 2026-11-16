@@ -35,8 +35,23 @@ CODES = (
     "BRUTE_FORCE_SUSPECTED", "ARP_SPOOFING_SUSPECTED", "ICMP_REDIRECT", "CAPTURE_LOSS",
     "TLS_SERVER_CIPHER_PREFERENCE", "INTERESTING_HOSTNAME", "HTTP_MISSING_SECURITY_HEADERS", "HTTP2_CLEARTEXT", "VPN_IKE_HANDSHAKE", "VPN_OPENVPN_HANDSHAKE", "VPN_WIREGUARD_HANDSHAKE", "TLS_ECH_OFFERED", "TLS_EARLY_DATA_OFFERED", "TLS_NO_SCT",
     "HTTP_WEB_ATTACK_SQLI", "HTTP_WEB_ATTACK_XSS", "HTTP_WEB_ATTACK_LFI", "HTTP_WEB_ATTACK_TRAVERSAL", "HTTP_WEB_ATTACK_COMMAND_INJECTION",
+    "DHCP_CLIENT_INVENTORY", "DHCPV6_CLIENT_INVENTORY", "DHCP_ROGUE_SERVER", "DHCP_DOMAIN_LEAK",
+    "DHCP_VENDOR_FINGERPRINT",
     "IOC_MATCH",
     "WATCHED_COUNTRY_LOGIN",
+    "OSINT_LOOKUP_PERFORMED",
+    "CLEARTEXT_SYSLOG",
+    "CLEARTEXT_SYSLOG_SECRET",
+    "SERVICE_BITTORRENT_INFOHASH",
+    "SERVICE_DHT_BOOTSTRAP",
+    "CLEARTEXT_IRC",
+    "CLEARTEXT_SOCKS",
+    "SERVICE_FINGER_EXPOSED",
+    "SERVICE_IDENT_EXPOSED",
+    "SERVICE_XMPP_CLEARTEXT",
+    "SERVICE_LPR_EXPOSED",
+    "SERVICE_PIA_EXPOSED",
+    "SERVICE_NCP_EXPOSED",
 )
 
 
@@ -56,6 +71,9 @@ def test_the_mapping_and_the_misc_activity_default() -> None:
     assert classtype_of("SIGNATURE_MATCH") == "attempted-admin"
     assert classtype_of("CAPTURE_LOSS") == "misc-activity"
     assert classtype_of("SERVICE_ON_ODD_PORT") == "non-standard-protocol"
+    assert classtype_of("OSINT_LOOKUP_PERFORMED") == "misc-activity"
+    assert classtype_of("CLEARTEXT_SYSLOG") == "policy-violation"
+    assert classtype_of("SERVICE_BITTORRENT_INFOHASH") == "misc-activity"
     assert classtype_of("NOT_A_CODE") == "misc-activity"  # unmapped codes take the default
 
 

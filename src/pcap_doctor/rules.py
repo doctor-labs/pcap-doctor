@@ -26,6 +26,7 @@ _DNS_QUIC_SSH = "d4.dns_quic_ssh"
 _SIGNATURES = "d9.user_signatures"
 _SMB = "d10.smb"
 _KRB_NTLM = "d23.kerberos_ntlm"
+_DHCP = "d26.dhcp"
 _BRUTE = "d11.brute_force"
 _ARP = "d12.arp_icmp"
 _CAPTURE_LOSS = "d13.capture_loss"
@@ -38,6 +39,8 @@ _HTTP2 = "d5.http2"
 _ICS = "d20.ics_control"
 _IOC = "d21.ioc_match"
 _SOFTWARE = "d22.software_vulns"
+_OSINT = "d25.osint"
+_LONG_TAIL = "d25.long_tail"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -105,6 +108,11 @@ RULES: dict[str, Rule] = {
         Rule("KERBEROS_NO_PREAUTH", _KRB_NTLM, "Credentials", "Kerberos AS reply without pre-authentication"),
         Rule("NTLM_V1_AUTH", _KRB_NTLM, "Credentials", "NTLMv1 authentication response"),
         Rule("NTLM_SIGNING_NOT_NEGOTIATED", _KRB_NTLM, "Credentials", "NTLM signing not negotiated"),
+        Rule("DHCP_CLIENT_INVENTORY", _DHCP, "Network", "DHCP client identity and lease"),
+        Rule("DHCPV6_CLIENT_INVENTORY", _DHCP, "Network", "DHCPv6 client identity and lease"),
+        Rule("DHCP_ROGUE_SERVER", _DHCP, "Network", "Two DHCP servers answered the same transaction"),
+        Rule("DHCP_DOMAIN_LEAK", _DHCP, "Network", "DHCP request broadcast the domain name"),
+        Rule("DHCP_VENDOR_FINGERPRINT", _DHCP, "Network", "DHCP request advertised the vendor class"),
         Rule("SIGNATURE_MATCH", _SIGNATURES, "Signatures", "User-supplied signature matched"),
         Rule("IOC_MATCH", _IOC, "Signatures", "Local indicator (IP, domain or URL) matched"),
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
@@ -125,6 +133,19 @@ RULES: dict[str, Rule] = {
         Rule("VPN_OPENVPN_HANDSHAKE", _VPN, "Network", "OpenVPN control-channel handshake seen (UDP/TCP 1194)"),
         Rule("HTTP2_CLEARTEXT", _HTTP2, "Cleartext", "HTTP/2 over cleartext (h2c) traffic is not encrypted"),
         Rule("SERVICE_VULNERABLE_VERSION", _SOFTWARE, "Cleartext", "Software version announced in a banner or header has a known vulnerability"),
+        Rule("OSINT_LOOKUP_PERFORMED", _OSINT, "Signatures", "Indicator looked up via an explicit OSINT endpoint"),
+        Rule("CLEARTEXT_SYSLOG", _LONG_TAIL, "Cleartext", "Syslog messages sent in cleartext"),
+        Rule("CLEARTEXT_SYSLOG_SECRET", _LONG_TAIL, "Credentials", "Syslog message may contain a credential or token"),
+        Rule("SERVICE_BITTORRENT_INFOHASH", _LONG_TAIL, "Network", "BitTorrent info-hash observed"),
+        Rule("SERVICE_DHT_BOOTSTRAP", _LONG_TAIL, "Network", "BitTorrent DHT bootstrap/query leaks client address"),
+        Rule("CLEARTEXT_IRC", _LONG_TAIL, "Cleartext", "IRC service inventory in cleartext"),
+        Rule("CLEARTEXT_SOCKS", _LONG_TAIL, "Cleartext", "SOCKS proxy traffic in cleartext"),
+        Rule("SERVICE_FINGER_EXPOSED", _LONG_TAIL, "Network", "Finger service exposed"),
+        Rule("SERVICE_IDENT_EXPOSED", _LONG_TAIL, "Network", "Ident service exposed"),
+        Rule("SERVICE_XMPP_CLEARTEXT", _LONG_TAIL, "Cleartext", "XMPP client service observed without confirmed TLS"),
+        Rule("SERVICE_LPR_EXPOSED", _LONG_TAIL, "Network", "LPR printing service exposed"),
+        Rule("SERVICE_PIA_EXPOSED", _LONG_TAIL, "Network", "PIA protocol service observed"),
+        Rule("SERVICE_NCP_EXPOSED", _LONG_TAIL, "Network", "NCP protocol service observed"),
     )
 }
 
@@ -207,6 +228,11 @@ _CLASSTYPES: dict[str, str] = {
     "KERBEROS_NO_PREAUTH": "policy-violation",
     "NTLM_V1_AUTH": "policy-violation",
     "NTLM_SIGNING_NOT_NEGOTIATED": "policy-violation",
+    "DHCP_CLIENT_INVENTORY": "protocol-command-decode",
+    "DHCPV6_CLIENT_INVENTORY": "protocol-command-decode",
+    "DHCP_ROGUE_SERVER": "trojan-activity",
+    "DHCP_DOMAIN_LEAK": "policy-violation",
+    "DHCP_VENDOR_FINGERPRINT": "policy-violation",
     "SIP_CLEARTEXT_SIGNALLING": "policy-violation",
     "SDP_NO_CRYPTO_ATTR": "policy-violation",
     "RTP_MEDIA_UNPROTECTED": "policy-violation",
@@ -223,11 +249,24 @@ _CLASSTYPES: dict[str, str] = {
     "HTTP_WEB_ATTACK_TRAVERSAL": "attempted-admin",
     "HTTP_WEB_ATTACK_COMMAND_INJECTION": "attempted-admin",
     "IOC_MATCH": "trojan-activity",
+    "OSINT_LOOKUP_PERFORMED": "misc-activity",
     "TLS_SELF_SIGNED_CHAIN": "protocol-command-decode",
     "TLS_SNI_CERT_MISMATCH": "protocol-command-decode",
     "SMB1_IN_USE": "protocol-command-decode",
     "SMB_EXECUTABLE_ON_SHARE": "protocol-command-decode",
     "SERVICE_ON_ODD_PORT": "non-standard-protocol",
+    "CLEARTEXT_SYSLOG": "policy-violation",
+    "CLEARTEXT_SYSLOG_SECRET": "policy-violation",
+    "SERVICE_BITTORRENT_INFOHASH": "misc-activity",
+    "SERVICE_DHT_BOOTSTRAP": "misc-activity",
+    "CLEARTEXT_IRC": "policy-violation",
+    "CLEARTEXT_SOCKS": "policy-violation",
+    "SERVICE_FINGER_EXPOSED": "misc-activity",
+    "SERVICE_IDENT_EXPOSED": "misc-activity",
+    "SERVICE_XMPP_CLEARTEXT": "policy-violation",
+    "SERVICE_LPR_EXPOSED": "misc-activity",
+    "SERVICE_PIA_EXPOSED": "misc-activity",
+    "SERVICE_NCP_EXPOSED": "misc-activity",
 }
 
 
