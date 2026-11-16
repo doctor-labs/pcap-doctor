@@ -8,7 +8,8 @@ from conftest import fixture, requires_tshark
 def _by_code(result) -> dict[str, list]:
     out: dict[str, list] = {}
     for f in result.findings:
-        if f.code.startswith(("KERBEROS_", "NTLM_")):  # other detectors (SMB, ...) may fire on the same capture
+        # Only the codes this file is about; d25.kerberos_auth emits KERBEROS_* codes of its own.
+        if f.code in {"KERBEROS_WEAK_ETYPE", "KERBEROS_NO_PREAUTH", "NTLM_V1_AUTH", "NTLM_SIGNING_NOT_NEGOTIATED"}:
             out.setdefault(f.code, []).append(f)
     return out
 

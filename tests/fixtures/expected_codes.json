@@ -106,9 +106,20 @@
   "irc_chat.pcap": [
     "CLEARTEXT_SERVICE"
   ],
-  "kerberos.pcap": [],
+  "kerberos_anonymous.pcap": [
+    "KERBEROS_ANONYMOUS_REPLY",
+    "KERBEROS_NO_PREAUTH"
+  ],
+  "kerberos.pcap": [
+    "KERBEROS_PRINCIPAL_INVENTORY"
+  ],
+  "kerberos_tgs_only.pcap": [
+    "KERBEROS_PRINCIPAL_INVENTORY",
+    "KERBEROS_TGS_WITHOUT_AS"
+  ],
   "kerberos_weak.pcap": [
     "KERBEROS_NO_PREAUTH",
+    "KERBEROS_PRINCIPAL_INVENTORY",
     "KERBEROS_WEAK_ETYPE"
   ],
   "ntlm_v1.pcap": [

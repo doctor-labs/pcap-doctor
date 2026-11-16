@@ -26,6 +26,7 @@ _DNS_QUIC_SSH = "d4.dns_quic_ssh"
 _SIGNATURES = "d9.user_signatures"
 _SMB = "d10.smb"
 _KRB_NTLM = "d23.kerberos_ntlm"
+_KRB_AUTH = "d25.kerberos_auth"
 _BRUTE = "d11.brute_force"
 _ARP = "d12.arp_icmp"
 _CAPTURE_LOSS = "d13.capture_loss"
@@ -105,6 +106,9 @@ RULES: dict[str, Rule] = {
         Rule("KERBEROS_NO_PREAUTH", _KRB_NTLM, "Credentials", "Kerberos AS reply without pre-authentication"),
         Rule("NTLM_V1_AUTH", _KRB_NTLM, "Credentials", "NTLMv1 authentication response"),
         Rule("NTLM_SIGNING_NOT_NEGOTIATED", _KRB_NTLM, "Credentials", "NTLM signing not negotiated"),
+        Rule("KERBEROS_PRINCIPAL_INVENTORY", _KRB_AUTH, "Credentials", "Kerberos principal, realm and service in use"),
+        Rule("KERBEROS_TGS_WITHOUT_AS", _KRB_AUTH, "Credentials", "Kerberos service ticket with no AS exchange in the capture"),
+        Rule("KERBEROS_ANONYMOUS_REPLY", _KRB_AUTH, "Credentials", "Kerberos reply that names no client principal"),
         Rule("SIGNATURE_MATCH", _SIGNATURES, "Signatures", "User-supplied signature matched"),
         Rule("IOC_MATCH", _IOC, "Signatures", "Local indicator (IP, domain or URL) matched"),
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
@@ -205,6 +209,9 @@ _CLASSTYPES: dict[str, str] = {
     "SMB_NULL_SESSION": "policy-violation",
     "KERBEROS_WEAK_ETYPE": "policy-violation",
     "KERBEROS_NO_PREAUTH": "policy-violation",
+    "KERBEROS_PRINCIPAL_INVENTORY": "protocol-command-decode",
+    "KERBEROS_TGS_WITHOUT_AS": "policy-violation",
+    "KERBEROS_ANONYMOUS_REPLY": "policy-violation",
     "NTLM_V1_AUTH": "policy-violation",
     "NTLM_SIGNING_NOT_NEGOTIATED": "policy-violation",
     "SIP_CLEARTEXT_SIGNALLING": "policy-violation",
