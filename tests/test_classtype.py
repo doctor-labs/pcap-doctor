@@ -40,6 +40,18 @@ CODES = (
     "IOC_MATCH",
     "WATCHED_COUNTRY_LOGIN",
     "OSINT_LOOKUP_PERFORMED",
+    "CLEARTEXT_SYSLOG",
+    "CLEARTEXT_SYSLOG_SECRET",
+    "SERVICE_BITTORRENT_INFOHASH",
+    "SERVICE_DHT_BOOTSTRAP",
+    "CLEARTEXT_IRC",
+    "CLEARTEXT_SOCKS",
+    "SERVICE_FINGER_EXPOSED",
+    "SERVICE_IDENT_EXPOSED",
+    "SERVICE_XMPP_CLEARTEXT",
+    "SERVICE_LPR_EXPOSED",
+    "SERVICE_PIA_EXPOSED",
+    "SERVICE_NCP_EXPOSED",
 )
 
 
@@ -60,6 +72,8 @@ def test_the_mapping_and_the_misc_activity_default() -> None:
     assert classtype_of("CAPTURE_LOSS") == "misc-activity"
     assert classtype_of("SERVICE_ON_ODD_PORT") == "non-standard-protocol"
     assert classtype_of("OSINT_LOOKUP_PERFORMED") == "misc-activity"
+    assert classtype_of("CLEARTEXT_SYSLOG") == "policy-violation"
+    assert classtype_of("SERVICE_BITTORRENT_INFOHASH") == "misc-activity"
     assert classtype_of("NOT_A_CODE") == "misc-activity"  # unmapped codes take the default
 
 
