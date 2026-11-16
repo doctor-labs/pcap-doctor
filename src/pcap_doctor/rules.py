@@ -38,6 +38,7 @@ _HTTP2 = "d5.http2"
 _ICS = "d20.ics_control"
 _IOC = "d21.ioc_match"
 _SOFTWARE = "d22.software_vulns"
+_OSINT = "d25.osint"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -125,6 +126,7 @@ RULES: dict[str, Rule] = {
         Rule("VPN_OPENVPN_HANDSHAKE", _VPN, "Network", "OpenVPN control-channel handshake seen (UDP/TCP 1194)"),
         Rule("HTTP2_CLEARTEXT", _HTTP2, "Cleartext", "HTTP/2 over cleartext (h2c) traffic is not encrypted"),
         Rule("SERVICE_VULNERABLE_VERSION", _SOFTWARE, "Cleartext", "Software version announced in a banner or header has a known vulnerability"),
+        Rule("OSINT_LOOKUP_PERFORMED", _OSINT, "Signatures", "Indicator looked up via an explicit OSINT endpoint"),
     )
 }
 
@@ -223,6 +225,7 @@ _CLASSTYPES: dict[str, str] = {
     "HTTP_WEB_ATTACK_TRAVERSAL": "attempted-admin",
     "HTTP_WEB_ATTACK_COMMAND_INJECTION": "attempted-admin",
     "IOC_MATCH": "trojan-activity",
+    "OSINT_LOOKUP_PERFORMED": "misc-activity",
     "TLS_SELF_SIGNED_CHAIN": "protocol-command-decode",
     "TLS_SNI_CERT_MISMATCH": "protocol-command-decode",
     "SMB1_IN_USE": "protocol-command-decode",
