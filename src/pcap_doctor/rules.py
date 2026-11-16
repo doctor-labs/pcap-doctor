@@ -38,6 +38,7 @@ _HTTP2 = "d5.http2"
 _ICS = "d20.ics_control"
 _IOC = "d21.ioc_match"
 _SOFTWARE = "d22.software_vulns"
+_CLEARTEXT_CREDS = "d25.cleartext_creds"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -105,6 +106,9 @@ RULES: dict[str, Rule] = {
         Rule("KERBEROS_NO_PREAUTH", _KRB_NTLM, "Credentials", "Kerberos AS reply without pre-authentication"),
         Rule("NTLM_V1_AUTH", _KRB_NTLM, "Credentials", "NTLMv1 authentication response"),
         Rule("NTLM_SIGNING_NOT_NEGOTIATED", _KRB_NTLM, "Credentials", "NTLM signing not negotiated"),
+        Rule("IRC_CLEARTEXT_CREDENTIAL", _CLEARTEXT_CREDS, "Credentials", "IRC credential sent in cleartext"),
+        Rule("SOCKS_CLEARTEXT_CREDENTIAL", _CLEARTEXT_CREDS, "Credentials", "SOCKS credential sent in cleartext"),
+        Rule("TDS_CLEARTEXT_CREDENTIAL", _CLEARTEXT_CREDS, "Credentials", "TDS LOGIN7 credential sent in cleartext"),
         Rule("SIGNATURE_MATCH", _SIGNATURES, "Signatures", "User-supplied signature matched"),
         Rule("IOC_MATCH", _IOC, "Signatures", "Local indicator (IP, domain or URL) matched"),
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
@@ -207,6 +211,9 @@ _CLASSTYPES: dict[str, str] = {
     "KERBEROS_NO_PREAUTH": "policy-violation",
     "NTLM_V1_AUTH": "policy-violation",
     "NTLM_SIGNING_NOT_NEGOTIATED": "policy-violation",
+    "IRC_CLEARTEXT_CREDENTIAL": "policy-violation",
+    "SOCKS_CLEARTEXT_CREDENTIAL": "policy-violation",
+    "TDS_CLEARTEXT_CREDENTIAL": "policy-violation",
     "SIP_CLEARTEXT_SIGNALLING": "policy-violation",
     "SDP_NO_CRYPTO_ATTR": "policy-violation",
     "RTP_MEDIA_UNPROTECTED": "policy-violation",

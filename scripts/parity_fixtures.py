@@ -2238,3 +2238,28 @@ def fixture_ics_control() -> bytes:
     i.send(False, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 7, 0, 1, 0, 0x65, 0, 0, 1]))  # activation confirmation
     i.close()
     return w.write()
+
+
+@fixture("cleartext_creds_extra.pcap")
+def fixture_cleartext_creds_extra() -> bytes:
+    """Extra cleartext credential cases: IRC OPER and channel key, and a SOCKS4 CONNECT request with userid (#231)."""
+    w = Wire(start=1_702_100_000.0)
+    irc_client = "10.0.1.10"
+    irc_server = "10.0.1.20"
+    irc = Tcp(w, irc_client, irc_server, 45100, 6667).open()
+    irc.send(True, b"PASS server-secret\r\n")
+    irc.send(True, b"NICK opernick\r\n")
+    irc.send(True, b"USER opernick 0 * :Oper User\r\n")
+    irc.send(True, b"OPER opername oper-secret\r\n")
+    irc.send(True, b"JOIN #secret chan-key\r\n")
+    irc.close()
+
+    # SOCKS4 CONNECT request: VER=4, CMD=1 (CONNECT), DSTPORT=80, DSTIP=10.0.1.99, USERID='sock4user\0'
+    socks_client = "10.0.1.30"
+    socks_server = "10.0.1.40"
+    req = struct.pack("!BBH4s", 4, 1, 80, _ip4("10.0.1.99")) + b"sock4user\x00"
+    socks = Tcp(w, socks_client, socks_server, 45110, 1080).open()
+    socks.send(True, req)
+    socks.send(False, struct.pack("!BBH4s", 0, 0x5A, 0, _ip4("0.0.0.0")))
+    socks.close()
+    return w.write()

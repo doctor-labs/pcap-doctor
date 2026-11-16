@@ -257,13 +257,21 @@
   "dhcpv6.pcap": [],
   "rdp_nat.pcap": [],
   "pgsql_redis.pcap": [],
+  "cleartext_creds_extra.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE",
+    "IRC_CLEARTEXT_CREDENTIAL"
+  ],
   "irc_socks_creds.pcap": [
     "CLEARTEXT_CREDENTIAL",
-    "CLEARTEXT_SERVICE"
+    "CLEARTEXT_SERVICE",
+    "IRC_CLEARTEXT_CREDENTIAL",
+    "SOCKS_CLEARTEXT_CREDENTIAL"
   ],
   "mssql_tds.pcap": [
     "CLEARTEXT_CREDENTIAL",
-    "CLEARTEXT_SERVICE"
+    "CLEARTEXT_SERVICE",
+    "TDS_CLEARTEXT_CREDENTIAL"
   ],
   "watched_login.pcap": [
     "CLEARTEXT_CREDENTIAL",
