@@ -166,6 +166,9 @@
   ],
   "sip_rtp.pcap": [
     "RTP_MEDIA_UNPROTECTED",
+    "RTP_MOS_POOR",
+    "RTP_PACKET_LOSS_HIGH",
+    "RTP_STREAM_SUMMARY",
     "SDP_NO_CRYPTO_ATTR",
     "SIP_CLEARTEXT_SIGNALLING"
   ],
@@ -197,6 +200,9 @@
   "strong_tls13.pcap": [],
   "rtp_quality.pcap": [
     "RTP_MEDIA_UNPROTECTED",
+    "RTP_MOS_POOR",
+    "RTP_PACKET_LOSS_HIGH",
+    "RTP_STREAM_SUMMARY",
     "SDP_NO_CRYPTO_ATTR",
     "SIP_CLEARTEXT_SIGNALLING"
   ],
@@ -311,5 +317,20 @@
     "SERVICE_NCP_EXPOSED",
     "SERVICE_PIA_EXPOSED",
     "SERVICE_XMPP_CLEARTEXT"
+  ],
+  "rtp_quality_clean.pcap": [
+    "RTP_MEDIA_UNPROTECTED",
+    "RTP_STREAM_SUMMARY",
+    "SDP_NO_CRYPTO_ATTR",
+    "SIP_CLEARTEXT_SIGNALLING"
+  ],
+  "rtp_quality_lossy.pcap": [
+    "RTP_JITTER_HIGH",
+    "RTP_MEDIA_UNPROTECTED",
+    "RTP_MOS_POOR",
+    "RTP_PACKET_LOSS_HIGH",
+    "RTP_STREAM_SUMMARY",
+    "SDP_NO_CRYPTO_ATTR",
+    "SIP_CLEARTEXT_SIGNALLING"
   ]
 }
