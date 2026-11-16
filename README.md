@@ -510,6 +510,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 | `d10.smb` | `detectors/smb.py` | SMBv1, SMB signing not required, null sessions, administrative shares, remote-execution pipes (svcctl, atsvc, PSEXESVC), executables opened on shares |
 | `d26.dhcp` | `detectors/dhcp.py` | DHCP and DHCPv6 host inventory (hardware address, host name, lease), transactions answered by more than one server, and the domain name and vendor class broadcast in the clear |
 | `d23.kerberos_ntlm` | `detectors/kerberos_ntlm.py` | Kerberos replies with DES or RC4-HMAC, AS replies without pre-authentication the KDC never asked for, NTLMv1 responses, NTLM challenges that do not negotiate signing |
+| `d25.kerberos_auth` | `detectors/kerberos_auth.py` | Which Kerberos principal authenticated to which realm for which service, service tickets issued with no AS exchange in the capture, and replies that name no client principal (anonymous PKINIT) |
 | `d16.web_attack` | `detectors/web_attack.py` | SQL injection, XSS, local file inclusion, path traversal and OS command injection in HTTP request URIs (`HTTP_WEB_ATTACK_*`) |
 | `d11.brute_force` | `detectors/brute_force.py` | Password guessing: 20+ failed FTP, 10+ failed HTTP Basic/Digest or 10+ failed SMB logins from one client to one server |
 | `d12.arp_icmp` | `detectors/arp_icmp.py` | ARP spoofing (one IPv4 claimed by two MACs) and ICMP redirects |

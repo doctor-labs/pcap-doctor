@@ -663,6 +663,79 @@ def fixture_kerberos_weak() -> bytes:
     return w.write()
 
 
+@fixture("kerberos_tgs_only.pcap")
+def fixture_kerberos_tgs_only() -> bytes:
+    """A service ticket requested and issued with no AS exchange anywhere in the capture (#205).
+
+    The client asks the KDC for a cifs ticket it never authenticated for, which is what constrained
+    delegation or a ticket obtained on another host looks like from the wire.
+    """
+    from scapy.asn1.asn1 import ASN1_GENERAL_STRING, ASN1_GENERALIZED_TIME
+    from scapy.layers.kerberos import (
+        KRB_KDC_REQ_BODY,
+        KRB_TGS_REP,
+        KRB_TGS_REQ,
+        EncryptedData,
+        KRB_Ticket,
+        PrincipalName,
+    )
+
+    realm, when = "CORP.EXAMPLE", ASN1_GENERALIZED_TIME("20231115000000Z")
+
+    def name(kind: int, *parts: str) -> PrincipalName:
+        return PrincipalName(nameType=kind, nameString=[ASN1_GENERAL_STRING(p) for p in parts])
+
+    def req(cname: str | None, sname: PrincipalName) -> KRB_KDC_REQ_BODY:
+        return KRB_KDC_REQ_BODY(cname=name(1, cname) if cname else None, realm=realm, sname=sname, etype=[18],
+                                nonce=1, till=when, rtime=when)
+
+    def enc() -> EncryptedData:
+        return EncryptedData(etype=18, cipher=bytes(16))
+
+    cifs = name(2, "cifs", "fs1.corp.example")
+    w = Wire(start=1_700_430_000.0)
+    c, k = "10.3.2.10", "10.3.2.2"
+    w.add(udp_frame(c, k, 50020, 88, _krb(KRB_TGS_REQ(reqBody=req(None, cifs)))))
+    w.add(udp_frame(k, c, 88, 50020, _krb(KRB_TGS_REP(msgType=13, crealm=realm, cname=name(1, "alice"),
+                                                      ticket=KRB_Ticket(realm=realm, sname=cifs, encPart=enc()),
+                                                      encPart=enc()))))
+    return w.write()
+
+
+@fixture("kerberos_anonymous.pcap")
+def fixture_kerberos_anonymous() -> bytes:
+    """An anonymous PKINIT exchange: the client names no principal and the KDC issues a nameless ticket (#205)."""
+    from scapy.asn1.asn1 import ASN1_GENERAL_STRING, ASN1_GENERALIZED_TIME
+    from scapy.layers.kerberos import (
+        KRB_AS_REP,
+        KRB_AS_REQ,
+        KRB_KDC_REQ_BODY,
+        EncryptedData,
+        KRB_Ticket,
+        PrincipalName,
+    )
+
+    realm, when = "CORP.EXAMPLE", ASN1_GENERALIZED_TIME("20231115000000Z")
+
+    def name(kind: int, *parts: str) -> PrincipalName:
+        return PrincipalName(nameType=kind, nameString=[ASN1_GENERAL_STRING(p) for p in parts])
+
+    def req(sname: PrincipalName) -> KRB_KDC_REQ_BODY:
+        return KRB_KDC_REQ_BODY(cname=None, realm=realm, sname=sname, etype=[18], nonce=1, till=when, rtime=when)
+
+    def enc() -> EncryptedData:
+        return EncryptedData(etype=18, cipher=bytes(16))
+
+    krbtgt = name(2, "krbtgt", realm)
+    w = Wire(start=1_700_440_000.0)
+    c, k = "10.3.3.10", "10.3.3.2"
+    w.add(udp_frame(c, k, 50030, 88, _krb(KRB_AS_REQ(reqBody=req(krbtgt)))))
+    w.add(udp_frame(k, c, 88, 50030, _krb(KRB_AS_REP(crealm=realm, cname=None,
+                                                      ticket=KRB_Ticket(realm=realm, sname=krbtgt, encPart=enc()),
+                                                      encPart=enc()))))
+    return w.write()
+
+
 @fixture("ntlm_v1.pcap")
 def fixture_ntlm_v1() -> bytes:
     """An SMB2 session setup answered with NTLMv1 (24-byte LM and NT responses) by a server whose challenge does not

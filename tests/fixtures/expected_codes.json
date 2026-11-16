@@ -110,9 +110,12 @@
     "CLEARTEXT_IRC",
     "CLEARTEXT_SERVICE"
   ],
-  "kerberos.pcap": [],
+  "kerberos.pcap": [
+    "KERBEROS_PRINCIPAL_INVENTORY"
+  ],
   "kerberos_weak.pcap": [
     "KERBEROS_NO_PREAUTH",
+    "KERBEROS_PRINCIPAL_INVENTORY",
     "KERBEROS_WEAK_ETYPE"
   ],
   "ntlm_v1.pcap": [
@@ -332,5 +335,13 @@
     "RTP_STREAM_SUMMARY",
     "SDP_NO_CRYPTO_ATTR",
     "SIP_CLEARTEXT_SIGNALLING"
+  ],
+  "kerberos_anonymous.pcap": [
+    "KERBEROS_ANONYMOUS_REPLY",
+    "KERBEROS_NO_PREAUTH"
+  ],
+  "kerberos_tgs_only.pcap": [
+    "KERBEROS_PRINCIPAL_INVENTORY",
+    "KERBEROS_TGS_WITHOUT_AS"
   ]
 }
