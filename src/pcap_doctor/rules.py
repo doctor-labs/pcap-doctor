@@ -44,6 +44,7 @@ _OSINT = "d25.osint"
 _LONG_TAIL = "d25.long_tail"
 _RTP_QUALITY = "d25.rtp_quality_view"
 _CLEARTEXT_CREDS = "d25.cleartext_creds"
+_STUN_TURN = "d25.stun_turn"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -135,6 +136,12 @@ RULES: dict[str, Rule] = {
         Rule("NTLM_HASH_OFFLINE_CRACKABLE", _KRB_NTLM, "Credentials", "NTLMv1 response length indicates offline-crackable material"),
         Rule("SIGNATURE_MATCH", _SIGNATURES, "Signatures", "User-supplied signature matched"),
         Rule("IOC_MATCH", _IOC, "Signatures", "Local indicator (IP, domain or URL) matched"),
+        Rule("STUN_BINDING_TRANSACTION", _STUN_TURN, "Network", "STUN/TURN binding request and response observed"),
+        Rule("STUN_XOR_MAPPED_ADDRESS", _STUN_TURN, "Network", "STUN reflexive transport address (XOR-MAPPED-ADDRESS) observed"),
+        Rule("RTSP_CONTROL_EXCHANGE", _STUN_TURN, "Cleartext", "RTSP DESCRIBE/PLAY control exchange in cleartext"),
+        Rule("RTSP_CLEARTEXT_CREDENTIAL_URL", _STUN_TURN, "Credentials", "RTSP URL contains credentials in cleartext"),
+        Rule("WEBRTC_DTLS_ASSOCIATION", _STUN_TURN, "Network", "DTLS association observed alongside STUN/ICE traffic"),
+        Rule("WEBRTC_MEDIA_UNPROTECTED", _STUN_TURN, "Voice", "RTP media observed without SRTP protection in a WebRTC context"),
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
         Rule("ARP_SPOOFING_SUSPECTED", _ARP, "Network", "ARP spoofing suspected"),
         Rule("ICMP_REDIRECT", _ARP, "Network", "ICMP redirect seen"),
@@ -286,6 +293,12 @@ _CLASSTYPES: dict[str, str] = {
     "HTTP_WEB_ATTACK_COMMAND_INJECTION": "attempted-admin",
     "IOC_MATCH": "trojan-activity",
     "OSINT_LOOKUP_PERFORMED": "misc-activity",
+    "STUN_BINDING_TRANSACTION": "misc-activity",
+    "STUN_XOR_MAPPED_ADDRESS": "misc-activity",
+    "RTSP_CONTROL_EXCHANGE": "policy-violation",
+    "RTSP_CLEARTEXT_CREDENTIAL_URL": "policy-violation",
+    "WEBRTC_DTLS_ASSOCIATION": "misc-activity",
+    "WEBRTC_MEDIA_UNPROTECTED": "policy-violation",
     "TLS_SELF_SIGNED_CHAIN": "protocol-command-decode",
     "TLS_SNI_CERT_MISMATCH": "protocol-command-decode",
     "SMB1_IN_USE": "protocol-command-decode",

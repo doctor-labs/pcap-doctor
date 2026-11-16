@@ -276,6 +276,16 @@
   "syslog.pcap": [
     "CLEARTEXT_SYSLOG"
   ],
+  "stun_rtsp.pcap": [
+    "RTSP_CONTROL_EXCHANGE",
+    "STUN_BINDING_TRANSACTION",
+    "STUN_XOR_MAPPED_ADDRESS"
+  ],
+  "rtsp_auth.pcap": [
+    "RTSP_CLEARTEXT_CREDENTIAL_URL",
+    "RTSP_CONTROL_EXCHANGE"
+  ],
+  "syslog.pcap": [],
   "strong_tls13.pcap": [],
   "rtp_quality.pcap": [
     "RTP_MEDIA_UNPROTECTED",
@@ -364,7 +374,6 @@
   ],
   "irc_socks_creds.pcap": [
     "CLEARTEXT_CREDENTIAL",
-<<<<<<< HEAD
     "CLEARTEXT_IRC",
     "CLEARTEXT_SERVICE",
     "CLEARTEXT_SOCKS"
@@ -430,10 +439,8 @@
   "kerberos_tgs_only.pcap": [
     "KERBEROS_PRINCIPAL_INVENTORY",
     "KERBEROS_TGS_WITHOUT_AS"
-=======
   "weird_mix.pcap": [
     "HTTP_CLEARTEXT",
     "HTTP_MISSING_SECURITY_HEADERS"
->>>>>>> origin/agent/232-detect-deepseek
   ]
 }

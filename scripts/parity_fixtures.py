@@ -2519,4 +2519,16 @@ def fixture_kerberos_delegation() -> bytes:
     w.add(udp_frame(k, c, 88, 50100, _krb(KRB_TGS_REP(msgType=13, crealm=realm, cname=name(1, "svc-web"),
                                                        ticket=KRB_Ticket(realm=realm, sname=cifs, encPart=enc()),
                                                        encPart=enc()))))
+@fixture("rtsp_auth.pcap")
+def fixture_rtsp_auth() -> bytes:
+    """RTSP DESCRIBE and PLAY over TCP/554 with credentials embedded in the request URL (#224)."""
+    w = Wire(start=1_702_000_000.0)
+    client, server = "10.10.0.11", "10.10.0.12"
+    t = Tcp(w, client, server, 49310, 554)
+    t.open()
+    t.send(True, b"DESCRIBE rtsp://admin:secret@10.10.0.12:554/live.sdp RTSP/1.0\r\nCSeq: 1\r\nAccept: application/sdp\r\n\r\n")
+    t.send(False, b"RTSP/1.0 200 OK\r\nCSeq: 1\r\nContent-Type: application/sdp\r\nContent-Length: 0\r\n\r\n")
+    t.send(True, b"PLAY rtsp://admin:secret@10.10.0.12:554/live.sdp RTSP/1.0\r\nCSeq: 2\r\nSession: 12345678\r\n\r\n")
+    t.send(False, b"RTSP/1.0 200 OK\r\nCSeq: 2\r\nSession: 12345678\r\n\r\n")
+    t.close()
     return w.write()
