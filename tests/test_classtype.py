@@ -37,6 +37,9 @@ CODES = (
     "TDS_CLEARTEXT_CREDENTIAL",
     "KERBEROS_WEAK_ETYPE", "KERBEROS_NO_PREAUTH", "NTLM_V1_AUTH", "NTLM_SIGNING_NOT_NEGOTIATED",
     "KERBEROS_PRINCIPAL_INVENTORY", "KERBEROS_TGS_WITHOUT_AS", "KERBEROS_ANONYMOUS_REPLY",
+    "KERBEROS_WEAK_ETYPE", "KERBEROS_NO_PREAUTH", "KERBEROS_TICKET_ISSUED", "KERBEROS_TGS_WITHOUT_PRIOR_AUTH",
+    "NTLM_V1_AUTH", "NTLM_SIGNING_NOT_NEGOTIATED", "NTLM_NEGOTIATION", "NTLM_CHALLENGE_UNANSWERED",
+    "NTLM_IDENTITY_EXPOSED", "NTLM_HASH_OFFLINE_CRACKABLE",
     "BRUTE_FORCE_SUSPECTED", "ARP_SPOOFING_SUSPECTED", "ICMP_REDIRECT", "CAPTURE_LOSS",
     "TLS_SERVER_CIPHER_PREFERENCE", "INTERESTING_HOSTNAME", "HTTP_MISSING_SECURITY_HEADERS", "HTTP2_CLEARTEXT", "VPN_IKE_HANDSHAKE", "VPN_OPENVPN_HANDSHAKE", "VPN_WIREGUARD_HANDSHAKE", "TLS_ECH_OFFERED", "TLS_EARLY_DATA_OFFERED", "TLS_NO_SCT",
     "HTTP_WEB_ATTACK_SQLI", "HTTP_WEB_ATTACK_XSS", "HTTP_WEB_ATTACK_LFI", "HTTP_WEB_ATTACK_TRAVERSAL", "HTTP_WEB_ATTACK_COMMAND_INJECTION",
@@ -80,11 +83,14 @@ def test_the_mapping_and_the_misc_activity_default() -> None:
     assert classtype_of("OSINT_LOOKUP_PERFORMED") == "misc-activity"
     assert classtype_of("CLEARTEXT_SYSLOG") == "policy-violation"
     assert classtype_of("SERVICE_BITTORRENT_INFOHASH") == "misc-activity"
-=======
     assert classtype_of("IRC_CLEARTEXT_CREDENTIAL") == "policy-violation"
     assert classtype_of("SOCKS_CLEARTEXT_CREDENTIAL") == "policy-violation"
     assert classtype_of("TDS_CLEARTEXT_CREDENTIAL") == "policy-violation"
->>>>>>> origin/agent/231-detect
+=======
+    assert classtype_of("KERBEROS_TICKET_ISSUED") == "misc-activity"
+    assert classtype_of("NTLM_CHALLENGE_UNANSWERED") == "attempted-recon"
+    assert classtype_of("NTLM_HASH_OFFLINE_CRACKABLE") == "policy-violation"
+>>>>>>> origin/agent/232-detect-deepseek
     assert classtype_of("NOT_A_CODE") == "misc-activity"  # unmapped codes take the default
 
 

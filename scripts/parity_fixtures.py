@@ -2453,7 +2453,6 @@ def fixture_rtp_quality_lossy() -> bytes:
         rtp = struct.pack("!BBHII", 0x80, 8, seq, ts, ssrc) + b"\x00" * 160
         frame = udp_frame("10.0.0.20", "10.0.0.10", 20020, 20022, rtp, smac=MAC_B, dmac=MAC_A)
         w.add(frame, dt=arrivals[i] if i == 0 else arrivals[i] - arrivals[i - 1])
-=======
 @fixture("cleartext_creds_extra.pcap")
 def fixture_cleartext_creds_extra() -> bytes:
     """Extra cleartext credential cases: IRC OPER and channel key, and a SOCKS4 CONNECT request with userid (#231)."""
@@ -2476,5 +2475,50 @@ def fixture_cleartext_creds_extra() -> bytes:
     socks.send(True, req)
     socks.send(False, struct.pack("!BBH4s", 0, 0x5A, 0, _ip4("0.0.0.0")))
     socks.close()
->>>>>>> origin/agent/231-detect
+=======
+@fixture("ntlm_rejected.pcap")
+def fixture_ntlm_rejected() -> bytes:
+    """An SMB2 NTLMv1 logon the server refuses (STATUS_LOGON_FAILURE). The 24-byte response is still on the wire
+    and must be reported as offline-crackable material without printing it (#232)."""
+    w = Wire(start=1_700_430_000.0)
+    c, s = "10.5.2.10", "10.5.2.20"
+    t = Tcp(w, c, s, 49620, 445).open()
+    t.send(True, smb2_negotiate_request())
+    t.send(False, smb2_negotiate_response())
+    t.send(True, smb2_session_setup(ntlm_negotiate(), msg_id=1))
+    t.send(False, smb2_session_setup(ntlm_challenge(bytes(8), flags=0xE2898205), response=True, msg_id=1,
+                                     session=0x100, status=0xC0000016))
+    t.send(True, smb2_session_setup(ntlm_authenticate("dave", "CORP", "PF-LAPTOP", bytes(24), bytes(24)),
+                                    msg_id=2, session=0x100))
+    t.send(False, smb2_session_setup(b"", response=True, msg_id=2, session=0x100, status=0xC000006D))  # refused
+    return w.write()
+
+
+@fixture("kerberos_delegation.pcap")
+def fixture_kerberos_delegation() -> bytes:
+    """A TGS-REP granting a service ticket with no prior AS/TGS authentication for the principal in the capture,
+    making the delegation/service-ticket surface visible (#232). Names only, no keys."""
+    from scapy.asn1.asn1 import ASN1_GENERAL_STRING
+    from scapy.layers.kerberos import (
+        KRB_TGS_REP,
+        EncryptedData,
+        KRB_Ticket,
+        PrincipalName,
+    )
+
+    realm = "CORP.EXAMPLE"
+
+    def name(kind: int, *parts: str) -> PrincipalName:
+        return PrincipalName(nameType=kind, nameString=[ASN1_GENERAL_STRING(p) for p in parts])
+
+    def enc() -> EncryptedData:
+        return EncryptedData(etype=18, cipher=bytes(16))
+
+    cifs = name(2, "cifs", "files.corp.example")
+    w = Wire(start=1_700_440_000.0)
+    c, k = "10.3.2.10", "10.3.2.2"
+    w.add(udp_frame(k, c, 88, 50100, _krb(KRB_TGS_REP(msgType=13, crealm=realm, cname=name(1, "svc-web"),
+                                                       ticket=KRB_Ticket(realm=realm, sname=cifs, encPart=enc()),
+                                                       encPart=enc()))))
+>>>>>>> origin/agent/232-detect-deepseek
     return w.write()
