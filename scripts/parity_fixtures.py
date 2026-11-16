@@ -2238,3 +2238,81 @@ def fixture_ics_control() -> bytes:
     i.send(False, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 7, 0, 1, 0, 0x65, 0, 0, 1]))  # activation confirmation
     i.close()
     return w.write()
+
+@fixture("rtp_quality_clean.pcap")
+def fixture_rtp_quality_clean() -> bytes:
+    """Clean RTP stream: contiguous sequence numbers and regular 20 ms timing.
+
+    No sequence gaps and ~0 ms interarrival jitter, so the quality-view detector
+    reports only the per-stream summary (MOS stays in the good/excellent band).
+    SIP/SDP advertises no SRTP, so the sip_rtp detector still reports unprotected
+    signalling/media as expected.
+    """
+    w = Wire(start=1_700_110_000.0, step=0.0)
+    sdp = (
+        b"v=0\r\no=alice 1 1 IN IP4 10.0.0.10\r\ns=rtp-quality-clean\r\nt=0 0\r\n"
+        b"m=audio 20010 RTP/AVP 8\r\na=rtpmap:8 PCMA/8000\r\n"
+    )
+    invite = (
+        b"INVITE sip:bob@10.0.0.20 SIP/2.0\r\n"
+        b"Via: SIP/2.0/UDP 10.0.0.10:5060;branch=z9hG4bKc1\r\n"
+        b"From: <sip:alice@10.0.0.10>;tag=10\r\nTo: <sip:bob@10.0.0.20>\r\n"
+        b"Call-ID: rtp-quality-clean@10.0.0.10\r\nCSeq: 1 INVITE\r\n"
+        b"Content-Type: application/sdp\r\nContent-Length: %d\r\n\r\n" % len(sdp) + sdp
+    )
+    ok = (
+        b"SIP/2.0 200 OK\r\n"
+        b"Via: SIP/2.0/UDP 10.0.0.10:5060;branch=z9hG4bKc1\r\n"
+        b"From: <sip:alice@10.0.0.10>;tag=10\r\nTo: <sip:bob@10.0.0.20>;tag=20\r\n"
+        b"Call-ID: rtp-quality-clean@10.0.0.10\r\nCSeq: 1 INVITE\r\n"
+        b"Content-Type: application/sdp\r\nContent-Length: %d\r\n\r\n" % len(sdp) + sdp
+    )
+    w.add(udp_frame("10.0.0.10", "10.0.0.20", 5060, 5060, invite, smac=MAC_A, dmac=MAC_B), dt=0.0)
+    w.add(udp_frame("10.0.0.20", "10.0.0.10", 5060, 5060, ok, smac=MAC_B, dmac=MAC_A), dt=0.05)
+    ssrc = 0x11112222
+    for i in range(20):
+        rtp = struct.pack("!BBHII", 0x80, 8, i, i * 160, ssrc) + b"\x00" * 160
+        frame = udp_frame("10.0.0.20", "10.0.0.10", 20010, 20012, rtp, smac=MAC_B, dmac=MAC_A)
+        w.add(frame, dt=0.1 if i == 0 else 0.020)
+    return w.write()
+
+
+@fixture("rtp_quality_lossy.pcap")
+def fixture_rtp_quality_lossy() -> bytes:
+    """Lossy and jittery RTP stream: sequence gaps and irregular arrivals.
+
+    Sequence numbers skip (holes in the 0..19 range) producing >1% loss, and
+    arrivals vary enough to push interarrival jitter above 30 ms, driving the
+    estimated MOS into the poor/bad band. SIP/SDP advertises no SRTP.
+    """
+    w = Wire(start=1_700_120_000.0, step=0.0)
+    sdp = (
+        b"v=0\r\no=alice 1 1 IN IP4 10.0.0.10\r\ns=rtp-quality-lossy\r\nt=0 0\r\n"
+        b"m=audio 20020 RTP/AVP 8\r\na=rtpmap:8 PCMA/8000\r\n"
+    )
+    invite = (
+        b"INVITE sip:bob@10.0.0.20 SIP/2.0\r\n"
+        b"Via: SIP/2.0/UDP 10.0.0.10:5060;branch=z9hG4bKl1\r\n"
+        b"From: <sip:alice@10.0.0.10>;tag=30\r\nTo: <sip:bob@10.0.0.20>\r\n"
+        b"Call-ID: rtp-quality-lossy@10.0.0.10\r\nCSeq: 1 INVITE\r\n"
+        b"Content-Type: application/sdp\r\nContent-Length: %d\r\n\r\n" % len(sdp) + sdp
+    )
+    ok = (
+        b"SIP/2.0 200 OK\r\n"
+        b"Via: SIP/2.0/UDP 10.0.0.10:5060;branch=z9hG4bKl1\r\n"
+        b"From: <sip:alice@10.0.0.10>;tag=30\r\nTo: <sip:bob@10.0.0.20>;tag=40\r\n"
+        b"Call-ID: rtp-quality-lossy@10.0.0.10\r\nCSeq: 1 INVITE\r\n"
+        b"Content-Type: application/sdp\r\nContent-Length: %d\r\n\r\n" % len(sdp) + sdp
+    )
+    w.add(udp_frame("10.0.0.10", "10.0.0.20", 5060, 5060, invite, smac=MAC_A, dmac=MAC_B), dt=0.0)
+    w.add(udp_frame("10.0.0.20", "10.0.0.10", 5060, 5060, ok, smac=MAC_B, dmac=MAC_A), dt=0.05)
+    ssrc = 0x33334444
+    seqs = [0, 1, 2, 5, 6, 7, 10, 11, 14, 19]
+    # Irregular arrivals (seconds since start of media) to drive jitter high.
+    arrivals = [0.100, 0.220, 0.230, 0.380, 0.390, 0.540, 0.550, 0.700, 0.710, 0.980]
+    for i, seq in enumerate(seqs):
+        ts = seq * 160
+        rtp = struct.pack("!BBHII", 0x80, 8, seq, ts, ssrc) + b"\x00" * 160
+        frame = udp_frame("10.0.0.20", "10.0.0.10", 20020, 20022, rtp, smac=MAC_B, dmac=MAC_A)
+        w.add(frame, dt=arrivals[i] if i == 0 else arrivals[i] - arrivals[i - 1])
+    return w.write()

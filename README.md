@@ -187,7 +187,7 @@ config use.
 | **Cleartext** | plain HTTP (high when the request path looks like a firmware or package download), cleartext FTP, Telnet, TFTP, NTP, SNMP, LDAP, SMTP, POP and MySQL |
 | **DNS** | plaintext DNS leakage, external resolvers over IPv4 and IPv6, DNS tunnelling shapes |
 | **SSH & QUIC** | weak SSH key exchange, cipher, MAC and host-key offers; Terrapin exposure (CVE-2023-48795); QUIC version inventory and payload opacity |
-| **Voice** | cleartext SIP signalling, SDP offered without `a=crypto`, RTP media in the clear, media volume anomalies (the SIP call graph is drawn in `04-diagrams.md`) |
+| **Voice** | cleartext SIP signalling, SDP offered without `a=crypto`, RTP media in the clear, per-stream packet loss/jitter/MOS quality view and playable summaries, media volume anomalies (the SIP call graph is drawn in `04-diagrams.md`) |
 | **Network** | unanswered-SYN scans, beaconing measured by regular gaps between bursts, services on non-standard ports |
 | **Other** | anything a detector reports that the catalog does not know yet (a test keeps this empty) |
 
@@ -503,6 +503,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 | `d1.tls_cipher` | `detectors/tls_cipher.py` | negotiated version, chosen suite, server cipher-order preference, offered-but-unused weak suites, forward secrecy, TLS compression (CRIME), insecure renegotiation, weak DHE group (Logjam), OCSP response not stapled, certificate without Certificate Transparency SCTs (#265), certificate expiry/key/signature/self-signed, certificate not yet valid, SNI/certificate mismatch, no extended master secret, alerts, truncated handshakes, JA3 fleet clustering, Heartbleed probes |
 | `d2.transport_exposure` | `detectors/transport_exposure.py` | plain HTTP (firmware-like downloads rated high; query strings never reported), HTTP Basic/Digest over cleartext, Basic inside TLS, cookies without `Secure`, cleartext FTP/Telnet/NTP/SNMP/LDAP/SMTP/POP/MySQL/TFTP, leaked credentials (SNMP community, FTP `PASS`, LDAP simple bind, MySQL queries, Telnet logins; always redacted), services on odd ports (lower-port side, low confidence), unanswered-SYN scan shapes, beaconing (regular gaps between bursts) |
 | `d3.sip_rtp` | `detectors/sip_rtp.py` | SIP call graph, cleartext REGISTER/INVITE with auth headers, SDP offered without `a=crypto` (no SRTP possible), RTP media in the clear, media volume anomalies |
+| `d25.rtp_quality_view` | `detectors/rtp_quality_view.py` | Per-stream RTP packet loss (gaps), interarrival jitter, estimated MOS band, and a playable stream summary (source, payload, duration, packets, bytes) using the core `rtp_quality` metrics |
 | `d5.http2` | `detectors/http2.py` | HTTP/2 over cleartext (h2c, prior-knowledge): reports HTTP2_CLEARTEXT with the decoded `:method`, `:path`, `:authority` and `:status` pseudo-headers per stream; TLS-encrypted HTTP/2 is out of scope |
 | `d9.user_signatures` | `detectors/user_signatures.py` | matches of Suricata-style rules / Zeek signatures you pass with `analyze --signatures` (`SIGNATURE_MATCH`) |
 | `d10.smb` | `detectors/smb.py` | SMBv1, SMB signing not required, null sessions, administrative shares, remote-execution pipes (svcctl, atsvc, PSEXESVC), executables opened on shares |

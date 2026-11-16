@@ -38,6 +38,7 @@ _HTTP2 = "d5.http2"
 _ICS = "d20.ics_control"
 _IOC = "d21.ioc_match"
 _SOFTWARE = "d22.software_vulns"
+_RTP_QUALITY = "d25.rtp_quality_view"
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -86,6 +87,10 @@ RULES: dict[str, Rule] = {
         Rule("SDP_NO_CRYPTO_ATTR", _VOICE, "Voice", "SDP offered without SRTP keys"),
         Rule("RTP_MEDIA_UNPROTECTED", _VOICE, "Voice", "Unprotected RTP media"),
         Rule("RTP_VOLUME_ANOMALY", _VOICE, "Voice", "RTP media volume anomaly"),
+        Rule("RTP_STREAM_SUMMARY", _RTP_QUALITY, "Voice", "RTP stream quality and playable summary"),
+        Rule("RTP_PACKET_LOSS_HIGH", _RTP_QUALITY, "Voice", "RTP packet loss above threshold"),
+        Rule("RTP_JITTER_HIGH", _RTP_QUALITY, "Voice", "RTP interarrival jitter above threshold"),
+        Rule("RTP_MOS_POOR", _RTP_QUALITY, "Voice", "Estimated RTP MOS in poor or bad band"),
         Rule("DNS_CLEARTEXT", _DNS_QUIC_SSH, "DNS", "Cleartext DNS"),
         Rule("DNS_TUNNEL_SHAPE", _DNS_QUIC_SSH, "DNS", "DNS tunnelling shape"),
         Rule("DNS_EXTERNAL_RESOLVER", _DNS_QUIC_SSH, "DNS", "External DNS resolver in use"),
@@ -210,6 +215,9 @@ _CLASSTYPES: dict[str, str] = {
     "SIP_CLEARTEXT_SIGNALLING": "policy-violation",
     "SDP_NO_CRYPTO_ATTR": "policy-violation",
     "RTP_MEDIA_UNPROTECTED": "policy-violation",
+    "RTP_PACKET_LOSS_HIGH": "policy-violation",
+    "RTP_JITTER_HIGH": "policy-violation",
+    "RTP_MOS_POOR": "policy-violation",
     "SSH_WEAK_KEX": "attempted-admin",
     "SSH_WEAK_CIPHER": "attempted-admin",
     "SSH_WEAK_MAC": "attempted-admin",
