@@ -2313,7 +2313,6 @@ def fixture_ics_control() -> bytes:
     return w.write()
 
 
-<<<<<<< HEAD
 def _dhcp4_opt(code: int, data: bytes) -> bytes:
     """One DHCPv4 option (code, length, payload)."""
     return bytes([code, len(data)]) + data
@@ -2475,7 +2474,7 @@ def fixture_cleartext_creds_extra() -> bytes:
     socks.send(True, req)
     socks.send(False, struct.pack("!BBH4s", 0, 0x5A, 0, _ip4("0.0.0.0")))
     socks.close()
-=======
+
 @fixture("ntlm_rejected.pcap")
 def fixture_ntlm_rejected() -> bytes:
     """An SMB2 NTLMv1 logon the server refuses (STATUS_LOGON_FAILURE). The 24-byte response is still on the wire
@@ -2520,5 +2519,4 @@ def fixture_kerberos_delegation() -> bytes:
     w.add(udp_frame(k, c, 88, 50100, _krb(KRB_TGS_REP(msgType=13, crealm=realm, cname=name(1, "svc-web"),
                                                        ticket=KRB_Ticket(realm=realm, sname=cifs, encPart=enc()),
                                                        encPart=enc()))))
->>>>>>> origin/agent/232-detect-deepseek
     return w.write()

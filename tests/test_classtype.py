@@ -79,18 +79,16 @@ def test_the_mapping_and_the_misc_activity_default() -> None:
     assert classtype_of("SIGNATURE_MATCH") == "attempted-admin"
     assert classtype_of("CAPTURE_LOSS") == "misc-activity"
     assert classtype_of("SERVICE_ON_ODD_PORT") == "non-standard-protocol"
-<<<<<<< HEAD
     assert classtype_of("OSINT_LOOKUP_PERFORMED") == "misc-activity"
     assert classtype_of("CLEARTEXT_SYSLOG") == "policy-violation"
     assert classtype_of("SERVICE_BITTORRENT_INFOHASH") == "misc-activity"
     assert classtype_of("IRC_CLEARTEXT_CREDENTIAL") == "policy-violation"
     assert classtype_of("SOCKS_CLEARTEXT_CREDENTIAL") == "policy-violation"
     assert classtype_of("TDS_CLEARTEXT_CREDENTIAL") == "policy-violation"
-=======
+
     assert classtype_of("KERBEROS_TICKET_ISSUED") == "misc-activity"
     assert classtype_of("NTLM_CHALLENGE_UNANSWERED") == "attempted-recon"
     assert classtype_of("NTLM_HASH_OFFLINE_CRACKABLE") == "policy-violation"
->>>>>>> origin/agent/232-detect-deepseek
     assert classtype_of("NOT_A_CODE") == "misc-activity"  # unmapped codes take the default
 
 

@@ -117,7 +117,6 @@ RULES: dict[str, Rule] = {
         Rule("KERBEROS_TGS_WITHOUT_PRIOR_AUTH", _KRB_NTLM, "Credentials", "Kerberos service ticket without prior authentication observed"),
         Rule("NTLM_V1_AUTH", _KRB_NTLM, "Credentials", "NTLMv1 authentication response"),
         Rule("NTLM_SIGNING_NOT_NEGOTIATED", _KRB_NTLM, "Credentials", "NTLM signing not negotiated"),
-<<<<<<< HEAD
         Rule("DHCP_CLIENT_INVENTORY", _DHCP, "Network", "DHCP client identity and lease"),
         Rule("DHCPV6_CLIENT_INVENTORY", _DHCP, "Network", "DHCPv6 client identity and lease"),
         Rule("DHCP_ROGUE_SERVER", _DHCP, "Network", "Two DHCP servers answered the same transaction"),
@@ -129,12 +128,11 @@ RULES: dict[str, Rule] = {
         Rule("IRC_CLEARTEXT_CREDENTIAL", _CLEARTEXT_CREDS, "Credentials", "IRC credential sent in cleartext"),
         Rule("SOCKS_CLEARTEXT_CREDENTIAL", _CLEARTEXT_CREDS, "Credentials", "SOCKS credential sent in cleartext"),
         Rule("TDS_CLEARTEXT_CREDENTIAL", _CLEARTEXT_CREDS, "Credentials", "TDS LOGIN7 credential sent in cleartext"),
-=======
+
         Rule("NTLM_NEGOTIATION", _KRB_NTLM, "Credentials", "NTLM negotiation observed"),
         Rule("NTLM_CHALLENGE_UNANSWERED", _KRB_NTLM, "Credentials", "NTLM challenge never answered"),
         Rule("NTLM_IDENTITY_EXPOSED", _KRB_NTLM, "Credentials", "NTLM account identity observed"),
         Rule("NTLM_HASH_OFFLINE_CRACKABLE", _KRB_NTLM, "Credentials", "NTLMv1 response length indicates offline-crackable material"),
->>>>>>> origin/agent/232-detect-deepseek
         Rule("SIGNATURE_MATCH", _SIGNATURES, "Signatures", "User-supplied signature matched"),
         Rule("IOC_MATCH", _IOC, "Signatures", "Local indicator (IP, domain or URL) matched"),
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
@@ -253,7 +251,6 @@ _CLASSTYPES: dict[str, str] = {
     "KERBEROS_ANONYMOUS_REPLY": "policy-violation",
     "NTLM_V1_AUTH": "policy-violation",
     "NTLM_SIGNING_NOT_NEGOTIATED": "policy-violation",
-<<<<<<< HEAD
     "DHCP_CLIENT_INVENTORY": "protocol-command-decode",
     "DHCPV6_CLIENT_INVENTORY": "protocol-command-decode",
     "DHCP_ROGUE_SERVER": "trojan-activity",
@@ -262,16 +259,13 @@ _CLASSTYPES: dict[str, str] = {
     "IRC_CLEARTEXT_CREDENTIAL": "policy-violation",
     "SOCKS_CLEARTEXT_CREDENTIAL": "policy-violation",
     "TDS_CLEARTEXT_CREDENTIAL": "policy-violation",
-=======
+
     "KERBEROS_TICKET_ISSUED": "misc-activity",
     "KERBEROS_TGS_WITHOUT_PRIOR_AUTH": "policy-violation",
-    "NTLM_V1_AUTH": "policy-violation",
-    "NTLM_SIGNING_NOT_NEGOTIATED": "policy-violation",
     "NTLM_NEGOTIATION": "misc-activity",
     "NTLM_CHALLENGE_UNANSWERED": "attempted-recon",
     "NTLM_IDENTITY_EXPOSED": "misc-activity",
     "NTLM_HASH_OFFLINE_CRACKABLE": "policy-violation",
->>>>>>> origin/agent/232-detect-deepseek
     "SIP_CLEARTEXT_SIGNALLING": "policy-violation",
     "SDP_NO_CRYPTO_ATTR": "policy-violation",
     "RTP_MEDIA_UNPROTECTED": "policy-violation",
