@@ -76,12 +76,12 @@ class KerberosNtlmDetector(Detector):
         for m in index.kerberos:
             if m.msg_type == KRB_AS_REQ:
                 last_as_req[m.key] = m
-            elif m.msg_type == KRB_ERROR and m.error == KDC_ERR_PREAUTH_REQUIRED:
+            if m.msg_type == KRB_ERROR and m.error == KDC_ERR_PREAUTH_REQUIRED:
                 # keyed by principal: the client retries from a new source port, so the 5-tuple differs
                 preauth_demanded.add(m.client or m.key)
-            elif m.msg_type in (KRB_AS_REP, KRB_TGS_REQ) and m.client:
+            if m.msg_type in (KRB_AS_REP, KRB_TGS_REQ) and m.client:
                 authenticated_principals.add(m.client)
-            elif m.msg_type in (KRB_AS_REP, KRB_TGS_REP):
+            if m.msg_type in (KRB_AS_REP, KRB_TGS_REP):
                 for etype in sorted({e for e in m.etypes if e in WEAK_ETYPES}):
                     if not once("KERBEROS_WEAK_ETYPE", f"{m.key}|{etype}"):
                         continue
