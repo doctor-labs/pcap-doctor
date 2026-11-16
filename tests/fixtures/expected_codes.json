@@ -375,5 +375,9 @@
   "rtsp_auth.pcap": [
     "RTSP_CLEARTEXT_CREDENTIAL_URL",
     "RTSP_CONTROL_EXCHANGE"
+  ],
+  "dns_zone_transfer.pcap": [
+    "DNS_CLEARTEXT",
+    "DNS_ZONE_TRANSFER_REQUEST"
   ]
 }
