@@ -280,15 +280,27 @@
   ],
   "rdp_nat.pcap": [],
   "pgsql_redis.pcap": [],
+  "cleartext_creds_extra.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE",
+    "IRC_CLEARTEXT_CREDENTIAL"
+  ],
   "irc_socks_creds.pcap": [
     "CLEARTEXT_CREDENTIAL",
+<<<<<<< HEAD
     "CLEARTEXT_IRC",
     "CLEARTEXT_SERVICE",
     "CLEARTEXT_SOCKS"
+=======
+    "CLEARTEXT_SERVICE",
+    "IRC_CLEARTEXT_CREDENTIAL",
+    "SOCKS_CLEARTEXT_CREDENTIAL"
+>>>>>>> origin/agent/231-detect
   ],
   "mssql_tds.pcap": [
     "CLEARTEXT_CREDENTIAL",
-    "CLEARTEXT_SERVICE"
+    "CLEARTEXT_SERVICE",
+    "TDS_CLEARTEXT_CREDENTIAL"
   ],
   "watched_login.pcap": [
     "CLEARTEXT_CREDENTIAL",

@@ -40,9 +40,13 @@ _HTTP2 = "d5.http2"
 _ICS = "d20.ics_control"
 _IOC = "d21.ioc_match"
 _SOFTWARE = "d22.software_vulns"
+<<<<<<< HEAD
 _OSINT = "d25.osint"
 _LONG_TAIL = "d25.long_tail"
 _RTP_QUALITY = "d25.rtp_quality_view"
+=======
+_CLEARTEXT_CREDS = "d25.cleartext_creds"
+>>>>>>> origin/agent/231-detect
 
 RULES: dict[str, Rule] = {
     rule.code: rule
@@ -114,6 +118,7 @@ RULES: dict[str, Rule] = {
         Rule("KERBEROS_NO_PREAUTH", _KRB_NTLM, "Credentials", "Kerberos AS reply without pre-authentication"),
         Rule("NTLM_V1_AUTH", _KRB_NTLM, "Credentials", "NTLMv1 authentication response"),
         Rule("NTLM_SIGNING_NOT_NEGOTIATED", _KRB_NTLM, "Credentials", "NTLM signing not negotiated"),
+<<<<<<< HEAD
         Rule("DHCP_CLIENT_INVENTORY", _DHCP, "Network", "DHCP client identity and lease"),
         Rule("DHCPV6_CLIENT_INVENTORY", _DHCP, "Network", "DHCPv6 client identity and lease"),
         Rule("DHCP_ROGUE_SERVER", _DHCP, "Network", "Two DHCP servers answered the same transaction"),
@@ -122,6 +127,11 @@ RULES: dict[str, Rule] = {
         Rule("KERBEROS_PRINCIPAL_INVENTORY", _KRB_AUTH, "Credentials", "Kerberos principal, realm and service in use"),
         Rule("KERBEROS_TGS_WITHOUT_AS", _KRB_AUTH, "Credentials", "Kerberos service ticket with no AS exchange in the capture"),
         Rule("KERBEROS_ANONYMOUS_REPLY", _KRB_AUTH, "Credentials", "Kerberos reply that names no client principal"),
+=======
+        Rule("IRC_CLEARTEXT_CREDENTIAL", _CLEARTEXT_CREDS, "Credentials", "IRC credential sent in cleartext"),
+        Rule("SOCKS_CLEARTEXT_CREDENTIAL", _CLEARTEXT_CREDS, "Credentials", "SOCKS credential sent in cleartext"),
+        Rule("TDS_CLEARTEXT_CREDENTIAL", _CLEARTEXT_CREDS, "Credentials", "TDS LOGIN7 credential sent in cleartext"),
+>>>>>>> origin/agent/231-detect
         Rule("SIGNATURE_MATCH", _SIGNATURES, "Signatures", "User-supplied signature matched"),
         Rule("IOC_MATCH", _IOC, "Signatures", "Local indicator (IP, domain or URL) matched"),
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
@@ -240,11 +250,17 @@ _CLASSTYPES: dict[str, str] = {
     "KERBEROS_ANONYMOUS_REPLY": "policy-violation",
     "NTLM_V1_AUTH": "policy-violation",
     "NTLM_SIGNING_NOT_NEGOTIATED": "policy-violation",
+<<<<<<< HEAD
     "DHCP_CLIENT_INVENTORY": "protocol-command-decode",
     "DHCPV6_CLIENT_INVENTORY": "protocol-command-decode",
     "DHCP_ROGUE_SERVER": "trojan-activity",
     "DHCP_DOMAIN_LEAK": "policy-violation",
     "DHCP_VENDOR_FINGERPRINT": "policy-violation",
+=======
+    "IRC_CLEARTEXT_CREDENTIAL": "policy-violation",
+    "SOCKS_CLEARTEXT_CREDENTIAL": "policy-violation",
+    "TDS_CLEARTEXT_CREDENTIAL": "policy-violation",
+>>>>>>> origin/agent/231-detect
     "SIP_CLEARTEXT_SIGNALLING": "policy-violation",
     "SDP_NO_CRYPTO_ATTR": "policy-violation",
     "RTP_MEDIA_UNPROTECTED": "policy-violation",

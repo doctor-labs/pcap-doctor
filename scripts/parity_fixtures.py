@@ -2313,6 +2313,7 @@ def fixture_ics_control() -> bytes:
     return w.write()
 
 
+<<<<<<< HEAD
 def _dhcp4_opt(code: int, data: bytes) -> bytes:
     """One DHCPv4 option (code, length, payload)."""
     return bytes([code, len(data)]) + data
@@ -2452,4 +2453,28 @@ def fixture_rtp_quality_lossy() -> bytes:
         rtp = struct.pack("!BBHII", 0x80, 8, seq, ts, ssrc) + b"\x00" * 160
         frame = udp_frame("10.0.0.20", "10.0.0.10", 20020, 20022, rtp, smac=MAC_B, dmac=MAC_A)
         w.add(frame, dt=arrivals[i] if i == 0 else arrivals[i] - arrivals[i - 1])
+=======
+@fixture("cleartext_creds_extra.pcap")
+def fixture_cleartext_creds_extra() -> bytes:
+    """Extra cleartext credential cases: IRC OPER and channel key, and a SOCKS4 CONNECT request with userid (#231)."""
+    w = Wire(start=1_702_100_000.0)
+    irc_client = "10.0.1.10"
+    irc_server = "10.0.1.20"
+    irc = Tcp(w, irc_client, irc_server, 45100, 6667).open()
+    irc.send(True, b"PASS server-secret\r\n")
+    irc.send(True, b"NICK opernick\r\n")
+    irc.send(True, b"USER opernick 0 * :Oper User\r\n")
+    irc.send(True, b"OPER opername oper-secret\r\n")
+    irc.send(True, b"JOIN #secret chan-key\r\n")
+    irc.close()
+
+    # SOCKS4 CONNECT request: VER=4, CMD=1 (CONNECT), DSTPORT=80, DSTIP=10.0.1.99, USERID='sock4user\0'
+    socks_client = "10.0.1.30"
+    socks_server = "10.0.1.40"
+    req = struct.pack("!BBH4s", 4, 1, 80, _ip4("10.0.1.99")) + b"sock4user\x00"
+    socks = Tcp(w, socks_client, socks_server, 45110, 1080).open()
+    socks.send(True, req)
+    socks.send(False, struct.pack("!BBH4s", 0, 0x5A, 0, _ip4("0.0.0.0")))
+    socks.close()
+>>>>>>> origin/agent/231-detect
     return w.write()

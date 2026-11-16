@@ -16,6 +16,7 @@ from pcap_doctor.rules import CLASS_TYPES, RULES, classtype_of
 #: Every code the rule registry must map (the full set of detector codes in src/pcap_doctor/rules.py).
 CODES = (
     "ICS_CONTROL_COMMAND",
+    "IRC_CLEARTEXT_CREDENTIAL",
     "SERVICE_VULNERABLE_VERSION",
     "TLS_VERSION_DEPRECATED", "TLS_LEGACY_RECORD_VERSION", "TLS_CIPHER_UNKNOWN", "TLS_CIPHER_WEAK",
     "TLS_OFFERS_WEAK_CIPHERS", "TLS_NO_FORWARD_SECRECY", "TLS_KEY_IN_FIRMWARE", "TLS_CERT_EXPIRED",
@@ -32,6 +33,8 @@ CODES = (
     "QUIC_PAYLOAD_OPAQUE", "SSH_WEAK_KEX", "SSH_WEAK_CIPHER", "SSH_WEAK_MAC", "SSH_WEAK_HOSTKEY",
     "SSH_TERRAPIN_EXPOSED", "SMB1_IN_USE", "SMB_SIGNING_NOT_REQUIRED", "SMB_NULL_SESSION",
     "SMB_ADMIN_SHARE_ACCESS", "SMB_REMOTE_EXEC_PIPE", "SMB_EXECUTABLE_ON_SHARE", "SIGNATURE_MATCH",
+    "SOCKS_CLEARTEXT_CREDENTIAL",
+    "TDS_CLEARTEXT_CREDENTIAL",
     "KERBEROS_WEAK_ETYPE", "KERBEROS_NO_PREAUTH", "NTLM_V1_AUTH", "NTLM_SIGNING_NOT_NEGOTIATED",
     "KERBEROS_PRINCIPAL_INVENTORY", "KERBEROS_TGS_WITHOUT_AS", "KERBEROS_ANONYMOUS_REPLY",
     "BRUTE_FORCE_SUSPECTED", "ARP_SPOOFING_SUSPECTED", "ICMP_REDIRECT", "CAPTURE_LOSS",
@@ -73,9 +76,15 @@ def test_the_mapping_and_the_misc_activity_default() -> None:
     assert classtype_of("SIGNATURE_MATCH") == "attempted-admin"
     assert classtype_of("CAPTURE_LOSS") == "misc-activity"
     assert classtype_of("SERVICE_ON_ODD_PORT") == "non-standard-protocol"
+<<<<<<< HEAD
     assert classtype_of("OSINT_LOOKUP_PERFORMED") == "misc-activity"
     assert classtype_of("CLEARTEXT_SYSLOG") == "policy-violation"
     assert classtype_of("SERVICE_BITTORRENT_INFOHASH") == "misc-activity"
+=======
+    assert classtype_of("IRC_CLEARTEXT_CREDENTIAL") == "policy-violation"
+    assert classtype_of("SOCKS_CLEARTEXT_CREDENTIAL") == "policy-violation"
+    assert classtype_of("TDS_CLEARTEXT_CREDENTIAL") == "policy-violation"
+>>>>>>> origin/agent/231-detect
     assert classtype_of("NOT_A_CODE") == "misc-activity"  # unmapped codes take the default
 
 
