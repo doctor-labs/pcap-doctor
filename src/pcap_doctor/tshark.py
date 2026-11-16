@@ -698,7 +698,8 @@ KERBEROS_PASS = PassSpec(
     ),
 )
 
-#: NTLMSSP identities for ntlm.log (#205): user, domain, workstation, server names. Never the responses.
+#: NTLMSSP identities and, for explicit opt-in extraction paths, response/challenge material (#205, #382).
+#: Responses are carried in the core data model only and must never reach default reports, logs, findings, or prompts.
 NTLM_PASS = PassSpec(
     name="ntlm",
     display_filter="ntlmssp",
@@ -718,6 +719,9 @@ NTLM_PASS = PassSpec(
             "ntlmssp.challenge.target_name",
             "ntlmssp.challenge.target_info.nb_computer_name",
             "ntlmssp.challenge.target_info.dns_computer_name",
+            "ntlmssp.ntlmserverchallenge",
+            "ntlmssp.auth.lmresponse",
+            "ntlmssp.auth.ntresponse",
         )
     ),
 )
