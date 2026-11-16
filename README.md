@@ -73,6 +73,7 @@ capture to hand? `make captures` fetches the Wireshark project's public samples.
 | `logs CAPTURE` | Zeek-style per-protocol logs (conn, dns, http, ssl, x509, files, notice, weird, dhcp, netbios, ftp, smtp, ssh, smb, rdp, rfb, stun, rtsp, bittorrent, syslog) as TSV or JSON; see [docs/zeek-logs.md](https://github.com/doctor-labs/pcap-doctor/blob/main/docs/zeek-logs.md) |
 | `eve CAPTURE` | Suricata EVE-compatible JSON events (alert, flow, dns, http, tls, fileinfo), one per line, for SIEM ingest |
 | `extract CAPTURE` | write the files a capture carries (HTTP, FTP, SMB, TFTP, SMTP/IMAP/POP3 mail and attachments, IRC chat) to a directory with a manifest |
+| `osint CAPTURE` | compute the capture hash and hostnames/domains locally; with explicit `--endpoint` contact that service and emit a doctor/1 report of the lookup (says plainly when a query leaves the machine) |
 | `search CAPTURE PATTERN` | find a keyword or hex byte pattern across packet payloads; `--hex`, `--json`, exits 1 when nothing matches (#215) |
 | `carve CAPTURE` | file signatures (magic bytes) in packet payloads, per frame; `--out DIR` writes the carved bytes, `--streams` carves reassembled TCP streams (a file split across segments is only found with `--streams`; per-packet output is truncated at the segment end) |
 | `smb CAPTURE` | NTLM users, shares and files seen in SMB/SMB2/SMB3 traffic |
@@ -517,6 +518,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 | `d18.radius` | `detectors/radius.py` | RADIUS Access-Request with cleartext User-Name (User-Password encrypted with shared secret, not TLS) |
 | `d19.vpn_handshakes` | `detectors/vpn_handshakes.py` | IKE/IPsec (ISAKMP on UDP 500/4500), WireGuard (handshake initiation on UDP 51820), and OpenVPN (control-channel opcodes on UDP/TCP 1194) |
 | `d21.ioc_match` | `detectors/ioc_match.py` | IPs, domains and URLs seen in the capture that match an indicator file you pass with `analyze --ioc` (`IOC_MATCH`); local file only, never fetched |
+| `d25.osint` | `detectors/osint.py` | Opt-in indicator lookups: `pcap-doctor osint` computes hashes and hostnames locally and, only with an explicit `--endpoint`, contacts that endpoint and reports what it returned (`OSINT_LOOKUP_PERFORMED`); no network use without opt-in |
 | `d22.software_vulns` | `detectors/software_vulns.py` | software and versions announced in HTTP `Server`/`User-Agent` headers and SSH banners that fall in a short list of known-vulnerable ranges (Zeek Vulnerable_Version parity; heuristic, self-reported versions) |
 | `d24.watched_country_login` | `detectors/watched_login.py` | Login attempts (HTTP Authorization, Telnet, FTP, POP3, IMAP, SMTP AUTH) whose client the local `--geoip-db` places in a country you list with `analyze --watch-country` (`WATCHED_COUNTRY_LOGIN`); offline |
 | `d4.dns_quic_ssh` | `detectors/dns_quic_ssh.py` | plaintext DNS leakage, DNS tunnelling heuristics (label depth + entropy + TXT/NULL volume), external resolvers (IPv4 and IPv6), QUIC version inventory and payload opacity, weak SSH kex/cipher/MAC/host-key offers, Terrapin exposure (CVE-2023-48795) |

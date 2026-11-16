@@ -39,6 +39,7 @@ CODES = (
     "DHCP_VENDOR_FINGERPRINT",
     "IOC_MATCH",
     "WATCHED_COUNTRY_LOGIN",
+    "OSINT_LOOKUP_PERFORMED",
 )
 
 
@@ -58,6 +59,7 @@ def test_the_mapping_and_the_misc_activity_default() -> None:
     assert classtype_of("SIGNATURE_MATCH") == "attempted-admin"
     assert classtype_of("CAPTURE_LOSS") == "misc-activity"
     assert classtype_of("SERVICE_ON_ODD_PORT") == "non-standard-protocol"
+    assert classtype_of("OSINT_LOOKUP_PERFORMED") == "misc-activity"
     assert classtype_of("NOT_A_CODE") == "misc-activity"  # unmapped codes take the default
 
 
