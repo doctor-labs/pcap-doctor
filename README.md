@@ -519,6 +519,7 @@ non-underscore module in `detectors/`, so adding one needs no registration.
 | `d22.software_vulns` | `detectors/software_vulns.py` | software and versions announced in HTTP `Server`/`User-Agent` headers and SSH banners that fall in a short list of known-vulnerable ranges (Zeek Vulnerable_Version parity; heuristic, self-reported versions) |
 | `d24.watched_country_login` | `detectors/watched_login.py` | Login attempts (HTTP Authorization, Telnet, FTP, POP3, IMAP, SMTP AUTH) whose client the local `--geoip-db` places in a country you list with `analyze --watch-country` (`WATCHED_COUNTRY_LOGIN`); offline |
 | `d4.dns_quic_ssh` | `detectors/dns_quic_ssh.py` | plaintext DNS leakage, DNS tunnelling heuristics (label depth + entropy + TXT/NULL volume), external resolvers (IPv4 and IPv6), QUIC version inventory and payload opacity, weak SSH kex/cipher/MAC/host-key offers, Terrapin exposure (CVE-2023-48795) |
+| `d25.dns_zone_transfer` | `detectors/dns_zone_transfer.py` | cleartext DNS zone transfer requests (AXFR/IXFR), which can disclose an entire zone to unauthorized clients or on-path observers |
 | `d14.http_headers` | `detectors/http_headers.py` | cleartext HTTP responses missing Strict-Transport-Security, Content-Security-Policy, X-Content-Type-Options or X-Frame-Options (HTTP_MISSING_SECURITY_HEADERS) |
 | `d17.ech_early_data` | `detectors/ech_early_data.py` | Encrypted Client Hello (ECH, extension 0xfe0d per RFC 9849) and TLS 1.3 0-RTT early data (early_data extension 42 per RFC 8446) offered in ClientHello |
 

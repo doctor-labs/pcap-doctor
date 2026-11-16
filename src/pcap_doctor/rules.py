@@ -23,6 +23,7 @@ _TLS = "d1.tls_cipher"
 _TRANSPORT = "d2.transport_exposure"
 _VOICE = "d3.sip_rtp"
 _DNS_QUIC_SSH = "d4.dns_quic_ssh"
+_DNS_ZONE = "d25.dns_zone_transfer"
 _SIGNATURES = "d9.user_signatures"
 _SMB = "d10.smb"
 _KRB_NTLM = "d23.kerberos_ntlm"
@@ -89,6 +90,7 @@ RULES: dict[str, Rule] = {
         Rule("DNS_CLEARTEXT", _DNS_QUIC_SSH, "DNS", "Cleartext DNS"),
         Rule("DNS_TUNNEL_SHAPE", _DNS_QUIC_SSH, "DNS", "DNS tunnelling shape"),
         Rule("DNS_EXTERNAL_RESOLVER", _DNS_QUIC_SSH, "DNS", "External DNS resolver in use"),
+        Rule("DNS_ZONE_TRANSFER_REQUEST", _DNS_ZONE, "DNS", "DNS zone transfer request (AXFR/IXFR)"),
         Rule("QUIC_PAYLOAD_OPAQUE", _DNS_QUIC_SSH, "SSH & QUIC", "QUIC payload opaque without a keylog"),
         Rule("SSH_WEAK_KEX", _DNS_QUIC_SSH, "SSH & QUIC", "Weak SSH key exchange offered"),
         Rule("SSH_WEAK_CIPHER", _DNS_QUIC_SSH, "SSH & QUIC", "Weak SSH cipher offered"),
@@ -171,6 +173,7 @@ _CLASSTYPES: dict[str, str] = {
     "SERVICE_VULNERABLE_VERSION": "policy-violation",
     "PORT_SCAN_VERTICAL": "attempted-recon",
     "PORT_SCAN_HORIZONTAL": "attempted-recon",
+    "DNS_ZONE_TRANSFER_REQUEST": "attempted-recon",
     "BEACONING_SHAPE": "trojan-activity",
     "ARP_SPOOFING_SUSPECTED": "trojan-activity",
     "ICMP_REDIRECT": "trojan-activity",

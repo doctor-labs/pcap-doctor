@@ -2207,6 +2207,18 @@ def fixture_opcua() -> bytes:
     return w.write()
 
 
+@fixture("dns_zone_transfer.pcap")
+def fixture_dns_zone_transfer() -> bytes:
+    """Cleartext AXFR and IXFR requests for the same zone: a zone-transfer exposure signal (#195)."""
+    w = Wire(start=1_702_700_000.0)
+    c, s = "10.18.0.5", "10.18.0.53"
+    w.add(udp_frame(c, s, 53000, 53, dns_wire("corp.example", 0x5100, 252)))  # AXFR
+    w.add(udp_frame(s, c, 53, 53000, dns_wire("corp.example", 0x5100, 252), smac=MAC_B, dmac=MAC_A))
+    w.add(udp_frame(c, s, 53001, 53, dns_wire("corp.example", 0x5101, 251)))  # IXFR
+    w.add(udp_frame(s, c, 53, 53001, dns_wire("corp.example", 0x5101, 251), smac=MAC_B, dmac=MAC_A))
+    return w.write()
+
+
 @fixture("ics_control.pcap")
 def fixture_ics_control() -> bytes:
     # Cleartext write and control commands on four ICS protocols (#206). The Modbus read and the IEC 104

@@ -40,6 +40,10 @@
     "DNS_CLEARTEXT",
     "DNS_TUNNEL_SHAPE"
   ],
+  "dns_zone_transfer.pcap": [
+    "DNS_CLEARTEXT",
+    "DNS_ZONE_TRANSFER_REQUEST"
+  ],
   "bt_dht.pcap": [],
   "capture_loss.pcap": [
     "CAPTURE_LOSS"
