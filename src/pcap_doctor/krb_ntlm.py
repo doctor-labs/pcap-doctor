@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from .tshark import Row, many, to_int
+from .tshark import Row, to_int
 
 KRB_AS_REQ, KRB_AS_REP, KRB_TGS_REQ, KRB_TGS_REP, KRB_ERROR = 10, 11, 12, 13, 30
 #: KDC_ERR_PREAUTH_REQUIRED: the KDC asked the client for pre-authentication
@@ -88,7 +88,7 @@ def _hex_bytes(value: str) -> bytes | None:
 
 
 def parse_ntlm(rows: list[Row], key_of: object) -> list[NtlmMsg]:  # key_of: Callable[[Row], str | None]
-    from .index import first
+    from .index import first, many
 
     out: list[NtlmMsg] = []
     challenge_by_flow: dict[str, bytes | None] = {}
