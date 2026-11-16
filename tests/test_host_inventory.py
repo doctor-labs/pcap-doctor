@@ -13,6 +13,7 @@ from conftest import fixture, requires_tshark
 EXPECTED_PASSES = {
     "base", "tls", "dtls", "http", "dns", "sip", "rtp", "ssh", "quic",
     "services", "telnet", "smb", "arp_icmp", "capture_loss", "conn", "radius", "http2", "ics_control",
+    "dhcp", "dhcpv6",
 }
 
 

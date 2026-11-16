@@ -30,8 +30,9 @@ def test_every_event_has_the_eve_envelope_and_is_time_ordered(cli_runner) -> Non
         assert {"src_ip", "src_port", "dest_ip", "dest_port", "proto"} <= set(e)
     smtp = next(e for e in events if e["event_type"] == "flow" and e["dest_port"] == 25)
     assert smtp["app_proto"] == "smtp" and smtp["proto"] == "TCP" and smtp["flow"]["pkts_toserver"] == 17
-    alert = next(e for e in events if e["event_type"] == "alert")
-    assert alert["alert"]["category"] == "CLEARTEXT_SERVICE" and alert["alert"]["severity"] == 2
+    # The capture carries a DHCP exchange as well, so pick the alert by category, not by position.
+    alert = next(e for e in events if e["event_type"] == "alert" and e["alert"]["category"] == "CLEARTEXT_SERVICE")
+    assert alert["alert"]["severity"] == 2
     assert alert["flow_id"] == smtp["flow_id"]
 
 

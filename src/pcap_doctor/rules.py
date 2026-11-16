@@ -26,6 +26,7 @@ _DNS_QUIC_SSH = "d4.dns_quic_ssh"
 _SIGNATURES = "d9.user_signatures"
 _SMB = "d10.smb"
 _KRB_NTLM = "d23.kerberos_ntlm"
+_DHCP = "d26.dhcp"
 _BRUTE = "d11.brute_force"
 _ARP = "d12.arp_icmp"
 _CAPTURE_LOSS = "d13.capture_loss"
@@ -105,6 +106,11 @@ RULES: dict[str, Rule] = {
         Rule("KERBEROS_NO_PREAUTH", _KRB_NTLM, "Credentials", "Kerberos AS reply without pre-authentication"),
         Rule("NTLM_V1_AUTH", _KRB_NTLM, "Credentials", "NTLMv1 authentication response"),
         Rule("NTLM_SIGNING_NOT_NEGOTIATED", _KRB_NTLM, "Credentials", "NTLM signing not negotiated"),
+        Rule("DHCP_CLIENT_INVENTORY", _DHCP, "Network", "DHCP client identity and lease"),
+        Rule("DHCPV6_CLIENT_INVENTORY", _DHCP, "Network", "DHCPv6 client identity and lease"),
+        Rule("DHCP_ROGUE_SERVER", _DHCP, "Network", "Two DHCP servers answered the same transaction"),
+        Rule("DHCP_DOMAIN_LEAK", _DHCP, "Network", "DHCP request broadcast the domain name"),
+        Rule("DHCP_VENDOR_FINGERPRINT", _DHCP, "Network", "DHCP request advertised the vendor class"),
         Rule("SIGNATURE_MATCH", _SIGNATURES, "Signatures", "User-supplied signature matched"),
         Rule("IOC_MATCH", _IOC, "Signatures", "Local indicator (IP, domain or URL) matched"),
         Rule("BRUTE_FORCE_SUSPECTED", _BRUTE, "Credentials", "Password guessing (repeated failed logins)"),
@@ -207,6 +213,11 @@ _CLASSTYPES: dict[str, str] = {
     "KERBEROS_NO_PREAUTH": "policy-violation",
     "NTLM_V1_AUTH": "policy-violation",
     "NTLM_SIGNING_NOT_NEGOTIATED": "policy-violation",
+    "DHCP_CLIENT_INVENTORY": "protocol-command-decode",
+    "DHCPV6_CLIENT_INVENTORY": "protocol-command-decode",
+    "DHCP_ROGUE_SERVER": "trojan-activity",
+    "DHCP_DOMAIN_LEAK": "policy-violation",
+    "DHCP_VENDOR_FINGERPRINT": "policy-violation",
     "SIP_CLEARTEXT_SIGNALLING": "policy-violation",
     "SDP_NO_CRYPTO_ATTR": "policy-violation",
     "RTP_MEDIA_UNPROTECTED": "policy-violation",
