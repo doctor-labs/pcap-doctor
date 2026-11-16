@@ -3,6 +3,7 @@
     "ARP_SPOOFING_SUSPECTED",
     "ICMP_REDIRECT"
   ],
+  "bacnet.pcap": [],
   "beaconing.pcap": [
     "BEACONING_SHAPE"
   ],
@@ -15,6 +16,22 @@
     "HTTP_MISSING_SECURITY_HEADERS",
     "SMB_SIGNING_NOT_REQUIRED"
   ],
+  "bt_dht.pcap": [
+    "SERVICE_BITTORRENT_INFOHASH",
+    "SERVICE_DHT_BOOTSTRAP"
+  ],
+  "capture_loss.pcap": [
+    "CAPTURE_LOSS"
+  ],
+  "connect_scans.pcap": [
+    "PORT_SCAN_HORIZONTAL",
+    "PORT_SCAN_VERTICAL"
+  ],
+  "devices.pcap": [],
+  "dhcpv6.pcap": [],
+  "dns_dnssec.pcap": [
+    "DNS_CLEARTEXT"
+  ],
   "dns_external.pcap": [
     "DNS_CLEARTEXT",
     "DNS_EXTERNAL_RESOLVER"
@@ -25,30 +42,19 @@
   "dns_plus_tls.pcap": [
     "DNS_CLEARTEXT"
   ],
-  "ech_0rtt_handshake.pcap": [
-    "TLS_EARLY_DATA_OFFERED",
-    "TLS_ECH_OFFERED",
-    "TLS_HANDSHAKE_TRUNCATED"
-  ],
   "dns_records.pcap": [
-    "DNS_CLEARTEXT"
-  ],
-  "dns_dnssec.pcap": [
     "DNS_CLEARTEXT"
   ],
   "dns_tunnel.pcap": [
     "DNS_CLEARTEXT",
     "DNS_TUNNEL_SHAPE"
   ],
-  "bt_dht.pcap": [],
-  "capture_loss.pcap": [
-    "CAPTURE_LOSS"
+  "ech_0rtt_handshake.pcap": [
+    "TLS_EARLY_DATA_OFFERED",
+    "TLS_ECH_OFFERED",
+    "TLS_HANDSHAKE_TRUNCATED"
   ],
-  "connect_scans.pcap": [
-    "PORT_SCAN_HORIZONTAL",
-    "PORT_SCAN_VERTICAL"
-  ],
-  "devices.pcap": [],
+  "enip.pcap": [],
   "files_mix.pcap": [
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE",
@@ -60,6 +66,7 @@
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"
   ],
+  "ftp_odd_port.pcap": [],
   "ftp_retransmit.pcap": [
     "CLEARTEXT_CREDENTIAL",
     "CLEARTEXT_SERVICE"
@@ -73,6 +80,9 @@
     "HTTP_CLEARTEXT",
     "INTERESTING_HOSTNAME",
     "TLS_HANDSHAKE_TRUNCATED"
+  ],
+  "http2_cleartext.pcap": [
+    "HTTP2_CLEARTEXT"
   ],
   "http_bare_token.pcap": [
     "HTTP_CLEARTEXT",
@@ -97,34 +107,51 @@
     "HTTP_CLEARTEXT",
     "HTTP_MISSING_SECURITY_HEADERS"
   ],
+  "http_versions.pcap": [
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
+  ],
   "ics_control.pcap": [
     "ICS_CONTROL_COMMAND"
   ],
   "ics_mix.pcap": [
     "ICS_CONTROL_COMMAND"
   ],
+  "iec104.pcap": [
+    "ICS_CONTROL_COMMAND"
+  ],
   "irc_chat.pcap": [
+    "CLEARTEXT_IRC",
     "CLEARTEXT_SERVICE"
+  ],
+  "irc_socks_creds.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_IRC",
+    "CLEARTEXT_SERVICE",
+    "CLEARTEXT_SOCKS"
   ],
   "kerberos.pcap": [],
   "kerberos_weak.pcap": [
     "KERBEROS_NO_PREAUTH",
     "KERBEROS_WEAK_ETYPE"
   ],
-  "ntlm_v1.pcap": [
-    "NTLM_SIGNING_NOT_NEGOTIATED",
-    "NTLM_V1_AUTH",
-    "SMB_SIGNING_NOT_REQUIRED"
-  ],
-  "mail_logins.pcap": [
-    "CLEARTEXT_CREDENTIAL",
-    "CLEARTEXT_SERVICE"
-  ],
   "logs_mix.pcap": [
     "CLEARTEXT_SERVICE",
     "SMB_ADMIN_SHARE_ACCESS",
     "SMB_EXECUTABLE_ON_SHARE",
     "SMB_SIGNING_NOT_REQUIRED"
+  ],
+  "long_tail_ports.pcap": [
+    "SERVICE_FINGER_EXPOSED",
+    "SERVICE_IDENT_EXPOSED",
+    "SERVICE_LPR_EXPOSED",
+    "SERVICE_NCP_EXPOSED",
+    "SERVICE_PIA_EXPOSED",
+    "SERVICE_XMPP_CLEARTEXT"
+  ],
+  "mail_logins.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE"
   ],
   "mixed_ciphers.pcap": [
     "TLS_NO_SCT",
@@ -133,22 +160,37 @@
     "TLS_SERVER_CIPHER_PREFERENCE"
   ],
   "mqtt.pcap": [],
-  "enip.pcap": [],
-  "iec104.pcap": [
-    "ICS_CONTROL_COMMAND"
+  "mssql_tds.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE"
   ],
-  "bacnet.pcap": [],
   "netbios_names.pcap": [],
-  "opcua.pcap": [],
-  "s7comm.pcap": [
-    "ICS_CONTROL_COMMAND"
-  ],
   "no_pfs_tls12.pcap": [
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",
     "TLS_NO_SCT",
     "TLS_SELF_SIGNED_CHAIN"
   ],
+  "ntlm_v1.pcap": [
+    "NTLM_SIGNING_NOT_NEGOTIATED",
+    "NTLM_V1_AUTH",
+    "SMB_SIGNING_NOT_REQUIRED"
+  ],
+  "opcua.pcap": [],
+  "os_syn_signatures.pcap": [
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS"
+  ],
+  "os_ttls.pcap": [
+    "SYN_SCAN_SHAPE"
+  ],
+  "pgsql_redis.pcap": [],
+  "radius_logins.pcap": [
+    "CLEARTEXT_CREDENTIAL"
+  ],
+  "rdp_nat.pcap": [],
+  "rdp_session.pcap": [],
+  "rfb_vnc.pcap": [],
   "rsa_kx.pcap": [
     "TLS_CERT_EXPIRED_NOW",
     "TLS_CERT_WEAK_KEY",
@@ -160,13 +202,30 @@
     "TLS_SERVER_CIPHER_PREFERENCE",
     "TLS_VERSION_DEPRECATED"
   ],
+  "rtp_quality.pcap": [
+    "RTP_MEDIA_UNPROTECTED",
+    "SDP_NO_CRYPTO_ATTR",
+    "SIP_CLEARTEXT_SIGNALLING"
+  ],
+  "s7comm.pcap": [
+    "ICS_CONTROL_COMMAND"
+  ],
+  "sct_tls12.pcap": [
+    "TLS_SELF_SIGNED_CHAIN"
+  ],
+  "search_bytes.pcap": [],
+  "server_cipher_order.pcap": [
+    "TLS_NO_SCT",
+    "TLS_OFFERS_WEAK_CIPHERS",
+    "TLS_SELF_SIGNED_CHAIN",
+    "TLS_SERVER_CIPHER_PREFERENCE"
+  ],
   "sip_rtp.pcap": [
     "RTP_MEDIA_UNPROTECTED",
     "SDP_NO_CRYPTO_ATTR",
     "SIP_CLEARTEXT_SIGNALLING"
   ],
   "slice_hosts.pcap": [],
-  "search_bytes.pcap": [],
   "smb_attack.pcap": [
     "SMB1_IN_USE",
     "SMB_ADMIN_SHARE_ACCESS",
@@ -186,22 +245,15 @@
     "SSH_WEAK_KEX",
     "SSH_WEAK_MAC"
   ],
-  "stun_rtsp.pcap": [],
-  "syslog.pcap": [],
   "strong_tls13.pcap": [],
-  "rtp_quality.pcap": [
-    "RTP_MEDIA_UNPROTECTED",
-    "SDP_NO_CRYPTO_ATTR",
-    "SIP_CLEARTEXT_SIGNALLING"
-  ],
+  "stun_rtsp.pcap": [],
   "syn_scan.pcap": [
     "SYN_SCAN_SHAPE"
   ],
-  "tcp_health.pcap": [
-    "HTTP_CLEARTEXT",
-    "HTTP_MISSING_SECURITY_HEADERS"
+  "syslog.pcap": [
+    "CLEARTEXT_SYSLOG"
   ],
-  "weird_mix.pcap": [
+  "tcp_health.pcap": [
     "HTTP_CLEARTEXT",
     "HTTP_MISSING_SECURITY_HEADERS"
   ],
@@ -210,32 +262,34 @@
     "CLEARTEXT_SERVICE"
   ],
   "tunnels.pcap": [],
+  "vnc_session.pcap": [],
+  "vpn_handshakes.pcap": [
+    "VPN_IKE_HANDSHAKE",
+    "VPN_OPENVPN_HANDSHAKE",
+    "VPN_WIREGUARD_HANDSHAKE"
+  ],
+  "vuln_greetings.pcap": [
+    "CLEARTEXT_SERVICE",
+    "SERVICE_VULNERABLE_VERSION"
+  ],
+  "vuln_versions.pcap": [
+    "HTTP_CLEARTEXT",
+    "HTTP_MISSING_SECURITY_HEADERS",
+    "SERVICE_VULNERABLE_VERSION"
+  ],
+  "watched_login.pcap": [
+    "CLEARTEXT_CREDENTIAL",
+    "CLEARTEXT_SERVICE",
+    "HTTP_CLEARTEXT",
+    "HTTP_CLEARTEXT_AUTH",
+    "HTTP_MISSING_SECURITY_HEADERS"
+  ],
   "weak_tls.pcap": [
     "TLS_CIPHER_WEAK",
     "TLS_NO_FORWARD_SECRECY",
     "TLS_NO_SCT",
     "TLS_SELF_SIGNED_CHAIN",
     "TLS_VERSION_DEPRECATED"
-  ],
-  "ftp_odd_port.pcap": [],
-  "http2_cleartext.pcap": [
-    "HTTP2_CLEARTEXT"
-  ],
-  "http_versions.pcap": [
-    "HTTP_CLEARTEXT",
-    "HTTP_MISSING_SECURITY_HEADERS"
-  ],
-  "os_ttls.pcap": [
-    "SYN_SCAN_SHAPE"
-  ],
-  "sct_tls12.pcap": [
-    "TLS_SELF_SIGNED_CHAIN"
-  ],
-  "server_cipher_order.pcap": [
-    "TLS_NO_SCT",
-    "TLS_OFFERS_WEAK_CIPHERS",
-    "TLS_SELF_SIGNED_CHAIN",
-    "TLS_SERVER_CIPHER_PREFERENCE"
   ],
   "web_attack.pcap": [
     "HTTP_CLEARTEXT",
@@ -246,46 +300,8 @@
     "HTTP_WEB_ATTACK_TRAVERSAL",
     "HTTP_WEB_ATTACK_XSS"
   ],
-  "radius_logins.pcap": [
-    "CLEARTEXT_CREDENTIAL"
-  ],
-  "vpn_handshakes.pcap": [
-    "VPN_IKE_HANDSHAKE",
-    "VPN_OPENVPN_HANDSHAKE",
-    "VPN_WIREGUARD_HANDSHAKE"
-  ],
-  "dhcpv6.pcap": [],
-  "rdp_nat.pcap": [],
-  "pgsql_redis.pcap": [],
-  "irc_socks_creds.pcap": [
-    "CLEARTEXT_CREDENTIAL",
-    "CLEARTEXT_SERVICE"
-  ],
-  "mssql_tds.pcap": [
-    "CLEARTEXT_CREDENTIAL",
-    "CLEARTEXT_SERVICE"
-  ],
-  "watched_login.pcap": [
-    "CLEARTEXT_CREDENTIAL",
-    "CLEARTEXT_SERVICE",
-    "HTTP_CLEARTEXT",
-    "HTTP_CLEARTEXT_AUTH",
-    "HTTP_MISSING_SECURITY_HEADERS"
-  ],
-  "os_syn_signatures.pcap": [
+  "weird_mix.pcap": [
     "HTTP_CLEARTEXT",
     "HTTP_MISSING_SECURITY_HEADERS"
-  ],
-  "rfb_vnc.pcap": [],
-  "vnc_session.pcap": [],
-  "rdp_session.pcap": [],
-  "vuln_versions.pcap": [
-    "HTTP_CLEARTEXT",
-    "HTTP_MISSING_SECURITY_HEADERS",
-    "SERVICE_VULNERABLE_VERSION"
-  ],
-  "vuln_greetings.pcap": [
-    "CLEARTEXT_SERVICE",
-    "SERVICE_VULNERABLE_VERSION"
   ]
 }

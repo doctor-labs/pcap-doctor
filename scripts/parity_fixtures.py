@@ -2238,3 +2238,13 @@ def fixture_ics_control() -> bytes:
     i.send(False, bytes([0x68, 14, 2, 0, 2, 0]) + bytes([45, 1, 7, 0, 1, 0, 0x65, 0, 0, 1]))  # activation confirmation
     i.close()
     return w.write()
+
+
+@fixture("long_tail_ports.pcap")
+def fixture_long_tail_ports() -> bytes:
+    """Finger, Ident, XMPP, LPR, PIA and NCP service ports observed as TCP flows (#228)."""
+    w = Wire(start=1_702_500_000.0)
+    c, s = "10.77.0.10", "10.77.0.20"
+    for i, dport in enumerate((79, 113, 5222, 515, 6543, 524)):
+        Tcp(w, c, s, 50000 + i, dport).open().send(True, b"probe\r\n").close()
+    return w.write()
